@@ -22,10 +22,12 @@ from agents.runtime import (
     RuntimeExternalMcpToolDefinition,
     RuntimeMcpBridge,
     RuntimeMcpToolPolicy,
+    RuntimePolicy,
     RuntimeRequirements,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
     RuntimeSubagentTask,
+    TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
     DIRECT_API_AUTONOMOUS_ENV,
     resolve_direct_api_autonomous_gate,
     check_external_mcp_contract,
@@ -71,6 +73,9 @@ from agents.runtime.adapters.generic_edit import (
     MAX_MUTATION_PREIMAGE_BYTES,
     GenericEditRuntimeError,
     bounded_subagent_attempts,
+    normalize_write_scope_path,
+    parse_runtime_subagent_action_task,
+    path_within_write_scope,
     build_generic_edit_file_preimage,
     build_generic_edit_recovery_plan_policy,
     build_generic_edit_rollback_operation,
@@ -3464,6 +3469,384 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert request["tool"] == "run_subagents"
     assert request["tasks_redacted"] is True
     assert request["task_count"] == 2
+
+
+def test_normalize_write_scope_path_rejects_escapes():
+    """Workspace-escaping paths can never normalize into a write scope."""
+    assert normalize_write_scope_path("/etc/passwd") is None
+    assert normalize_write_scope_path("C:\\Windows\\system32") is None
+    assert normalize_write_scope_path("src/../../outside") is None
+    assert normalize_write_scope_path("..") is None
+    assert normalize_write_scope_path("   ") is None
+    assert normalize_write_scope_path("./src//utils/./a.py") == "src/utils/a.py"
+    assert normalize_write_scope_path("src\\api\\b.py") == "src/api/b.py"
+
+
+def test_path_within_write_scope_matches_files_and_subtrees():
+    scope = ("src/api", "docs/readme.md")
+    assert path_within_write_scope("src/api/handler.py", scope) is True
+    assert path_within_write_scope("src/api", scope) is True
+    assert path_within_write_scope("docs/readme.md", scope) is True
+    # Prefix tricks and parallel paths stay outside.
+    assert path_within_write_scope("src/api2/handler.py", scope) is False
+    assert path_within_write_scope("docs/readme.md.bak", scope) is False
+    assert path_within_write_scope("/src/api/handler.py", scope) is False
+    assert path_within_write_scope("src/api/../../escape.py", scope) is False
+
+
+def test_parse_subagent_task_transactional_write_contract():
+    """transactional_write tasks need a normalized scope and raised requirements."""
+    task = parse_runtime_subagent_action_task(
+        {
+            "id": "edit-a",
+            "prompt": "Edit module a",
+            "merge_policy": "transactional_write",
+            "write_scope": ["./src//feature_a/", "src/feature_a"],
+        },
+        1,
+        "1.1",
+    )
+
+    assert task.merge_policy == TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY
+    assert task.write_scope == ("src/feature_a",)
+    assert task.requirements.mode == "mutating_subagent"
+    assert "subagents" in task.requirements.required
+    assert "shell" not in task.requirements.required
+
+    with pytest.raises(GenericEditRuntimeError, match="non-empty list"):
+        parse_runtime_subagent_action_task(
+            {"id": "x", "prompt": "p", "merge_policy": "transactional_write"},
+            1,
+            None,
+        )
+    with pytest.raises(GenericEditRuntimeError, match="read_only"):
+        parse_runtime_subagent_action_task(
+            {"id": "x", "prompt": "p", "write_scope": ["src"]},
+            1,
+            None,
+        )
+    with pytest.raises(GenericEditRuntimeError, match="not supported"):
+        parse_runtime_subagent_action_task(
+            {"id": "x", "prompt": "p", "merge_policy": "yolo_write"},
+            1,
+            None,
+        )
+    with pytest.raises(GenericEditRuntimeError, match="workspace-relative"):
+        parse_runtime_subagent_action_task(
+            {
+                "id": "x",
+                "prompt": "p",
+                "merge_policy": "transactional_write",
+                "write_scope": ["../outside"],
+            },
+            1,
+            None,
+        )
+
+
+def test_resolve_runtime_subagent_support_policy_gates_mutating_children():
+    """Mutating child requirements stay behind the mutating-subagents policy."""
+    blocked = resolve_runtime_subagent_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        orchestrator_available=True,
+        child_requirements=RuntimeRequirements.mutating_subagent(),
+    )
+    assert blocked.available is False
+    assert "subagents" in blocked.missing_capabilities
+
+    granted = resolve_runtime_subagent_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        orchestrator_available=True,
+        child_requirements=RuntimeRequirements.mutating_subagent(),
+        policy=RuntimePolicy(mutating_subagents_enabled=True),
+    )
+    assert granted.available is True
+    assert granted.strategy == "orchestrated"
+
+
+@pytest.mark.asyncio
+async def test_mutating_subagent_requires_confined_child_session(tmp_path: Path):
+    """A mutating child only runs on a session confined by write_scope_guard."""
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FakeSubagentRuntimeSession(f"changes from {task.id}")
+        if task.id == "overbroad":
+            session.write_scope_guard = ("src/feature_a", "docs")
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=2,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="unconfined",
+                prompt="edit feature a",
+                merge_policy=TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
+                write_scope=("src/feature_a",),
+            ),
+            RuntimeSubagentTask(
+                id="overbroad",
+                prompt="edit feature a",
+                merge_policy=TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
+                write_scope=("src/feature_a",),
+            ),
+        ]
+    )
+
+    results = {result.id: result for result in run.results}
+    assert results["unconfined"].status == "error"
+    assert "unconfined session" in (results["unconfined"].error or "")
+    assert results["overbroad"].status == "error"
+    assert "outside the declared write scope" in (results["overbroad"].error or "")
+    assert "docs" in (results["overbroad"].error or "")
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_refuses_mutating_subagents_without_policy(
+    tmp_path: Path,
+):
+    """Without the mutating-subagents policy grant the action is refused."""
+    created_sessions: list[FakeSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FakeSubagentRuntimeSession(f"changes from {task.id}")
+        created_sessions.append(session)
+        return session
+
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "parallel edits",
+                "actions": [
+                    {
+                        "tool": "run_subagents",
+                        "tasks": [
+                            {
+                                "id": "edit-a",
+                                "prompt": "Edit feature a",
+                                "merge_policy": "transactional_write",
+                                "write_scope": ["src/feature_a"],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "attempted mutating subagents",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        subagent_session_factory=session_factory,
+    )
+
+    await run_runtime_session(
+        runtime_session,
+        "run mutating children",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    # The factory must never have been invoked: support is refused up front.
+    assert created_sessions == []
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    subagent_observation = observation_lines[0]["result"]
+    assert subagent_observation["ok"] is False
+    assert "subagents" in json.dumps(subagent_observation)
+
+
+@pytest.mark.asyncio
+async def test_direct_api_autonomous_runs_mutating_subagents_under_bold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """bold's policy grant lets confined mutating children run end-to-end."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    created_sessions: list[FakeSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FakeSubagentRuntimeSession(f"changes from {task.id}")
+        session.capabilities = RuntimeCapabilities(
+            text_completion=True,
+            structured_output=True,
+            filesystem_read=True,
+            filesystem_edit=True,
+            subagents=True,
+        )
+        session.write_scope_guard = tuple(task.write_scope)
+        created_sessions.append(session)
+        return session
+
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "parallel edits",
+                "actions": [
+                    {
+                        "tool": "run_subagents",
+                        "tasks": [
+                            {
+                                "id": "edit-a",
+                                "prompt": "Edit feature a",
+                                "merge_policy": "transactional_write",
+                                "write_scope": ["src/feature_a"],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "ran mutating subagents",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+        subagent_session_factory=session_factory,
+        allow_direct_api_autonomous=True,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "run mutating children",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    assert len(created_sessions) == 1
+    artifact_path = tmp_path / "artifacts" / "generic_edit_subagents_1_1_1.json"
+    subagent_artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert subagent_artifact["status"] == "complete"
+    assert subagent_artifact["merge_plan"]["strategy"] == "transactional_parent_merge"
+    assert subagent_artifact["merge_plan"]["requires_parent_merge"] is True
+    assert subagent_artifact["merge_plan"]["mutating_result_ids"] == ["edit-a"]
+    assert subagent_artifact["results"][0]["write_scope"] == ["src/feature_a"]
+
+
+@pytest.mark.asyncio
+async def test_write_scope_guard_blocks_out_of_scope_mutations(tmp_path: Path):
+    """A confined session writes inside its scope and is blocked outside it."""
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inside scope",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "src/inside.txt",
+                        "content": "confined write\n",
+                    }
+                ],
+            },
+            {
+                "thought": "outside scope",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "docs/outside.txt",
+                        "content": "escaped write\n",
+                    }
+                ],
+            },
+            {
+                "thought": "opaque command",
+                "actions": [
+                    {
+                        "tool": "run_command",
+                        "command": "echo hello",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "scope checks exercised",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        write_scope_guard=["src/"],
+    )
+    assert runtime_session.write_scope_guard == ("src",)
+
+    await run_runtime_session(
+        runtime_session,
+        "exercise the write scope guard",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert (tmp_path / "src" / "inside.txt").read_text(
+        encoding="utf-8"
+    ) == "confined write\n"
+    assert not (tmp_path / "docs" / "outside.txt").exists()
+
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    inside, outside, command = (
+        observation_lines[0]["result"],
+        observation_lines[1]["result"],
+        observation_lines[2]["result"],
+    )
+    assert inside["ok"] is True
+    assert outside["ok"] is False
+    assert outside["data"]["write_scope_violation"] is True
+    assert outside["data"]["violating_paths"] == ["docs/outside.txt"]
+    assert command["ok"] is False
+    assert command["data"]["write_scope_violation"] is True
 
 
 @pytest.mark.asyncio

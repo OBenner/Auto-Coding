@@ -310,6 +310,28 @@ class RuntimeRequirements:
             ),
         )
 
+    @classmethod
+    def mutating_subagent(cls) -> "RuntimeRequirements":
+        """Requirements for a write-confined mutating child session (Phase 1.2).
+
+        Mutating children edit files only inside their declared write scope,
+        so they need the workspace edit surface but NOT ``shell`` — opaque
+        commands cannot be scope-confined. ``subagents`` is policy-granted via
+        ``RuntimePolicy.mutating_subagents_enabled``, keeping mutating
+        children behind the autonomy policy until the operator's level
+        enables them.
+        """
+        return cls(
+            mode="mutating_subagent",
+            required=(
+                "text_completion",
+                "structured_output",
+                "filesystem_read",
+                "filesystem_edit",
+                "subagents",
+            ),
+        )
+
 
 class RuntimeCapabilityError(RuntimeError):
     """Raised when a runtime cannot satisfy phase requirements."""

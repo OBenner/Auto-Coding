@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from .capabilities import RuntimeCapabilities, RuntimeRequirements
+from .capabilities import RuntimeCapabilities, RuntimePolicy, RuntimeRequirements
 from .result import AgentRunResult
 from .session_engine import run_runtime_session
 
@@ -21,6 +21,23 @@ DEFAULT_SUBAGENT_TIMEOUT_SECONDS = 180.0
 DEFAULT_SUBAGENT_MAX_ATTEMPTS = 1
 MAX_SUBAGENT_ATTEMPTS = 3
 DEFAULT_SUBAGENT_MERGE_POLICY = "read_only"
+# Phase 1.2: a mutating child confined to its declared write scope. The
+# parent applies child changes through transactional staged batches, so the
+# policy name describes HOW the result merges, not just that it mutates.
+TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY = "transactional_write"
+SUPPORTED_SUBAGENT_MERGE_POLICIES = frozenset(
+    {
+        DEFAULT_SUBAGENT_MERGE_POLICY,
+        TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
+    }
+)
+
+
+def is_mutating_subagent_task(task: "RuntimeSubagentTask") -> bool:
+    """Return whether a child task may mutate the workspace."""
+    return (
+        task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY
+    ) != DEFAULT_SUBAGENT_MERGE_POLICY
 
 
 @dataclass(frozen=True)
@@ -171,6 +188,7 @@ class RuntimeSubagentOrchestrator:
         runtime_name: str,
         capabilities: RuntimeCapabilities,
         child_requirements: RuntimeRequirements | None = None,
+        policy: RuntimePolicy | None = None,
     ) -> RuntimeSubagentSupport:
         """Return effective subagent support with this orchestrator configured."""
         return resolve_runtime_subagent_support(
@@ -179,6 +197,7 @@ class RuntimeSubagentOrchestrator:
             capabilities=capabilities,
             orchestrator_available=True,
             child_requirements=child_requirements,
+            policy=policy,
         )
 
     async def run(
@@ -303,15 +322,20 @@ class RuntimeSubagentOrchestrator:
         child_context_id = subagent_child_context_id(task, attempt=attempt)
         try:
             runtime_session = await maybe_await(self.session_factory(task))
-            agent_result = await self._run_child_session(
-                runtime_session,
-                task,
-                attempt=attempt,
-                child_context_id=child_context_id,
-                verbose=verbose,
-                phase=phase,
-            )
-            result = runtime_result_to_subagent_result(task, agent_result)
+            confinement_error = mutating_child_confinement_error(task, runtime_session)
+            if confinement_error is not None:
+                await cancel_runtime_session(runtime_session)
+                result = error_subagent_result(task, confinement_error)
+            else:
+                agent_result = await self._run_child_session(
+                    runtime_session,
+                    task,
+                    attempt=attempt,
+                    child_context_id=child_context_id,
+                    verbose=verbose,
+                    phase=phase,
+                )
+                result = runtime_result_to_subagent_result(task, agent_result)
         except asyncio.CancelledError:
             if runtime_session is not None:
                 await cancel_runtime_session(runtime_session)
@@ -505,6 +529,39 @@ async def cancel_runtime_session(runtime_session: Any) -> None:
         await maybe_await(cancel_hook())
 
 
+def mutating_child_confinement_error(
+    task: RuntimeSubagentTask,
+    runtime_session: Any,
+) -> str | None:
+    """Return why a mutating child session is not safely confined, if it isn't.
+
+    A mutating child may only run on a session that carries a
+    ``write_scope_guard`` covering no more than the task's declared write
+    scope. This makes the write-scope contract enforced by construction:
+    a session factory that does not confine the child cannot run it.
+    Read-only children are unaffected.
+    """
+    if not is_mutating_subagent_task(task):
+        return None
+    guard = getattr(runtime_session, "write_scope_guard", None)
+    if guard is None:
+        return (
+            f"Mutating subagent task '{task.id}' "
+            f"(merge_policy={task.merge_policy}) requires a child session "
+            "confined by write_scope_guard, but the session factory returned "
+            "an unconfined session."
+        )
+    guard_paths = {str(path) for path in guard}
+    declared_paths = set(task.write_scope)
+    extra_paths = sorted(guard_paths - declared_paths)
+    if extra_paths:
+        return (
+            f"Mutating subagent task '{task.id}' child session allows paths "
+            f"outside the declared write scope: {', '.join(extra_paths)}."
+        )
+    return None
+
+
 def resolve_runtime_subagent_support(
     *,
     provider_name: str,
@@ -512,8 +569,14 @@ def resolve_runtime_subagent_support(
     capabilities: RuntimeCapabilities,
     orchestrator_available: bool = False,
     child_requirements: RuntimeRequirements | None = None,
+    policy: RuntimePolicy | None = None,
 ) -> RuntimeSubagentSupport:
-    """Return native or orchestrated subagent support without over-promising."""
+    """Return native or orchestrated subagent support without over-promising.
+
+    ``policy`` may grant additional capabilities (for example ``subagents``
+    via ``RuntimePolicy.mutating_subagents_enabled``), which is how mutating
+    child requirements stay behind the autonomy policy.
+    """
     provider = provider_name.lower()
     requirements = child_requirements or RuntimeRequirements.text_only(mode="subagent")
     required_capabilities = requirements.required
@@ -530,7 +593,7 @@ def resolve_runtime_subagent_support(
             available_capabilities=available_capabilities,
         )
 
-    missing_capabilities = tuple(capabilities.missing(requirements))
+    missing_capabilities = tuple(capabilities.missing(requirements, policy=policy))
     if not orchestrator_available:
         return RuntimeSubagentSupport(
             provider_name=provider,
@@ -604,7 +667,10 @@ def build_subagent_prompt(
         f"- Merge policy: {task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY}.\n"
         f"- Write scope:\n{write_scope}\n"
         "- If the merge policy is read_only, do not modify files or run commands "
-        "that mutate the workspace.\n\n"
+        "that mutate the workspace.\n"
+        "- If the merge policy is transactional_write, modify files only inside "
+        "your write scope; writes outside it and shell commands are blocked by "
+        "the runtime, and the parent merges your changes transactionally.\n\n"
         "Work only on the delegated task below. Return a concise result with "
         "findings, changes, verification, and risks where relevant.\n\n"
         f"Context:\n{context}\n\n"

@@ -31,8 +31,15 @@ def create_runtime_session(
     agent_type: str | None = None,
     subagent_session_factory: Callable[..., Awaitable[Any] | Any] | None = None,
     allow_direct_api_autonomous: bool = False,
+    write_scope_guard: tuple[str, ...] | list[str] | None = None,
 ) -> Any:
-    """Create a runtime adapter for a provider session."""
+    """Create a runtime adapter for a provider session.
+
+    ``write_scope_guard`` confines a Generic Edit session (or its promoted
+    direct-API variant) to a declared write scope; the runtime then blocks
+    mutations outside that scope. Used to build mutating subagent child
+    sessions whose write contract is enforced, not advisory.
+    """
 
     provider_name = provider_name.lower()
     runtime_mode = runtime_mode.lower().replace("-", "_")
@@ -55,6 +62,7 @@ def create_runtime_session(
             project_dir=project_dir,
             agent_type=agent_type,
             subagent_session_factory=subagent_session_factory,
+            write_scope_guard=write_scope_guard,
         )
 
     if (
@@ -72,6 +80,7 @@ def create_runtime_session(
             project_dir=project_dir,
             agent_type=agent_type,
             subagent_session_factory=subagent_session_factory,
+            write_scope_guard=write_scope_guard,
         )
 
     if runtime_mode == "analysis_only":

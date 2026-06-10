@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import re
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from ..local_actions import (
     MAX_SUBAGENT_RESULT_CHARS,
     MAX_SUBAGENT_ROLE_CHARS,
     MAX_SUBAGENT_TASKS,
+    MAX_SUBAGENT_WRITE_SCOPE_CHARS,
+    MAX_SUBAGENT_WRITE_SCOPE_PATHS,
     LocalActionExecutor,
     ToolActionResult,
     action_tool,
@@ -45,9 +48,12 @@ from ..result import AgentRunResult
 from ..subagents import (
     DEFAULT_SUBAGENT_MERGE_POLICY,
     MAX_SUBAGENT_ATTEMPTS,
+    SUPPORTED_SUBAGENT_MERGE_POLICIES,
+    TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
     RuntimeSessionFactory,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentTask,
+    is_mutating_subagent_task,
 )
 from .completion import CompletionRuntimeSession
 from .json_helpers import extract_first_json_object
@@ -65,8 +71,10 @@ GENERIC_EDIT_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode
 
 You do not have native provider filesystem, shell, or external MCP. Auto Code
 exposes a small local action loop. When run_subagents is available, it runs
-bounded read-only child sessions for parallel analysis; it is not Claude SDK
-Task tool parity. Respond with exactly one JSON object and no prose.
+bounded child sessions for parallel work: read_only children analyze, and
+(when policy allows) transactional_write children edit files only inside a
+declared write_scope that the runtime enforces; it is not Claude SDK Task
+tool parity. Respond with exactly one JSON object and no prose.
 
 Available actions:
 __AUTO_CODE_LOCAL_ACTIONS__
@@ -583,10 +591,15 @@ class GenericEditRuntimeSession:
         max_iterations: int = 8,
         sandbox_policy: SandboxPolicy | None = None,
         sandbox_backend: SandboxBackendInfo | None = None,
+        write_scope_guard: tuple[str, ...] | list[str] | None = None,
     ):
         self.provider_name = provider_name
         self.agent_session = agent_session
         self.agent_type = agent_type
+        # Phase 1.2: a write-confined child session. When set, mutating local
+        # actions may only target paths inside this scope and opaque shell
+        # commands are blocked entirely (they cannot be scope-checked).
+        self.write_scope_guard = normalize_write_scope_entries(write_scope_guard)
         self._subagent_session_factory = subagent_session_factory
         self._max_subagent_concurrency = max(1, max_subagent_concurrency)
         self._max_subagent_task_seconds = max_subagent_task_seconds
@@ -1790,6 +1803,10 @@ class GenericEditRuntimeSession:
         if isolation_error is not None:
             return isolation_error
 
+        scope_error = self._write_scope_violation_result(action)
+        if scope_error is not None:
+            return scope_error
+
         tool = action_tool(action)
         try:
             staged_workspace = self._materialize_staged_batch_workspace(action)
@@ -1900,6 +1917,65 @@ class GenericEditRuntimeSession:
                 "staged_workspace_batch_id": staged_workspace["batch_id"],
             }
         return None
+
+    def _write_scope_violation_result(
+        self,
+        action: dict[str, Any],
+    ) -> ToolActionResult | None:
+        """Reject mutations a write-confined session may not perform.
+
+        Active only when this session carries a ``write_scope_guard``
+        (Phase 1.2 mutating subagents). Path-bearing mutations must target
+        paths inside the scope; opaque shell commands are blocked entirely
+        because their writes cannot be scope-checked. Recovery tools
+        (rollback/repair/abort) operate on previously scope-validated
+        targets and stay available.
+        """
+        guard = self.write_scope_guard
+        if guard is None:
+            return None
+        tool = action_tool(action)
+        if tool not in MUTATING_LOCAL_ACTIONS:
+            return None
+        if tool == "run_command":
+            return ToolActionResult(
+                tool=tool,
+                ok=False,
+                message=(
+                    "write_scope_violation: this session is confined to a "
+                    "declared write scope, and run_command is unavailable "
+                    "because opaque shell writes cannot be scope-checked. "
+                    "Use write_file/replace_text/apply_patch inside the "
+                    "write scope instead."
+                ),
+                data={
+                    "write_scope_violation": True,
+                    "write_scope": list(guard),
+                },
+            )
+        if tool not in SNAPSHOT_MUTATING_ACTIONS:
+            return None
+        violating_paths = [
+            path
+            for path in action_path_values(action)
+            if not path_within_write_scope(path, guard)
+        ]
+        if not violating_paths:
+            return None
+        return ToolActionResult(
+            tool=tool,
+            ok=False,
+            message=(
+                f"write_scope_violation: {tool} targets paths outside this "
+                "session's declared write scope: "
+                f"{', '.join(violating_paths)}."
+            ),
+            data={
+                "write_scope_violation": True,
+                "violating_paths": violating_paths,
+                "write_scope": list(guard),
+            },
+        )
 
     def _opaque_batch_mutation_result(
         self,
@@ -2275,11 +2351,20 @@ class GenericEditRuntimeSession:
             max_concurrency=self._max_subagent_concurrency,
             max_task_seconds=self._max_subagent_task_seconds,
         )
+        # Mutating tasks raise the child-capability bar: the ``subagents``
+        # capability is policy-granted (RuntimePolicy.mutating_subagents_enabled),
+        # so without that grant a transactional_write task is honestly refused.
+        child_requirements = (
+            RuntimeRequirements.mutating_subagent()
+            if any(is_mutating_subagent_task(task) for task in tasks)
+            else RuntimeRequirements.text_only(mode="subagent")
+        )
         support = orchestrator.support_for(
             provider_name=self.provider_name,
             runtime_name=self.name,
             capabilities=self.capabilities,
-            child_requirements=RuntimeRequirements.text_only(mode="subagent"),
+            child_requirements=child_requirements,
+            policy=getattr(self, "runtime_policy", None),
         )
         if not support.available:
             return ToolActionResult(
@@ -2774,25 +2859,88 @@ def parse_runtime_subagent_action_task(
         field_name=f"tasks[{index}].merge_policy",
         maximum=40,
     )
-    if merge_policy != DEFAULT_SUBAGENT_MERGE_POLICY:
+    if merge_policy not in SUPPORTED_SUBAGENT_MERGE_POLICIES:
+        supported = ", ".join(sorted(SUPPORTED_SUBAGENT_MERGE_POLICIES))
         raise GenericEditRuntimeError(
-            "run_subagents currently supports only read_only child merge policy"
+            f"run_subagents task #{index} merge_policy '{merge_policy}' is not "
+            f"supported; use one of: {supported}"
         )
+    write_scope = parse_subagent_write_scope(
+        raw_task.get("write_scope"),
+        index=index,
+        merge_policy=merge_policy,
+    )
     max_attempts = bounded_subagent_attempts(
         raw_task.get("max_attempts", 1),
         field_name=f"tasks[{index}].max_attempts",
+    )
+    requirements = (
+        RuntimeRequirements.mutating_subagent()
+        if merge_policy == TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY
+        else RuntimeRequirements.text_only(mode="subagent")
     )
     return RuntimeSubagentTask(
         id=task_id,
         role=role,
         prompt=prompt,
-        requirements=RuntimeRequirements.text_only(mode="subagent"),
+        requirements=requirements,
         subtask_id=subtask_id,
         metadata=metadata,
         context=context,
         merge_policy=merge_policy,
+        write_scope=write_scope,
         max_attempts=max_attempts,
     )
+
+
+def parse_subagent_write_scope(
+    raw_scope: Any,
+    *,
+    index: int,
+    merge_policy: str,
+) -> tuple[str, ...]:
+    """Parse and validate one run_subagents task write scope.
+
+    A ``transactional_write`` task must declare a bounded, workspace-relative
+    write scope; a ``read_only`` task must not declare one. Entries are
+    normalized to forward-slash relative paths and deduplicated.
+    """
+    if merge_policy == DEFAULT_SUBAGENT_MERGE_POLICY:
+        if raw_scope in (None, [], ()):
+            return ()
+        raise GenericEditRuntimeError(
+            f"run_subagents task #{index} declares write_scope but its "
+            "merge_policy is read_only; use merge_policy transactional_write "
+            "for mutating children"
+        )
+    if not isinstance(raw_scope, list) or not raw_scope:
+        raise GenericEditRuntimeError(
+            f"run_subagents task #{index} with merge_policy "
+            f"{TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY} must declare "
+            "write_scope as a non-empty list of workspace-relative paths"
+        )
+    if len(raw_scope) > MAX_SUBAGENT_WRITE_SCOPE_PATHS:
+        raise GenericEditRuntimeError(
+            f"run_subagents task #{index} write_scope supports at most "
+            f"{MAX_SUBAGENT_WRITE_SCOPE_PATHS} paths"
+        )
+    normalized_scope: list[str] = []
+    for path_index, raw_path in enumerate(raw_scope, start=1):
+        value = bounded_subagent_string(
+            raw_path,
+            field_name=f"tasks[{index}].write_scope[{path_index}]",
+            maximum=MAX_SUBAGENT_WRITE_SCOPE_CHARS,
+        )
+        normalized = normalize_write_scope_path(value)
+        if normalized is None:
+            raise GenericEditRuntimeError(
+                f"run_subagents task #{index} write_scope[{path_index}] "
+                f"'{raw_path}' must be a workspace-relative path without "
+                "'..' or absolute components"
+            )
+        if normalized not in normalized_scope:
+            normalized_scope.append(normalized)
+    return tuple(normalized_scope)
 
 
 def bounded_subagent_string(value: Any, *, field_name: str, maximum: int) -> str:
@@ -4299,6 +4447,67 @@ def resolve_snapshot_workspace_path(project_dir: Path, path: str) -> Path:
             f"Mutation snapshot path escapes workspace: {path}"
         )
     return target
+
+
+_WINDOWS_DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:")
+
+
+def normalize_write_scope_path(value: str) -> str | None:
+    """Normalize one write-scope path to a forward-slash relative form.
+
+    Returns ``None`` for paths that can never be inside a workspace-relative
+    write scope: absolute paths (POSIX or Windows-drive), UNC paths, empty
+    values, and any path containing a ``..`` segment. Pure string handling —
+    no filesystem access, so not-yet-created targets validate the same way.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip().replace("\\", "/")
+    if not text:
+        return None
+    if text.startswith("/") or _WINDOWS_DRIVE_PATH_RE.match(text):
+        return None
+    segments = [
+        segment for segment in text.split("/") if segment not in ("", ".")
+    ]
+    if not segments or any(segment == ".." for segment in segments):
+        return None
+    return "/".join(segments)
+
+
+def normalize_write_scope_entries(
+    entries: tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...] | None:
+    """Normalize a write-scope guard, raising on entries that cannot confine."""
+    if not entries:
+        return None
+    normalized: list[str] = []
+    for entry in entries:
+        normalized_entry = normalize_write_scope_path(str(entry))
+        if normalized_entry is None:
+            raise ValueError(
+                f"write_scope_guard entry '{entry}' must be a workspace-"
+                "relative path without '..' or absolute components"
+            )
+        if normalized_entry not in normalized:
+            normalized.append(normalized_entry)
+    return tuple(normalized)
+
+
+def path_within_write_scope(path: str, scope: tuple[str, ...]) -> bool:
+    """Return whether a target path falls inside a normalized write scope.
+
+    Scope entries match themselves and, as directory prefixes, their whole
+    subtree. Paths that fail normalization (absolute, ``..``) are always
+    outside the scope.
+    """
+    normalized = normalize_write_scope_path(path)
+    if normalized is None:
+        return False
+    for entry in scope:
+        if normalized == entry or normalized.startswith(entry + "/"):
+            return True
+    return False
 
 
 def action_path_values(action: dict[str, Any]) -> list[str]:
