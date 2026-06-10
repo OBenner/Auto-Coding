@@ -80,6 +80,7 @@ from .runtime import (
     RuntimeCapabilityError,
     create_runtime_session,
     get_runtime_mode,
+    is_mutating_subagent_task,
     requirements_for_runtime_mode,
     resolve_direct_api_autonomous_gate,
     resolve_runtime_mode_with_fallback,
@@ -1352,6 +1353,21 @@ async def run_autonomous_agent(
                     else:
                         child_session = child_provider.create_session(
                             child_session_config
+                        )
+                    if is_mutating_subagent_task(task):
+                        # A transactional_write child runs a write-confined
+                        # generic_edit session that stages its mutations and
+                        # exports them as a changeset for the parent to merge
+                        # — it never commits to the shared workspace itself.
+                        return create_runtime_session(
+                            provider_name=child_provider.name,
+                            agent_session=child_session,
+                            claude_session_runner=run_agent_session,
+                            runtime_mode="generic_edit",
+                            project_dir=project_dir,
+                            agent_type=child_agent_type,
+                            write_scope_guard=tuple(task.write_scope),
+                            changeset_export=True,
                         )
                     return create_runtime_session(
                         provider_name=child_provider.name,

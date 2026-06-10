@@ -118,6 +118,10 @@ class RuntimeSubagentResult:
     merge_policy: str = DEFAULT_SUBAGENT_MERGE_POLICY
     write_scope: tuple[str, ...] = ()
     artifact_path: str | None = None
+    # Staged mutations exported by a changeset session (transactional_write
+    # children). None for read-only children and for mutating children that
+    # did not reach a clean finish.
+    changeset: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize result for artifact output."""
@@ -372,7 +376,14 @@ class RuntimeSubagentOrchestrator:
         verbose: bool,
         phase: Any,
     ) -> AgentRunResult:
-        """Run one child runtime session with the configured timeout."""
+        """Run one child runtime session with the configured timeout.
+
+        Children get a per-child artifact namespace under the parent spec
+        dir so a runtime child (for example a confined generic_edit session)
+        never clobbers the parent's own runtime artifacts — or a sibling's —
+        with same-named trace/checkpoint files.
+        """
+        child_spec_dir = subagent_child_spec_dir(self.spec_dir, task)
         return await asyncio.wait_for(
             run_runtime_session(
                 runtime_session,
@@ -381,10 +392,10 @@ class RuntimeSubagentOrchestrator:
                     attempt=attempt,
                     child_context_id=child_context_id,
                 ),
-                self.spec_dir,
+                child_spec_dir,
                 verbose=verbose,
                 phase=phase,
-                requirements=task.requirements,
+                requirements=child_execution_requirements(task),
                 subtask_id=task.subtask_id or task.id,
             ),
             timeout=self.max_task_seconds,
@@ -424,6 +435,7 @@ def runtime_result_to_subagent_result(
         usage_metadata=result.usage_metadata,
         artifacts=result.artifacts,
         max_attempts=bounded_subagent_attempts(task.max_attempts),
+        changeset=getattr(result, "changeset", None),
     )
 
 
@@ -559,7 +571,29 @@ def mutating_child_confinement_error(
             f"Mutating subagent task '{task.id}' child session allows paths "
             f"outside the declared write scope: {', '.join(extra_paths)}."
         )
+    if not getattr(runtime_session, "changeset_export", False):
+        return (
+            f"Mutating subagent task '{task.id}' requires a changeset-exporting "
+            "child session (changeset_export=True) so its staged mutations "
+            "reach the parent as a changeset instead of landing on the shared "
+            "workspace; the session factory returned a directly-writing "
+            "session."
+        )
     return None
+
+
+def child_execution_requirements(task: RuntimeSubagentTask) -> RuntimeRequirements:
+    """Return the capability requirements for RUNNING one child session.
+
+    ``task.requirements`` is the parent-side gate (it includes the
+    policy-granted ``subagents`` capability that keeps mutating children
+    behind the autonomy policy). The child session itself is a Generic Edit
+    runtime for mutating tasks — validate it against what it physically
+    does, not against the parent gate.
+    """
+    if is_mutating_subagent_task(task):
+        return RuntimeRequirements.generic_edit()
+    return task.requirements
 
 
 def resolve_runtime_subagent_support(
@@ -688,6 +722,11 @@ def subagent_child_context_id(
     return f"child-{safe_artifact_id(task.id)}-attempt-{attempt}"
 
 
+def subagent_child_spec_dir(spec_dir: Path, task: RuntimeSubagentTask) -> Path:
+    """Return the per-child artifact namespace for one delegated task."""
+    return spec_dir / "artifacts" / "subagents" / safe_artifact_id(task.id)
+
+
 def summarize_subagent_status(results: list[RuntimeSubagentResult]) -> str:
     """Return aggregate status for a subagent run."""
     if any(result.status == "error" for result in results):
@@ -799,6 +838,21 @@ def build_subagent_merge_plan(
             scope_owner[scope] = result.id
 
     conflict_result_ids = list(dict.fromkeys(conflict_result_ids))
+    changeset_result_ids = [
+        result.id
+        for result in results
+        if result.id in mutating_result_ids and result.changeset is not None
+    ]
+    # A mutating child that finished WITHOUT exporting a changeset has
+    # nothing the parent can apply — the merge executor treats it as failed.
+    # (A real generic_edit child reports "continue" on a clean finish.)
+    missing_changeset_result_ids = [
+        result.id
+        for result in results
+        if result.id in mutating_result_ids
+        and result.changeset is None
+        and result.status in {"complete", "continue"}
+    ]
     return {
         "strategy": (
             "read_only" if not mutating_result_ids else "transactional_parent_merge"
@@ -806,6 +860,8 @@ def build_subagent_merge_plan(
         "requires_parent_merge": bool(mutating_result_ids),
         "read_only_result_ids": read_only_result_ids,
         "mutating_result_ids": mutating_result_ids,
+        "changeset_result_ids": changeset_result_ids,
+        "missing_changeset_result_ids": missing_changeset_result_ids,
         "write_scopes": write_scopes,
         "conflict_result_ids": conflict_result_ids,
         "has_conflicts": bool(conflict_result_ids),
