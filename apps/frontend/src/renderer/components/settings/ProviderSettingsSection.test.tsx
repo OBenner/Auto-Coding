@@ -21,7 +21,8 @@ import {
   buildRuntimeCapabilityDiagnosticRows,
   buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
-  buildRuntimePolicyDiagnosticRows
+  buildRuntimePolicyDiagnosticRows,
+  getReadinessBadgeClass
 } from './ProviderSettingsSection';
 
 const translate = (key: string, options?: Record<string, unknown>) => {
@@ -1548,5 +1549,18 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
       labelKey: 'settings:aiProvider.connectionTest.batchBoundaryErrors',
       value: '2',
     });
+  });
+});
+
+describe('getReadinessBadgeClass', () => {
+  it('maps readiness status to the autonomy badge color', () => {
+    expect(getReadinessBadgeClass('full_autonomous_candidate')).toContain('text-success');
+    expect(getReadinessBadgeClass('ready')).toContain('text-success');
+    expect(getReadinessBadgeClass('warming_up')).toContain('text-warning');
+    expect(getReadinessBadgeClass('needs_live_fault_evidence')).toContain('text-warning');
+    expect(getReadinessBadgeClass('blocked')).toContain('text-destructive');
+    // Unknown / missing statuses fall back to a muted chip.
+    expect(getReadinessBadgeClass('not_required')).toContain('text-muted-foreground');
+    expect(getReadinessBadgeClass(undefined)).toContain('text-muted-foreground');
   });
 });

@@ -752,6 +752,29 @@
     "description": "Sélectionnez le backend d'IA à utiliser pour les sessions d'agent",
     "label": "Fournisseur d'IA",
     "selectProvider": "Sélectionner le fournisseur d'IA",
+    "autonomyLevel": {
+      "label": "Niveau d'autonomie",
+      "hint": "Le réglage d'autonomie principal (ADR-006). La barrière de promotion des API directes reste appliquée en mode Sûr — seuls les fournisseurs disposant de preuves enregistrées sont promus.",
+      "readinessBadgeLabel": "Disponibilité de {{provider}} :",
+      "levels": {
+        "off": {
+          "name": "Désactivé",
+          "description": "Analyse uniquement — aucune modification autonome"
+        },
+        "claude": {
+          "name": "Claude (par défaut)",
+          "description": "Autonomie complète Claude / Codex ; barrière API directe désactivée"
+        },
+        "safe": {
+          "name": "Sûr (recommandé)",
+          "description": "Les fournisseurs d'API directes s'exécutent de façon autonome une fois la barrière de preuves franchie ; bac à sable, repli d'exécution et sous-agents mutateurs transactionnels activés"
+        },
+        "bold": {
+          "name": "Audacieux",
+          "description": "Ignore la barrière de preuves (utilisateur avancé ; promeut des fournisseurs sans preuves enregistrées)"
+        }
+      }
+    },
     "currentProvider": "Fournisseur actuel",
     "providers": {
       "claude": {

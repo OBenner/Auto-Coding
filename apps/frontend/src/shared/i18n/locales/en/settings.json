@@ -804,6 +804,29 @@
     "description": "Select the AI backend to use for agent sessions",
     "label": "AI Provider",
     "selectProvider": "Select AI Provider",
+    "autonomyLevel": {
+      "label": "Autonomy Level",
+      "hint": "The primary autonomy knob (ADR-006). The direct-API promotion gate stays enforced under Safe — only providers with recorded evidence are promoted.",
+      "readinessBadgeLabel": "{{provider}} readiness:",
+      "levels": {
+        "off": {
+          "name": "Off",
+          "description": "Analysis only — no autonomous edits"
+        },
+        "claude": {
+          "name": "Claude (default)",
+          "description": "Claude / Codex full autonomy; direct-API gate off"
+        },
+        "safe": {
+          "name": "Safe (recommended)",
+          "description": "Direct-API providers run autonomously once they pass the evidence gate; sandbox, runtime fallback and transactional mutating subagents on"
+        },
+        "bold": {
+          "name": "Bold",
+          "description": "Skips the evidence gate (power user; promotes providers without recorded evidence)"
+        }
+      }
+    },
     "currentProvider": "Current Provider",
     "providers": {
       "claude": {
