@@ -4590,14 +4590,15 @@ def test_subagent_merge_rollback_transaction_undoes_one_child(tmp_path: Path):
         mutation_snapshots=snapshots,
     )
     assert merge_execution["status"] == "applied"
+    assert len(merge_execution["outcomes"]) == 1
     assert merge_execution["outcomes"][0]["mutation_snapshot_id"] == (
         "subagent_merge-1"
     )
     # Checkpoint integrity validation requires workspace_guard on every
     # checkpoint-referenced snapshot.
+    assert len(snapshots) == 1
     assert snapshots[0]["workspace_guard"]["status"] == "captured"
     assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "child change\n"
-    assert len(snapshots) == 1
 
     rollback = execute_generic_edit_transaction_rollback(
         action={"transaction_id": "subagent_merge:edit-a"},
