@@ -102,6 +102,8 @@ from .runner_router import (
 from .session_engine import resume_runtime_session, run_runtime_session
 from .subagents import (
     MAX_SUBAGENT_ATTEMPTS,
+    SUPPORTED_SUBAGENT_MERGE_POLICIES,
+    TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
     RuntimeSubagentAttempt,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
@@ -109,6 +111,7 @@ from .subagents import (
     RuntimeSubagentSupport,
     RuntimeSubagentTask,
     build_subagent_merge_plan,
+    is_mutating_subagent_task,
     resolve_runtime_subagent_support,
     summarize_subagent_results,
 )
@@ -159,6 +162,9 @@ __all__ = [
     "LocalActionToolSpec",
     "ToolActionResult",
     "MAX_SUBAGENT_ATTEMPTS",
+    "SUPPORTED_SUBAGENT_MERGE_POLICIES",
+    "TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY",
+    "is_mutating_subagent_task",
     "build_external_mcp_health_matrix",
     "build_mcp_bridge_plan",
     "McpExecutionSmokeResult",
