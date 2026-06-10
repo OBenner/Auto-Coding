@@ -13,3 +13,8 @@ class AgentRunResult:
     usage_metadata: dict[str, Any] | None = None
     decision_tracker: Any = None
     artifacts: dict[str, str] | None = None
+    # Phase 1.2 mutating subagents: a changeset-exporting session (a
+    # write-confined child) finishes WITHOUT committing its staged mutations
+    # to the shared workspace; the staged pre/postimages are returned here so
+    # the parent can merge them transactionally.
+    changeset: dict[str, Any] | None = None

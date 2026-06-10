@@ -352,6 +352,12 @@ BEGIN_BATCH_TOOL = "begin_batch"
 COMMIT_BATCH_TOOL = "commit_batch"
 ABORT_BATCH_TOOL = "abort_batch"
 BATCH_CONTROL_TOOLS = frozenset({BEGIN_BATCH_TOOL, COMMIT_BATCH_TOOL, ABORT_BATCH_TOOL})
+# Phase 1.2: implicit staging batch for changeset-exporting (mutating child)
+# sessions. The runtime owns this batch: it auto-opens on the first staged
+# mutation and is finalized into an exported changeset at finish instead of
+# ever being committed to the shared workspace.
+CHANGESET_BATCH_ID = "__changeset__"
+GENERIC_EDIT_CHANGESET_SCHEMA_VERSION = 1
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -598,6 +604,7 @@ class GenericEditRuntimeSession:
         sandbox_policy: SandboxPolicy | None = None,
         sandbox_backend: SandboxBackendInfo | None = None,
         write_scope_guard: tuple[str, ...] | list[str] | None = None,
+        changeset_export: bool = False,
     ):
         self.provider_name = provider_name
         self.agent_session = agent_session
@@ -606,6 +613,12 @@ class GenericEditRuntimeSession:
         # actions may only target paths inside this scope and opaque shell
         # commands are blocked entirely (they cannot be scope-checked).
         self.write_scope_guard = normalize_write_scope_entries(write_scope_guard)
+        # Phase 1.2: changeset-exporting session. Mutations are auto-staged
+        # into the runtime-owned CHANGESET_BATCH_ID batch and finish exports
+        # the staged pre/postimages instead of committing them to the shared
+        # workspace; transaction batching is runtime-owned in this mode.
+        self.changeset_export = bool(changeset_export)
+        self._exported_changeset: dict[str, Any] | None = None
         self._subagent_session_factory = subagent_session_factory
         self._max_subagent_concurrency = max(1, max_subagent_concurrency)
         self._max_subagent_task_seconds = max_subagent_task_seconds
@@ -1163,7 +1176,11 @@ class GenericEditRuntimeSession:
             results=action_results,
         )
         finish_trace = [*trace, iteration_entry]
-        if has_open_transaction_batch(finish_trace):
+        # In a changeset-exporting session the only possible open batch is the
+        # runtime-owned staging batch (model batch control is rejected), and
+        # finish finalizes it into the exported changeset — so the open-batch
+        # veto only applies to model-managed batches.
+        if not self.changeset_export and has_open_transaction_batch(finish_trace):
             return self._open_batch_finish_result(
                 trace=finish_trace,
                 spec_dir=spec_dir,
@@ -1177,6 +1194,7 @@ class GenericEditRuntimeSession:
                 observation_path=observation_path,
                 subtask_id=subtask_id,
             )
+        changeset = self._finalize_changeset_export()
         trace.append(iteration_entry)
         artifacts = save_generic_edit_artifacts(
             spec_dir=spec_dir,
@@ -1203,6 +1221,7 @@ class GenericEditRuntimeSession:
         return AgentRunResult(
             status="continue",
             response_text="\n".join(response_lines),
+            changeset=changeset,
         )
 
     async def _run_native_tool_iteration(
@@ -1649,7 +1668,9 @@ class GenericEditRuntimeSession:
             results=action_results,
         )
         finish_trace = [*trace, iteration_entry]
-        if has_open_transaction_batch(finish_trace):
+        # See the JSON finish path: the open-batch veto only applies to
+        # model-managed batches, never to the runtime-owned staging batch.
+        if not self.changeset_export and has_open_transaction_batch(finish_trace):
             return self._open_batch_finish_result(
                 trace=finish_trace,
                 spec_dir=spec_dir,
@@ -1663,6 +1684,7 @@ class GenericEditRuntimeSession:
                 observation_path=observation_path,
                 subtask_id=subtask_id,
             )
+        changeset = self._finalize_changeset_export()
         trace.append(iteration_entry)
         artifacts = save_generic_edit_artifacts(
             spec_dir=spec_dir,
@@ -1689,6 +1711,7 @@ class GenericEditRuntimeSession:
         return AgentRunResult(
             status="continue",
             response_text="\n".join(response_lines),
+            changeset=changeset,
         )
 
     def _open_batch_finish_result(
@@ -1812,9 +1835,15 @@ class GenericEditRuntimeSession:
         if scope_error is not None:
             return scope_error
 
+        changeset_error = self._changeset_batch_control_result(action)
+        if changeset_error is not None:
+            return changeset_error
+
         isolation_error = self._opaque_batch_mutation_result(action)
         if isolation_error is not None:
             return isolation_error
+
+        self._auto_open_changeset_batch(action)
 
         tool = action_tool(action)
         try:
@@ -1985,6 +2014,70 @@ class GenericEditRuntimeSession:
                 "write_scope": list(guard),
             },
         )
+
+    def _changeset_batch_control_result(
+        self,
+        action: dict[str, Any],
+    ) -> ToolActionResult | None:
+        """Reject model-issued batch control in a changeset-exporting session.
+
+        Changeset sessions stage mutations automatically into the
+        runtime-owned changeset batch; committing to the shared workspace is
+        the parent's job, so begin/commit/abort batch are not available to
+        the child model.
+        """
+        if not self.changeset_export:
+            return None
+        tool = action_tool(action)
+        if tool not in BATCH_CONTROL_TOOLS:
+            return None
+        return ToolActionResult(
+            tool=tool,
+            ok=False,
+            message=(
+                f"{tool} is unavailable in a changeset-exporting session: "
+                "mutations are staged automatically and exported at finish "
+                "for the parent to merge transactionally. Edit files inside "
+                "your write scope and call finish."
+            ),
+            data={
+                "changeset_batch_control_rejected": True,
+                "changeset_batch_id": CHANGESET_BATCH_ID,
+            },
+        )
+
+    def _auto_open_changeset_batch(self, action: dict[str, Any]) -> None:
+        """Open the runtime-owned staging batch before the first mutation."""
+        if (
+            self.changeset_export
+            and self._active_batch_id is None
+            and action_tool(action) in SNAPSHOT_MUTATING_ACTIONS
+        ):
+            self._active_batch_id = CHANGESET_BATCH_ID
+
+    def _finalize_changeset_export(self) -> dict[str, Any] | None:
+        """Export staged changeset mutations at finish without committing them.
+
+        Returns the changeset payload (empty entries when the child mutated
+        nothing) and closes the runtime-owned staging batch so the session
+        ends clean. The shared workspace is left at its baseline state.
+        """
+        if not self.changeset_export:
+            return None
+        changeset = build_generic_edit_changeset(
+            batch_id=CHANGESET_BATCH_ID,
+            mutation_snapshots=self._mutation_snapshots,
+            write_scope=self.write_scope_guard,
+        )
+        for snapshot in self._mutation_snapshots:
+            if generic_edit_snapshot_is_active_staged(
+                snapshot, batch_id=CHANGESET_BATCH_ID
+            ):
+                snapshot["staged_status"] = "exported"
+        if self._active_batch_id == CHANGESET_BATCH_ID:
+            self._active_batch_id = None
+        self._exported_changeset = changeset
+        return changeset
 
     def _opaque_batch_mutation_result(
         self,
@@ -3805,6 +3898,72 @@ def active_generic_edit_staged_postimages(
                 continue
             postimages.append({**postimage, "snapshot_id": snapshot_id})
     return postimages
+
+
+def build_generic_edit_changeset(
+    *,
+    batch_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+    write_scope: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    """Build an exportable changeset from active staged mutation snapshots.
+
+    One entry per path: the FIRST captured preimage (the shared-workspace
+    baseline the parent must still observe at merge time) and the LAST staged
+    postimage (the content the parent applies). An entry without full
+    postimage content (over the preimage size cap, or non-UTF-8) is marked
+    non-exportable, and the changeset as a whole is only ``exportable`` when
+    every entry is — the parent refuses to apply partial content.
+    """
+    first_preimage_by_path: dict[str, dict[str, Any]] = {}
+    last_postimage_by_path: dict[str, dict[str, Any]] = {}
+    snapshot_ids: list[str] = []
+    for snapshot in mutation_snapshots:
+        if not generic_edit_snapshot_is_active_staged(snapshot, batch_id=batch_id):
+            continue
+        snapshot_id = str(snapshot.get("id") or "")
+        if snapshot_id:
+            snapshot_ids.append(snapshot_id)
+        for preimage in snapshot.get("preimages") or []:
+            if not isinstance(preimage, dict):
+                continue
+            path = str(preimage.get("path") or "")
+            if path and path not in first_preimage_by_path:
+                first_preimage_by_path[path] = preimage
+        for postimage in snapshot.get("postimages") or []:
+            if not isinstance(postimage, dict):
+                continue
+            path = str(postimage.get("path") or "")
+            if path:
+                last_postimage_by_path[path] = postimage
+
+    entries: list[dict[str, Any]] = []
+    for path in sorted(last_postimage_by_path):
+        postimage = last_postimage_by_path[path]
+        # The parent applies entries with the same machinery that
+        # materializes staged states, so exportability == materializability.
+        entry_exportable = generic_edit_file_state_is_materializable(postimage)
+        entries.append(
+            {
+                "path": path,
+                "exportable": entry_exportable,
+                "preimage": first_preimage_by_path.get(path),
+                "postimage": postimage,
+            }
+        )
+
+    return {
+        "schema_version": GENERIC_EDIT_CHANGESET_SCHEMA_VERSION,
+        "batch_id": batch_id,
+        "write_scope": list(write_scope or ()),
+        "entry_count": len(entries),
+        "exportable": all(entry["exportable"] for entry in entries),
+        "non_exportable_paths": [
+            entry["path"] for entry in entries if not entry["exportable"]
+        ],
+        "snapshot_ids": list(dict.fromkeys(snapshot_ids)),
+        "entries": entries,
+    }
 
 
 def materialize_generic_edit_staged_workspace(

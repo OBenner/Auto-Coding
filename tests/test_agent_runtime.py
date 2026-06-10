@@ -1589,6 +1589,7 @@ class FakeSubagentRuntimeSession:
             response_text=self.response,
             usage_metadata={"input_tokens": 1, "output_tokens": 2},
             artifacts=None,
+            changeset=getattr(self, "changeset", None),
         )
 
     async def cancel(self):
@@ -1761,6 +1762,8 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "requires_parent_merge": False,
         "read_only_result_ids": ["explore-api", "explore-ui"],
         "mutating_result_ids": [],
+        "changeset_result_ids": [],
+        "missing_changeset_result_ids": [],
         "write_scopes": {},
         "conflict_result_ids": [],
         "has_conflicts": False,
@@ -3699,14 +3702,17 @@ async def test_direct_api_autonomous_runs_mutating_subagents_under_bold(
 
     def session_factory(task: RuntimeSubagentTask):
         session = FakeSubagentRuntimeSession(f"changes from {task.id}")
-        session.capabilities = RuntimeCapabilities(
-            text_completion=True,
-            structured_output=True,
-            filesystem_read=True,
-            filesystem_edit=True,
-            subagents=True,
-        )
+        # A mutating child runs as a confined changeset-exporting generic_edit
+        # session; mirror that contract on the fake.
+        session.capabilities = RuntimeCapabilities.generic_edit()
         session.write_scope_guard = tuple(task.write_scope)
+        session.changeset_export = True
+        session.changeset = {
+            "schema_version": 1,
+            "entry_count": 1,
+            "exportable": True,
+            "entries": [{"path": "src/feature_a/a.txt", "exportable": True}],
+        }
         created_sessions.append(session)
         return session
 
@@ -3766,7 +3772,10 @@ async def test_direct_api_autonomous_runs_mutating_subagents_under_bold(
     assert subagent_artifact["merge_plan"]["strategy"] == "transactional_parent_merge"
     assert subagent_artifact["merge_plan"]["requires_parent_merge"] is True
     assert subagent_artifact["merge_plan"]["mutating_result_ids"] == ["edit-a"]
+    assert subagent_artifact["merge_plan"]["changeset_result_ids"] == ["edit-a"]
+    assert subagent_artifact["merge_plan"]["missing_changeset_result_ids"] == []
     assert subagent_artifact["results"][0]["write_scope"] == ["src/feature_a"]
+    assert subagent_artifact["results"][0]["changeset"]["entry_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -3872,6 +3881,258 @@ async def test_write_scope_guard_blocks_out_of_scope_mutations(tmp_path: Path):
     assert batched_command["ok"] is False
     assert batched_command["data"]["write_scope_violation"] is True
     assert "batch_boundary_error" not in batched_command["data"]
+
+
+@pytest.mark.asyncio
+async def test_changeset_session_exports_without_touching_workspace(tmp_path: Path):
+    """A changeset session stages mutations and exports them at finish."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "existing.txt").write_text("before\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "edit inside scope",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "src/existing.txt",
+                        "content": "after\n",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "src/created.txt",
+                        "content": "new file\n",
+                    },
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "changes staged for export",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        write_scope_guard=["src"],
+        changeset_export=True,
+    )
+    assert runtime_session.changeset_export is True
+
+    result = await run_runtime_session(
+        runtime_session,
+        "stage edits for the parent",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    # The shared workspace is untouched: staged content never committed.
+    assert result.status == "continue"
+    assert (tmp_path / "src" / "existing.txt").read_text(
+        encoding="utf-8"
+    ) == "before\n"
+    assert not (tmp_path / "src" / "created.txt").exists()
+
+    changeset = result.changeset
+    assert changeset is not None
+    assert changeset["schema_version"] == 1
+    assert changeset["exportable"] is True
+    assert changeset["entry_count"] == 2
+    assert changeset["write_scope"] == ["src"]
+    entries = {entry["path"]: entry for entry in changeset["entries"]}
+    assert entries["src/existing.txt"]["preimage"]["content"] == "before\n"
+    assert entries["src/existing.txt"]["postimage"]["content"] == "after\n"
+    assert entries["src/created.txt"]["preimage"]["exists"] is False
+    assert entries["src/created.txt"]["postimage"]["content"] == "new file\n"
+
+
+@pytest.mark.asyncio
+async def test_changeset_session_rejects_model_batch_control(tmp_path: Path):
+    """Batch control is runtime-owned in a changeset-exporting session."""
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "try to manage my own batch",
+                "actions": [{"tool": "begin_batch", "batch_id": "mine"}],
+            },
+            {
+                "thought": "stage and finish instead",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "src/a.txt",
+                        "content": "staged\n",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "staged despite batch refusal",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        write_scope_guard=["src"],
+        changeset_export=True,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "exercise batch control rejection",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    batch_control = observation_lines[0]["result"]
+    assert batch_control["ok"] is False
+    assert batch_control["data"]["changeset_batch_control_rejected"] is True
+    # The refusal does not poison the session: staging + export still work.
+    assert result.changeset is not None
+    assert result.changeset["entry_count"] == 1
+    assert not (tmp_path / "src" / "a.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_runs_changeset_children_end_to_end(tmp_path: Path):
+    """A real confined generic_edit child exports a changeset to the parent."""
+
+    def session_factory(task: RuntimeSubagentTask):
+        child_agent_session = FakeGenericEditSession(
+            [
+                {
+                    "thought": "edit my scope",
+                    "actions": [
+                        {
+                            "tool": "write_file",
+                            "path": "src/feature_a/a.txt",
+                            "content": "child change\n",
+                        }
+                    ],
+                },
+                {
+                    "thought": "done",
+                    "actions": [
+                        {
+                            "tool": "finish",
+                            "summary": "feature a staged",
+                            "tests": [],
+                            "risks": [],
+                        }
+                    ],
+                },
+            ]
+        )
+        return create_runtime_session(
+            provider_name="openai",
+            agent_session=child_agent_session,
+            runtime_mode="generic_edit",
+            project_dir=tmp_path,
+            write_scope_guard=tuple(task.write_scope),
+            changeset_export=True,
+        )
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=2,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="edit-a",
+                prompt="edit feature a",
+                merge_policy=TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
+                write_scope=("src/feature_a",),
+            )
+        ]
+    )
+
+    assert run.status == "continue"
+    result = run.results[0]
+    assert result.status == "continue"
+    assert result.changeset is not None
+    assert result.changeset["exportable"] is True
+    assert result.changeset["entries"][0]["path"] == "src/feature_a/a.txt"
+    # The shared workspace stays untouched until the parent merges.
+    assert not (tmp_path / "src" / "feature_a" / "a.txt").exists()
+    # Merge plan records the exported changeset for the parent executor.
+    merge_plan = run.merge_plan or {}
+    assert merge_plan["changeset_result_ids"] == ["edit-a"]
+    assert merge_plan["missing_changeset_result_ids"] == []
+    # The per-child parent artifact embeds the changeset payload.
+    child_artifact = json.loads(
+        Path(str(result.artifact_path)).read_text(encoding="utf-8")
+    )
+    assert (
+        child_artifact["result"]["changeset"]["entries"][0]["postimage"]["content"]
+        == "child change\n"
+    )
+    # The child runtime writes its own artifacts into a per-child namespace,
+    # never clobbering the parent's generic_edit artifacts.
+    child_runtime_artifacts = (
+        tmp_path / "artifacts" / "subagents" / "edit-a" / "artifacts"
+    )
+    assert (child_runtime_artifacts / "generic_edit_trace.json").exists()
+    assert not (tmp_path / "artifacts" / "generic_edit_trace.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_mutating_child_requires_changeset_export(tmp_path: Path):
+    """A confined but directly-writing child session is refused."""
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FakeSubagentRuntimeSession(f"changes from {task.id}")
+        session.capabilities = RuntimeCapabilities.generic_edit()
+        session.write_scope_guard = tuple(task.write_scope)
+        # changeset_export deliberately absent.
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=1,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="edit-a",
+                prompt="edit feature a",
+                merge_policy=TRANSACTIONAL_WRITE_SUBAGENT_MERGE_POLICY,
+                write_scope=("src/feature_a",),
+            )
+        ]
+    )
+
+    assert run.results[0].status == "error"
+    assert "changeset-exporting" in (run.results[0].error or "")
 
 
 @pytest.mark.asyncio
