@@ -1,6 +1,14 @@
 # Non-Claude Provider Full Autonomy Roadmap
 
-Status: Draft, in active development.
+Status: In active development.
+Milestone (2026-06-01): OpenAI, Google, and OpenRouter pass the full provider
+e2e suite with stable + live-fault evidence and read **ready** from the
+AutonomyPolicy gate (green readiness badges). Per Principle 4, the live-fault
+probes now derive coverage from built-in fault fixtures, so readiness is proven
+from a CI run without local env toggling. `AUTO_CODE_AUTONOMY=safe` is the
+recommended setting and the shipped `.env.example` default: it promotes these
+three providers to full autonomous coding while the evidence gate stays enforced
+for every other provider.
 Owner: runtime / provider integration track.
 Audience: contributors who land code under `apps/backend/agents/runtime/`,
 `apps/backend/core/providers/`, `apps/backend/cli/runtime_commands.py`,
