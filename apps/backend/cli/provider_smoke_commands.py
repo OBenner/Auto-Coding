@@ -26,6 +26,7 @@ from agents.runtime.adapters.completion import CompletionRuntimeSession
 from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
+from core.autonomy_level import MUTATING_SUBAGENTS_ENV
 from core.autonomy_policy import (
     DEFAULT_MAX_HISTORY_AGE_DAYS,
     DEFAULT_MIN_STABLE_RUNS,
@@ -77,6 +78,11 @@ DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT = (
     f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}.\n"
     "3. Call commit_batch to commit the batch.\n"
     "4. Call finish with a short summary. Do not edit any other file.\n"
+)
+DEFAULT_PROVIDER_SUBAGENT_MERGE_SMOKE_PROMPT = (
+    "Subagent merge readiness exercise: delegate the prepared "
+    "transactional_write child tasks, resolve any reported changeset "
+    "conflicts explicitly, then finish."
 )
 DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
     "Implement slugify(value: str) in string_tools.py."
@@ -203,6 +209,7 @@ PROVIDER_SMOKE_RUNTIME_MODES = (
     "generic_edit",
     "mini_pipeline",
     "transaction_batch_probe",
+    "subagent_merge_probe",
     "provider_e2e",
 )
 PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = DIRECT_API_PROVIDERS
@@ -3403,7 +3410,11 @@ def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
             mode="provider_e2e",
             required=RuntimeRequirements.generic_edit().required,
         )
-    if runtime_mode in {"mini_pipeline", "transaction_batch_probe"}:
+    if runtime_mode in {
+        "mini_pipeline",
+        "transaction_batch_probe",
+        "subagent_merge_probe",
+    }:
         return RuntimeRequirements(
             mode=runtime_mode,
             required=RuntimeRequirements.generic_edit().required,
@@ -3420,6 +3431,8 @@ def _provider_smoke_scope(runtime_mode: str) -> str:
         return "mini_task_pipeline"
     if runtime_mode == "transaction_batch_probe":
         return "transaction_batch_probe"
+    if runtime_mode == "subagent_merge_probe":
+        return "subagent_merge_probe"
     if runtime_mode == "generic_edit":
         return "generic_edit_tool_loop"
     return "text_completion_only"
@@ -3446,6 +3459,13 @@ def _provider_smoke_note(runtime_mode: str) -> str:
             "Provider smoke validates a temporary generic_edit transaction batch "
             "with begin_batch, commit_batch, and committed batch diagnostics."
         )
+    if runtime_mode == "subagent_merge_probe":
+        return (
+            "Provider smoke validates the mutating-subagent merge mechanism: "
+            "write-confined children export changesets, the parent applies "
+            "them transactionally, and a real conflict requires explicit "
+            "resolution before finish."
+        )
     if runtime_mode == "generic_edit":
         return (
             "Provider smoke validates a temporary generic_edit tool loop; full "
@@ -3462,7 +3482,11 @@ def _provider_smoke_capability_mode(runtime_mode: str) -> str:
     """Map smoke-only scopes to the runtime mode that supplies capabilities."""
     if runtime_mode == "provider_e2e":
         return "generic_edit"
-    if runtime_mode in {"mini_pipeline", "transaction_batch_probe"}:
+    if runtime_mode in {
+        "mini_pipeline",
+        "transaction_batch_probe",
+        "subagent_merge_probe",
+    }:
         return "generic_edit"
     return runtime_mode
 
@@ -4569,6 +4593,11 @@ async def _complete_provider_e2e_smoke_suite(
             _complete_provider_transaction_batch_smoke,
             None,
         ),
+        (
+            "subagent_merge_probe",
+            _complete_provider_subagent_merge_smoke,
+            None,
+        ),
     ):
         child_diagnostics = build_provider_smoke_runtime_diagnostics(
             provider_name=provider.name,
@@ -4967,6 +4996,326 @@ async def _complete_provider_transaction_batch_smoke(
                 **result.runtime_diagnostics,
                 "smoke_scope": "transaction_batch_probe",
             },
+            success=True,
+        ),
+    )
+
+
+class _DeterministicSubagentChildSession:
+    """Scripted mutating child: one write inside its scope, then finish."""
+
+    def __init__(self, *, path: str, content: str):
+        self._path = path
+        self._content = content
+        self._step = 0
+
+    async def complete_with_tool_calls(
+        self, message: str, tools: Any
+    ) -> ProviderToolCallResponse:
+        self._step += 1
+        if self._step == 1:
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="child_write",
+                        name="write_file",
+                        arguments={"path": self._path, "content": self._content},
+                    ),
+                ),
+            )
+        return ProviderToolCallResponse(
+            content="",
+            tool_calls=(
+                ProviderToolCall(
+                    id="child_finish",
+                    name="finish",
+                    arguments={
+                        "summary": "staged child change",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ),
+            ),
+        )
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        return None
+
+
+class _DeterministicSubagentMergeParentSession:
+    """Scripted parent that delegates mutating children and finishes.
+
+    With ``resolutions`` it additionally resolves the conflicted children
+    explicitly between the delegation and the finish — exercising the
+    conflict checkpoint contract end to end.
+    """
+
+    def __init__(
+        self,
+        *,
+        tasks: list[dict[str, Any]],
+        resolutions: list[dict[str, str]] | None = None,
+    ):
+        self._tasks = tasks
+        self._resolutions = resolutions or []
+        self._step = 0
+
+    async def complete_with_tool_calls(
+        self, message: str, tools: Any
+    ) -> ProviderToolCallResponse:
+        self._step += 1
+        if self._step == 1:
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="parent_delegate",
+                        name="run_subagents",
+                        arguments={"tasks": self._tasks},
+                    ),
+                ),
+            )
+        if self._step == 2 and self._resolutions:
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=tuple(
+                    ProviderToolCall(
+                        id=f"parent_resolve_{index}",
+                        name="resolve_subagent_conflict",
+                        arguments=dict(resolution),
+                    )
+                    for index, resolution in enumerate(self._resolutions, start=1)
+                ),
+            )
+        return ProviderToolCallResponse(
+            content="",
+            tool_calls=(
+                ProviderToolCall(
+                    id="parent_finish",
+                    name="finish",
+                    arguments={
+                        "summary": "subagent merge readiness",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ),
+            ),
+        )
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        return None
+
+
+async def _run_subagent_merge_probe_case(
+    *,
+    provider_name: str,
+    tasks: list[dict[str, Any]],
+    child_contents: dict[str, tuple[str, str]],
+    resolutions: list[dict[str, str]] | None,
+    timeout_seconds: float,
+) -> tuple[Path, Any, tempfile.TemporaryDirectory]:
+    """Run one scripted parent+children subagent merge case.
+
+    Returns the project dir, the parent run result, and the TemporaryDirectory
+    handle (kept alive so the caller can assert on the produced files).
+    """
+
+    def child_session_factory(task: Any) -> Any:
+        path, content = child_contents[str(task.id)]
+        return create_runtime_session(
+            provider_name=provider_name,
+            agent_session=_DeterministicSubagentChildSession(
+                path=path, content=content
+            ),
+            runtime_mode="generic_edit",
+            project_dir=probe_project_dir,
+            write_scope_guard=tuple(task.write_scope),
+            changeset_export=True,
+        )
+
+    temp_handle = tempfile.TemporaryDirectory(prefix="auto-code-subagent-merge-")
+    temp_root = Path(temp_handle.name)
+    probe_project_dir = temp_root / "project"
+    probe_spec_dir = temp_root / "spec"
+    probe_project_dir.mkdir(parents=True, exist_ok=True)
+    probe_spec_dir.mkdir(parents=True, exist_ok=True)
+
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=_DeterministicSubagentMergeParentSession(
+            tasks=tasks,
+            resolutions=resolutions,
+        ),
+        runtime_mode="full_autonomous",
+        project_dir=probe_project_dir,
+        agent_type="coder",
+        subagent_session_factory=child_session_factory,
+        allow_direct_api_autonomous=True,
+    )
+    result = await asyncio.wait_for(
+        run_runtime_session(
+            runtime_session,
+            DEFAULT_PROVIDER_SUBAGENT_MERGE_SMOKE_PROMPT,
+            probe_spec_dir,
+            verbose=False,
+            phase=LogPhase.PLANNING,
+            requirements=RuntimeRequirements.generic_edit(),
+        ),
+        timeout=timeout_seconds,
+    )
+    return probe_project_dir, result, temp_handle
+
+
+async def _complete_provider_subagent_merge_smoke(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    """Probe the mutating-subagent merge mechanism deterministically.
+
+    Two scripted cases drive the REAL runtime (parent and children are
+    scripted sessions, like the recovery and transaction probes, so the
+    probe measures the runtime mechanism rather than model orchestration):
+
+    1. Two write-confined children with disjoint scopes export changesets and
+       the parent applies both transactionally.
+    2. Two children edit the SAME path: the merge surfaces the conflict, the
+       parent resolves explicitly (apply one, discard the other), and finish
+       only passes after resolution.
+
+    The mutating-subagents policy grant is probe-local via the explicit
+    ``AUTO_CODE_MUTATING_SUBAGENTS`` override (restored afterwards), so the
+    probe does not depend on the ambient autonomy level.
+    """
+    del session_config, prompt
+    diagnostics = {**runtime_diagnostics, "smoke_scope": "subagent_merge_probe"}
+
+    def _failure(error_details: str) -> ProviderSmokeResult:
+        return ProviderSmokeResult(
+            success=False,
+            provider=provider.name,
+            model=model,
+            runtime_mode="subagent_merge_probe",
+            message="Provider subagent merge probe failed",
+            error_details=error_details,
+            runtime_diagnostics=_with_provider_contract_health(
+                diagnostics,
+                error_details=error_details,
+            ),
+        )
+
+    mutating_env_before = os.environ.get(MUTATING_SUBAGENTS_ENV)
+    os.environ[MUTATING_SUBAGENTS_ENV] = "true"
+    try:
+        # Case 1: disjoint scopes — both changesets applied by the parent.
+        (
+            disjoint_dir,
+            disjoint_result,
+            disjoint_handle,
+        ) = await _run_subagent_merge_probe_case(
+            provider_name=provider.name,
+            tasks=[
+                {
+                    "id": "edit-a",
+                    "prompt": "Edit feature a",
+                    "merge_policy": "transactional_write",
+                    "write_scope": ["src/feature_a"],
+                },
+                {
+                    "id": "edit-b",
+                    "prompt": "Edit feature b",
+                    "merge_policy": "transactional_write",
+                    "write_scope": ["src/feature_b"],
+                },
+            ],
+            child_contents={
+                "edit-a": ("src/feature_a/a.txt", "feature a change\n"),
+                "edit-b": ("src/feature_b/b.txt", "feature b change\n"),
+            },
+            resolutions=None,
+            timeout_seconds=timeout_seconds,
+        )
+        with disjoint_handle:
+            if disjoint_result.status != "continue":
+                return _failure(
+                    "subagent_merge_disjoint_not_clean(status="
+                    f"{disjoint_result.status})"
+                )
+            applied_a = disjoint_dir / "src" / "feature_a" / "a.txt"
+            applied_b = disjoint_dir / "src" / "feature_b" / "b.txt"
+            if not applied_a.exists() or not applied_b.exists():
+                return _failure(
+                    "subagent_merge_disjoint_not_applied(a="
+                    f"{applied_a.exists()}, b={applied_b.exists()})"
+                )
+            if not _smoke_content_matches(
+                applied_a.read_text(encoding="utf-8"), "feature a change\n"
+            ) or not _smoke_content_matches(
+                applied_b.read_text(encoding="utf-8"), "feature b change\n"
+            ):
+                return _failure("subagent_merge_disjoint_content_mismatch")
+
+        # Case 2: a real conflict — explicit resolution unblocks finish.
+        (
+            conflict_dir,
+            conflict_result,
+            conflict_handle,
+        ) = await _run_subagent_merge_probe_case(
+            provider_name=provider.name,
+            tasks=[
+                {
+                    "id": "edit-a",
+                    "prompt": "Edit the shared file",
+                    "merge_policy": "transactional_write",
+                    "write_scope": ["src/shared"],
+                },
+                {
+                    "id": "edit-b",
+                    "prompt": "Edit the shared file differently",
+                    "merge_policy": "transactional_write",
+                    "write_scope": ["src/shared"],
+                },
+            ],
+            child_contents={
+                "edit-a": ("src/shared/file.txt", "from a\n"),
+                "edit-b": ("src/shared/file.txt", "from b\n"),
+            },
+            resolutions=[
+                {"result_id": "edit-a", "resolution": "apply"},
+                {"result_id": "edit-b", "resolution": "discard"},
+            ],
+            timeout_seconds=timeout_seconds,
+        )
+        with conflict_handle:
+            if conflict_result.status != "continue":
+                return _failure(
+                    "subagent_merge_conflict_not_resolved(status="
+                    f"{conflict_result.status})"
+                )
+            shared_path = conflict_dir / "src" / "shared" / "file.txt"
+            if not shared_path.exists() or not _smoke_content_matches(
+                shared_path.read_text(encoding="utf-8"), "from a\n"
+            ):
+                return _failure("subagent_merge_conflict_resolution_mismatch")
+    finally:
+        if mutating_env_before is None:
+            os.environ.pop(MUTATING_SUBAGENTS_ENV, None)
+        else:
+            os.environ[MUTATING_SUBAGENTS_ENV] = mutating_env_before
+
+    return ProviderSmokeResult(
+        success=True,
+        provider=provider.name,
+        model=model,
+        runtime_mode="subagent_merge_probe",
+        message="Provider subagent merge probe passed",
+        runtime_diagnostics=_with_provider_contract_health(
+            diagnostics,
             success=True,
         ),
     )
