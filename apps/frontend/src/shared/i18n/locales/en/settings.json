@@ -819,11 +819,11 @@
         },
         "safe": {
           "name": "Safe (recommended)",
-          "description": "Direct-API providers run autonomously once they pass the evidence gate; sandbox + runtime fallback on"
+          "description": "Direct-API providers run autonomously once they pass the evidence gate; sandbox, runtime fallback and transactional mutating subagents on"
         },
         "bold": {
           "name": "Bold",
-          "description": "Skips the evidence gate and enables mutating parallel subagents (power user)"
+          "description": "Skips the evidence gate (power user; promotes providers without recorded evidence)"
         }
       }
     },

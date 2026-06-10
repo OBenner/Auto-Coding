@@ -767,11 +767,11 @@
         },
         "safe": {
           "name": "Sûr (recommandé)",
-          "description": "Les fournisseurs d'API directes s'exécutent de façon autonome une fois la barrière de preuves franchie ; bac à sable + repli d'exécution activés"
+          "description": "Les fournisseurs d'API directes s'exécutent de façon autonome une fois la barrière de preuves franchie ; bac à sable, repli d'exécution et sous-agents mutateurs transactionnels activés"
         },
         "bold": {
           "name": "Audacieux",
-          "description": "Ignore la barrière de preuves et active les sous-agents parallèles mutateurs (utilisateur avancé)"
+          "description": "Ignore la barrière de preuves (utilisateur avancé ; promeut des fournisseurs sans preuves enregistrées)"
         }
       }
     },
