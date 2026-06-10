@@ -406,6 +406,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
             "generic_edit",
             "mini_pipeline",
             "transaction_batch_probe",
+            "subagent_merge_probe",
             "unsupported_tools_probe",
             "gateway_model_probe",
         ],

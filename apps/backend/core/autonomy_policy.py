@@ -36,6 +36,12 @@ DEFAULT_REQUIRED_E2E_RUNS: tuple[str, ...] = (
     "generic_edit",
     "mini_pipeline",
     "transaction_batch_probe",
+    # Phase 1.2: the mutating-subagent merge mechanism (changeset export,
+    # transactional parent merge, conflict resolution) must hold before a
+    # provider is promotion-eligible. Persisted history records keep the
+    # contract they were recorded under, so adding this requirement does not
+    # retroactively un-promote providers — it binds from the next recorded run.
+    "subagent_merge_probe",
     "unsupported_tools_probe",
     "gateway_model_probe",
 )
