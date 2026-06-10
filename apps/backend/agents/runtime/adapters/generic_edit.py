@@ -2216,6 +2216,15 @@ class GenericEditRuntimeSession:
                 "result_id": result_id,
                 "resolution": "apply",
                 "outcome": outcome,
+                # Plural keys feed transaction summaries the same way an
+                # applied run_subagents merge does.
+                "mutation_snapshot_ids": (
+                    [str(outcome["mutation_snapshot_id"])]
+                    if outcome.get("mutation_snapshot_id")
+                    else []
+                ),
+                "mutated_paths": list(outcome.get("applied_paths") or []),
+                "affected_paths": list(outcome.get("applied_paths") or []),
                 "remaining_conflict_ids": [
                     pending_id for pending_id in pending_ids if pending_id != result_id
                 ],
