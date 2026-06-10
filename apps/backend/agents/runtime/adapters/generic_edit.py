@@ -358,6 +358,10 @@ BATCH_CONTROL_TOOLS = frozenset({BEGIN_BATCH_TOOL, COMMIT_BATCH_TOOL, ABORT_BATC
 # ever being committed to the shared workspace.
 CHANGESET_BATCH_ID = "__changeset__"
 GENERIC_EDIT_CHANGESET_SCHEMA_VERSION = 1
+# Parent-side application of one child's exported changeset is recorded as one
+# parent transaction with this id prefix, so rollback_transaction can undo a
+# single child's merge without touching its siblings.
+SUBAGENT_MERGE_TRANSACTION_PREFIX = "subagent_merge"
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -2476,6 +2480,28 @@ class GenericEditRuntimeSession:
                 data={"support": support.to_dict()},
             )
 
+        # A transactional parent merge mutates the shared workspace directly;
+        # doing that while a model-managed batch is open would interleave two
+        # staging domains. Fail fast before any child spawns.
+        if (
+            any(is_mutating_subagent_task(task) for task in tasks)
+            and self._active_batch_id is not None
+        ):
+            return ToolActionResult(
+                tool="run_subagents",
+                ok=False,
+                message=(
+                    "Cannot run transactional_write subagents inside open "
+                    f"batch {self._active_batch_id}: commit or abort the "
+                    "batch before delegating mutating work."
+                ),
+                data={
+                    "batch_id": self._active_batch_id,
+                    "batch_boundary_error": True,
+                    "batch_boundary_error_reason": "mutating_subagents_in_open_batch",
+                },
+            )
+
         self._subagent_orchestrator = orchestrator
         try:
             run = await orchestrator.run(
@@ -2492,17 +2518,55 @@ class GenericEditRuntimeSession:
             self._subagent_orchestrator = None
 
         run_payload = run.to_dict()
+        merge_plan = run_payload.get("merge_plan") or {}
+        merge_execution: dict[str, Any] | None = None
+        if merge_plan.get("requires_parent_merge"):
+            merge_execution = execute_subagent_changeset_merge(
+                project_dir=self._executor.project_dir,
+                results=run.results,
+                merge_plan=merge_plan,
+                mutation_snapshots=self._mutation_snapshots,
+            )
+        merge_ok = merge_execution is None or merge_execution["status"] in {
+            "applied",
+            "noop",
+        }
+        # Surface applied-merge snapshots/paths so transaction summaries see
+        # the parent-side mutations: a later failing action in the same turn
+        # must record partial_failure (with a recovery plan), not plain failed.
+        merged_snapshot_ids: list[str] = []
+        merged_paths: list[str] = []
+        if merge_execution is not None:
+            for outcome in merge_execution.get("outcomes") or []:
+                if outcome.get("status") != "applied":
+                    continue
+                if outcome.get("mutation_snapshot_id"):
+                    merged_snapshot_ids.append(str(outcome["mutation_snapshot_id"]))
+                merged_paths.extend(
+                    str(path) for path in outcome.get("applied_paths") or []
+                )
+        merge_suffix = (
+            f" Parent merge {merge_execution['status']}: "
+            f"{len(merge_execution['applied_result_ids'])} changeset(s) applied."
+            if merge_execution is not None
+            else ""
+        )
         return ToolActionResult(
             tool="run_subagents",
-            ok=run.status in {"complete", "continue"},
+            ok=run.status in {"complete", "continue"} and merge_ok,
             message=(
                 f"Runtime subagents finished with status {run.status} "
-                f"({len(run.results)} task(s))."
+                f"({len(run.results)} task(s)).{merge_suffix}"
             ),
             data={
                 "status": run.status,
                 "artifact_path": run.artifact_path,
                 "cancelled": run.cancelled,
+                "merge_plan": merge_plan,
+                "merge_execution": merge_execution,
+                "mutation_snapshot_ids": list(dict.fromkeys(merged_snapshot_ids)),
+                "mutated_paths": list(dict.fromkeys(merged_paths)),
+                "affected_paths": list(dict.fromkeys(merged_paths)),
                 "support": run_payload["support"],
                 "summary": run_payload["summary"],
                 "results": [
@@ -3963,6 +4027,260 @@ def build_generic_edit_changeset(
         ],
         "snapshot_ids": list(dict.fromkeys(snapshot_ids)),
         "entries": entries,
+    }
+
+
+def subagent_merge_transaction_id(result_id: str) -> str:
+    """Return the parent transaction id for one child's changeset merge."""
+    return f"{SUBAGENT_MERGE_TRANSACTION_PREFIX}:{result_id}"
+
+
+def _subagent_merge_outcome(
+    result_id: str,
+    status: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Return one per-child merge outcome row."""
+    return {"result_id": result_id, "status": status, **extra}
+
+
+def _verify_changeset_baseline(
+    *,
+    project_dir: Path,
+    changeset: dict[str, Any],
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """Verify the shared workspace still matches a changeset's preimages.
+
+    Returns ``(failure_status, drift_checks)``. The parent only applies a
+    child's changes onto the exact baseline the child staged against; an
+    unverifiable preimage cannot guarantee a transactional rollback, so it
+    refuses the merge just like real drift does.
+    """
+    drift_checks: list[dict[str, Any]] = []
+    failure_status: str | None = None
+    for entry in changeset.get("entries") or []:
+        preimage = entry.get("preimage")
+        if not isinstance(preimage, dict):
+            return "baseline_unverifiable", drift_checks
+        current = build_generic_edit_file_preimage(
+            project_dir=project_dir,
+            path=str(entry.get("path") or ""),
+        )
+        check = compare_generic_edit_file_state(
+            expected=preimage,
+            current=current,
+            snapshot={"id": "", "transaction_id": ""},
+        )
+        drift_checks.append(check)
+        if check["status"] == "drifted":
+            failure_status = "baseline_drift"
+        elif check["status"] == "unverified" and failure_status is None:
+            failure_status = "baseline_unverifiable"
+    return failure_status, drift_checks
+
+
+def _apply_one_subagent_changeset(
+    *,
+    project_dir: Path,
+    result_id: str,
+    changeset: dict[str, Any],
+    snapshot_index: int,
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply one child changeset transactionally onto the parent workspace.
+
+    The parent merge is the last confinement boundary, so the changeset is
+    treated as untrusted input: the declared write scope must be non-empty
+    and valid, and every entry's declared path must match the paths inside
+    its pre/postimages (the postimage path is what actually gets written).
+    """
+    try:
+        write_scope = normalize_write_scope_entries(
+            [str(path) for path in changeset.get("write_scope") or () if path]
+        )
+    except ValueError:
+        write_scope = None
+    entries = list(changeset.get("entries") or [])
+    if not write_scope:
+        return _subagent_merge_outcome(
+            result_id,
+            "scope_violation",
+            violating_paths=[],
+            reason="missing_or_invalid_write_scope",
+        )
+    for entry in entries:
+        entry_path = str(entry.get("path") or "")
+        preimage_path = str((entry.get("preimage") or {}).get("path") or "")
+        postimage_path = str((entry.get("postimage") or {}).get("path") or "")
+        if len({entry_path, preimage_path, postimage_path}) != 1:
+            return _subagent_merge_outcome(
+                result_id,
+                "invalid_changeset_path",
+                entry_path=entry_path,
+                preimage_path=preimage_path,
+                postimage_path=postimage_path,
+            )
+    scope_violations = [
+        str(entry.get("path"))
+        for entry in entries
+        if not path_within_write_scope(str(entry.get("path")), write_scope)
+    ]
+    if scope_violations:
+        return _subagent_merge_outcome(
+            result_id,
+            "scope_violation",
+            violating_paths=scope_violations,
+        )
+
+    failure_status, drift_checks = _verify_changeset_baseline(
+        project_dir=project_dir,
+        changeset=changeset,
+    )
+    if failure_status is not None:
+        return _subagent_merge_outcome(
+            result_id,
+            failure_status,
+            drift_checks=[
+                check for check in drift_checks if check["status"] != "clean"
+            ],
+        )
+
+    paths = [str(entry.get("path") or "") for entry in entries]
+    rollback_baseline = [
+        build_generic_edit_file_preimage(project_dir=project_dir, path=path)
+        for path in paths
+    ]
+    applied_states: list[dict[str, Any]] = []
+    try:
+        for entry in entries:
+            postimage = entry.get("postimage") or {}
+            apply_generic_edit_file_state(project_dir=project_dir, state=postimage)
+            applied_states.append(postimage)
+    except GenericEditRuntimeError as e:
+        for state in reversed(rollback_baseline):
+            apply_generic_edit_file_state(project_dir=project_dir, state=state)
+        return _subagent_merge_outcome(
+            result_id,
+            "apply_failed_rolled_back",
+            error=str(e),
+            failed_path=str((e.data or {}).get("path") or ""),
+        )
+
+    transaction_id = subagent_merge_transaction_id(result_id)
+    snapshot_id = f"{SUBAGENT_MERGE_TRANSACTION_PREFIX}-{snapshot_index}"
+    snapshot: dict[str, Any] = {
+        "id": snapshot_id,
+        "transaction_id": transaction_id,
+        "batch_id": None,
+        "loop": SUBAGENT_MERGE_TRANSACTION_PREFIX,
+        "iteration": 0,
+        "action_index": snapshot_index,
+        "tool": "apply_subagent_changeset",
+        "paths": paths,
+        "preimages": rollback_baseline,
+        "postimages": applied_states,
+        "rollback": {
+            "strategy": "restore_preimages",
+            "restorable": all(
+                bool(preimage.get("restorable")) for preimage in rollback_baseline
+            ),
+            "instructions": [
+                "For existing file preimages, restore the captured content.",
+                "For missing file preimages, delete the created file if rollback is selected.",
+                "If a preimage is not restorable, inspect git_diff and repair manually.",
+            ],
+        },
+    }
+    # Checkpoint integrity validation treats workspace_guard as mandatory for
+    # any checkpoint-referenced snapshot; without it a recoverable stop after
+    # a subagent_merge rollback would fail resume validation.
+    snapshot["workspace_guard"] = build_generic_edit_snapshot_workspace_guard(snapshot)
+    mutation_snapshots.append(snapshot)
+    return _subagent_merge_outcome(
+        result_id,
+        "applied",
+        mutation_snapshot_id=snapshot_id,
+        applied_paths=paths,
+        transaction_id=transaction_id,
+    )
+
+
+def execute_subagent_changeset_merge(
+    *,
+    project_dir: Path,
+    results: list[Any],
+    merge_plan: dict[str, Any],
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Execute a transactional parent merge of exported child changesets.
+
+    Each mutating child is one transaction boundary: its changeset is
+    baseline-verified and applied as a unit, recorded as a parent mutation
+    snapshot (so ``rollback_transaction`` with ``subagent_merge:<child-id>``
+    undoes exactly that child), and a failed application rolls back only
+    that child's paths. Conflicted children are never auto-applied — they
+    surface as ``conflicted_unresolved`` for explicit parent resolution.
+    """
+    mutating_ids = [
+        str(result_id) for result_id in merge_plan.get("mutating_result_ids") or []
+    ]
+    conflict_ids = {
+        str(result_id) for result_id in merge_plan.get("conflict_result_ids") or []
+    }
+    results_by_id = {str(result.id): result for result in results}
+
+    outcomes: list[dict[str, Any]] = []
+    snapshot_index = 0
+    for result_id in mutating_ids:
+        result = results_by_id.get(result_id)
+        changeset = getattr(result, "changeset", None) if result else None
+        if result is None or changeset is None:
+            outcomes.append(_subagent_merge_outcome(result_id, "missing_changeset"))
+            continue
+        if result_id in conflict_ids:
+            outcomes.append(_subagent_merge_outcome(result_id, "conflicted_unresolved"))
+            continue
+        if not changeset.get("exportable", False):
+            outcomes.append(
+                _subagent_merge_outcome(
+                    result_id,
+                    "non_exportable",
+                    non_exportable_paths=list(
+                        changeset.get("non_exportable_paths") or []
+                    ),
+                )
+            )
+            continue
+        snapshot_index += 1
+        outcomes.append(
+            _apply_one_subagent_changeset(
+                project_dir=project_dir,
+                result_id=result_id,
+                changeset=changeset,
+                snapshot_index=snapshot_index,
+                mutation_snapshots=mutation_snapshots,
+            )
+        )
+
+    applied_result_ids = [
+        outcome["result_id"] for outcome in outcomes if outcome["status"] == "applied"
+    ]
+    unapplied_result_ids = [
+        outcome["result_id"] for outcome in outcomes if outcome["status"] != "applied"
+    ]
+    if not mutating_ids:
+        status = "noop"
+    elif not unapplied_result_ids:
+        status = "applied"
+    elif applied_result_ids:
+        status = "partial"
+    else:
+        status = "failed"
+    return {
+        "status": status,
+        "outcomes": outcomes,
+        "applied_result_ids": applied_result_ids,
+        "unapplied_result_ids": unapplied_result_ids,
     }
 
 
