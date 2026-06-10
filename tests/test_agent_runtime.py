@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -4133,6 +4134,435 @@ async def test_mutating_child_requires_changeset_export(tmp_path: Path):
 
     assert run.results[0].status == "error"
     assert "changeset-exporting" in (run.results[0].error or "")
+
+
+def _changeset_child_payloads(path: str, content: str) -> list[dict]:
+    return [
+        {
+            "thought": "edit my scope",
+            "actions": [
+                {"tool": "write_file", "path": path, "content": content}
+            ],
+        },
+        {
+            "thought": "done",
+            "actions": [
+                {
+                    "tool": "finish",
+                    "summary": "staged",
+                    "tests": [],
+                    "risks": [],
+                }
+            ],
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_parent_merge_applies_child_changesets_end_to_end(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """run_subagents applies exported changesets transactionally to the parent."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+
+    def session_factory(task: RuntimeSubagentTask):
+        child_agent_session = FakeGenericEditSession(
+            _changeset_child_payloads("src/feature_a/a.txt", "child change\n")
+        )
+        return create_runtime_session(
+            provider_name="openai",
+            agent_session=child_agent_session,
+            runtime_mode="generic_edit",
+            project_dir=tmp_path,
+            write_scope_guard=tuple(task.write_scope),
+            changeset_export=True,
+        )
+
+    parent_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "delegate the edit",
+                "actions": [
+                    {
+                        "tool": "run_subagents",
+                        "tasks": [
+                            {
+                                "id": "edit-a",
+                                "prompt": "Edit feature a",
+                                "merge_policy": "transactional_write",
+                                "write_scope": ["src/feature_a"],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "merged child work",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=parent_session,
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+        subagent_session_factory=session_factory,
+        allow_direct_api_autonomous=True,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "delegate and merge",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    # The child's staged change landed on the shared workspace via the parent.
+    assert (tmp_path / "src" / "feature_a" / "a.txt").read_text(
+        encoding="utf-8"
+    ) == "child change\n"
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    subagent_observation = observation_lines[0]["result"]
+    assert subagent_observation["ok"] is True
+    merge_execution = subagent_observation["data"]["merge_execution"]
+    assert merge_execution["status"] == "applied"
+    assert merge_execution["applied_result_ids"] == ["edit-a"]
+    assert merge_execution["outcomes"][0]["transaction_id"] == (
+        "subagent_merge:edit-a"
+    )
+
+
+def test_subagent_merge_refuses_on_baseline_drift(tmp_path: Path):
+    """A changeset only applies onto the exact baseline the child staged on."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
+    )
+
+    # The child staged against a missing file, but the parent workspace has
+    # since gained one — the baseline drifted, so nothing is applied.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.txt").write_text("someone else\n", encoding="utf-8")
+    changeset = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [
+            {
+                "path": "src/a.txt",
+                "exportable": True,
+                "preimage": {"path": "src/a.txt", "exists": False, "type": "missing"},
+                "postimage": {
+                    "path": "src/a.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content": "child change\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                },
+            }
+        ],
+    }
+    results = [SimpleNamespace(id="edit-a", changeset=changeset)]
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=results,
+        merge_plan={"mutating_result_ids": ["edit-a"], "conflict_result_ids": []},
+        mutation_snapshots=snapshots,
+    )
+
+    assert merge_execution["status"] == "failed"
+    assert merge_execution["outcomes"][0]["status"] == "baseline_drift"
+    assert (tmp_path / "src" / "a.txt").read_text(
+        encoding="utf-8"
+    ) == "someone else\n"
+    assert snapshots == []
+
+
+def test_subagent_merge_rolls_back_failed_application(tmp_path: Path):
+    """A mid-apply failure restores that child's paths; nothing leaks."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
+    )
+
+    changeset = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [
+            {
+                "path": "src/ok.txt",
+                "exportable": True,
+                "preimage": {"path": "src/ok.txt", "exists": False, "type": "missing"},
+                "postimage": {
+                    "path": "src/ok.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content": "applied first\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                },
+            },
+            {
+                "path": "src/broken.txt",
+                "exportable": True,
+                "preimage": {
+                    "path": "src/broken.txt",
+                    "exists": False,
+                    "type": "missing",
+                },
+                # Unmaterializable postimage: content missing.
+                "postimage": {
+                    "path": "src/broken.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content_encoding": "utf-8",
+                    "content_truncated": True,
+                },
+            },
+        ],
+    }
+    results = [SimpleNamespace(id="edit-a", changeset=changeset)]
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=results,
+        merge_plan={"mutating_result_ids": ["edit-a"], "conflict_result_ids": []},
+        mutation_snapshots=snapshots,
+    )
+
+    outcome = merge_execution["outcomes"][0]
+    assert merge_execution["status"] == "failed"
+    assert outcome["status"] == "apply_failed_rolled_back"
+    assert outcome["failed_path"] == "src/broken.txt"
+    # The first entry was applied then rolled back with the failing child.
+    assert not (tmp_path / "src" / "ok.txt").exists()
+    assert not (tmp_path / "src" / "broken.txt").exists()
+    assert snapshots == []
+
+
+def test_subagent_merge_rollback_transaction_undoes_one_child(tmp_path: Path):
+    """An applied child merge is one parent transaction and can be rolled back."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_generic_edit_transaction_rollback,
+        execute_subagent_changeset_merge,
+    )
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.txt").write_text("baseline\n", encoding="utf-8")
+    baseline_sha = hashlib.sha256(b"baseline\n").hexdigest()
+    changeset = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [
+            {
+                "path": "src/a.txt",
+                "exportable": True,
+                "preimage": {
+                    "path": "src/a.txt",
+                    "exists": True,
+                    "type": "file",
+                    "bytes": len("baseline\n"),
+                    "content": "baseline\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                    "content_sha256": baseline_sha,
+                    "line_count": 1,
+                },
+                "postimage": {
+                    "path": "src/a.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content": "child change\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                },
+            }
+        ],
+    }
+    results = [SimpleNamespace(id="edit-a", changeset=changeset)]
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=results,
+        merge_plan={"mutating_result_ids": ["edit-a"], "conflict_result_ids": []},
+        mutation_snapshots=snapshots,
+    )
+    assert merge_execution["status"] == "applied"
+    assert (tmp_path / "src" / "a.txt").read_text(
+        encoding="utf-8"
+    ) == "child change\n"
+    assert len(snapshots) == 1
+
+    rollback = execute_generic_edit_transaction_rollback(
+        action={"transaction_id": "subagent_merge:edit-a"},
+        project_dir=tmp_path,
+        mutation_snapshots=snapshots,
+    )
+    assert rollback.ok is True
+    assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "baseline\n"
+
+
+def test_subagent_merge_keeps_conflicted_children_unapplied(tmp_path: Path):
+    """Overlapping-scope children are surfaced, never auto-applied."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
+    )
+
+    def entry(content: str) -> dict:
+        return {
+            "path": "src/shared.txt",
+            "exportable": True,
+            "preimage": {
+                "path": "src/shared.txt",
+                "exists": False,
+                "type": "missing",
+            },
+            "postimage": {
+                "path": "src/shared.txt",
+                "exists": True,
+                "type": "file",
+                "content": content,
+                "content_encoding": "utf-8",
+                "content_truncated": False,
+            },
+        }
+
+    results = [
+        SimpleNamespace(
+            id="edit-a",
+            changeset={
+                "schema_version": 1,
+                "write_scope": ["src"],
+                "exportable": True,
+                "entries": [entry("from a\n")],
+            },
+        ),
+        SimpleNamespace(
+            id="edit-b",
+            changeset={
+                "schema_version": 1,
+                "write_scope": ["src"],
+                "exportable": True,
+                "entries": [entry("from b\n")],
+            },
+        ),
+    ]
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=results,
+        merge_plan={
+            "mutating_result_ids": ["edit-a", "edit-b"],
+            "conflict_result_ids": ["edit-a", "edit-b"],
+        },
+        mutation_snapshots=snapshots,
+    )
+
+    assert merge_execution["status"] == "failed"
+    assert [outcome["status"] for outcome in merge_execution["outcomes"]] == [
+        "conflicted_unresolved",
+        "conflicted_unresolved",
+    ]
+    assert not (tmp_path / "src" / "shared.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_mutating_subagents_refused_inside_open_parent_batch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A mutating delegation cannot run while a parent batch is open."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    created = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        created.append(task.id)
+        return FakeSubagentRuntimeSession("never used")
+
+    parent_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "open a batch then delegate",
+                "actions": [
+                    {"tool": "begin_batch", "batch_id": "outer"},
+                    {
+                        "tool": "run_subagents",
+                        "tasks": [
+                            {
+                                "id": "edit-a",
+                                "prompt": "Edit feature a",
+                                "merge_policy": "transactional_write",
+                                "write_scope": ["src/feature_a"],
+                            }
+                        ],
+                    },
+                    {"tool": "abort_batch", "batch_id": "outer"},
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "delegation refused inside batch",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=parent_session,
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+        subagent_session_factory=session_factory,
+        allow_direct_api_autonomous=True,
+    )
+
+    await run_runtime_session(
+        runtime_session,
+        "delegate inside an open batch",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert created == []
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    delegation = observation_lines[1]["result"]
+    assert delegation["ok"] is False
+    assert delegation["data"]["batch_boundary_error_reason"] == (
+        "mutating_subagents_in_open_batch"
+    )
 
 
 @pytest.mark.asyncio
