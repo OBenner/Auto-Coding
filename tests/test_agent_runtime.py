@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import os
 import sys
@@ -712,8 +711,7 @@ def _write_direct_api_autonomous_history(
                         "failed_runs": 0,
                         "last_status": "passed",
                         "last_runtime_mode": "provider_e2e",
-                        "last_run_at": run_at
-                        or datetime.now(timezone.utc).isoformat(),
+                        "last_run_at": run_at or datetime.now(timezone.utc).isoformat(),
                         "last_provider_e2e_status": "passed",
                         "last_reliability_status": "complete",
                         "last_live_fault_probe_status": "passed",
@@ -942,9 +940,7 @@ async def test_direct_api_autonomous_factory_runs_full_coder_when_gate_allowed(
     # loop; the underlying Generic Edit engine falls back to JSON when the
     # provider does not support tools. The full_coder requirement is met
     # via the runtime_policy promotion, not via a capability claim.
-    assert not runtime_session.capabilities.supports(
-        RuntimeRequirements.full_coder()
-    )
+    assert not runtime_session.capabilities.supports(RuntimeRequirements.full_coder())
     assert runtime_session.runtime_policy.promoted_to_full_autonomous is True
     assert runtime_session.capabilities.supports(
         RuntimeRequirements.full_coder(),
@@ -3939,9 +3935,7 @@ async def test_changeset_session_exports_without_touching_workspace(tmp_path: Pa
 
     # The shared workspace is untouched: staged content never committed.
     assert result.status == "continue"
-    assert (tmp_path / "src" / "existing.txt").read_text(
-        encoding="utf-8"
-    ) == "before\n"
+    assert (tmp_path / "src" / "existing.txt").read_text(encoding="utf-8") == "before\n"
     assert not (tmp_path / "src" / "created.txt").exists()
 
     changeset = result.changeset
@@ -4140,9 +4134,7 @@ def _changeset_child_payloads(path: str, content: str) -> list[dict]:
     return [
         {
             "thought": "edit my scope",
-            "actions": [
-                {"tool": "write_file", "path": path, "content": content}
-            ],
+            "actions": [{"tool": "write_file", "path": path, "content": content}],
         },
         {
             "thought": "done",
@@ -4243,9 +4235,206 @@ async def test_parent_merge_applies_child_changesets_end_to_end(
     merge_execution = subagent_observation["data"]["merge_execution"]
     assert merge_execution["status"] == "applied"
     assert merge_execution["applied_result_ids"] == ["edit-a"]
-    assert merge_execution["outcomes"][0]["transaction_id"] == (
-        "subagent_merge:edit-a"
+    assert merge_execution["outcomes"][0]["transaction_id"] == ("subagent_merge:edit-a")
+    # Transaction summaries read these to see parent-side merge mutations.
+    assert subagent_observation["data"]["mutation_snapshot_ids"] == ["subagent_merge-1"]
+    assert subagent_observation["data"]["mutated_paths"] == ["src/feature_a/a.txt"]
+
+
+def test_subagent_merge_refuses_on_unverifiable_baseline(tmp_path: Path):
+    """An unverifiable child preimage refuses the merge like drift does."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
     )
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.txt").write_text("anything\n", encoding="utf-8")
+    changeset = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [
+            {
+                "path": "src/a.txt",
+                "exportable": True,
+                # A truncated preimage cannot be revalidated exactly, so the
+                # merge has no transactional-rollback guarantee for it.
+                "preimage": {
+                    "path": "src/a.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content_truncated": True,
+                    "restorable": False,
+                },
+                "postimage": {
+                    "path": "src/a.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content": "child change\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                },
+            }
+        ],
+    }
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=[SimpleNamespace(id="edit-a", changeset=changeset)],
+        merge_plan={"mutating_result_ids": ["edit-a"], "conflict_result_ids": []},
+        mutation_snapshots=snapshots,
+    )
+
+    assert merge_execution["status"] == "failed"
+    assert merge_execution["outcomes"][0]["status"] == "baseline_unverifiable"
+    assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "anything\n"
+    assert snapshots == []
+
+
+def test_subagent_merge_failure_keeps_applied_sibling(tmp_path: Path):
+    """A failing child must not roll back a previously applied sibling."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
+    )
+
+    def created_entry(path: str, content: str | None) -> dict:
+        postimage: dict = {
+            "path": path,
+            "exists": True,
+            "type": "file",
+            "content_encoding": "utf-8",
+            "content_truncated": content is None,
+        }
+        if content is not None:
+            postimage["content"] = content
+        return {
+            "path": path,
+            "exportable": True,
+            "preimage": {"path": path, "exists": False, "type": "missing"},
+            "postimage": postimage,
+        }
+
+    child_a = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [created_entry("src/a.txt", "from a\n")],
+    }
+    child_b = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [
+            created_entry("src/b.txt", "temp\n"),
+            # Unmaterializable: forces a mid-apply failure for child b.
+            created_entry("src/broken.txt", None),
+        ],
+    }
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=[
+            SimpleNamespace(id="edit-a", changeset=child_a),
+            SimpleNamespace(id="edit-b", changeset=child_b),
+        ],
+        merge_plan={
+            "mutating_result_ids": ["edit-a", "edit-b"],
+            "conflict_result_ids": [],
+        },
+        mutation_snapshots=snapshots,
+    )
+
+    assert merge_execution["status"] == "partial"
+    assert merge_execution["applied_result_ids"] == ["edit-a"]
+    outcomes = {
+        outcome["result_id"]: outcome for outcome in merge_execution["outcomes"]
+    }
+    assert outcomes["edit-b"]["status"] == "apply_failed_rolled_back"
+    # The applied sibling stays applied; only child b's paths were rolled back.
+    assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "from a\n"
+    assert not (tmp_path / "src" / "b.txt").exists()
+    assert not (tmp_path / "src" / "broken.txt").exists()
+    assert len(snapshots) == 1
+    assert snapshots[0]["transaction_id"] == "subagent_merge:edit-a"
+
+
+def test_subagent_merge_rejects_malformed_changesets(tmp_path: Path):
+    """The parent merge is the last confinement boundary for untrusted input."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
+    )
+
+    # Entry path and postimage path disagree: the write would escape the
+    # validated path, so the changeset is rejected outright.
+    mismatched = {
+        "schema_version": 1,
+        "write_scope": ["src"],
+        "exportable": True,
+        "entries": [
+            {
+                "path": "src/a.txt",
+                "exportable": True,
+                "preimage": {"path": "src/a.txt", "exists": False, "type": "missing"},
+                "postimage": {
+                    "path": "docs/elsewhere.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content": "escape\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                },
+            }
+        ],
+    }
+    # A scope-less changeset disables revalidation and is refused as well.
+    scopeless = {
+        "schema_version": 1,
+        "write_scope": [],
+        "exportable": True,
+        "entries": [
+            {
+                "path": "src/b.txt",
+                "exportable": True,
+                "preimage": {"path": "src/b.txt", "exists": False, "type": "missing"},
+                "postimage": {
+                    "path": "src/b.txt",
+                    "exists": True,
+                    "type": "file",
+                    "content": "no scope\n",
+                    "content_encoding": "utf-8",
+                    "content_truncated": False,
+                },
+            }
+        ],
+    }
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=[
+            SimpleNamespace(id="edit-a", changeset=mismatched),
+            SimpleNamespace(id="edit-b", changeset=scopeless),
+        ],
+        merge_plan={
+            "mutating_result_ids": ["edit-a", "edit-b"],
+            "conflict_result_ids": [],
+        },
+        mutation_snapshots=snapshots,
+    )
+
+    outcomes = {
+        outcome["result_id"]: outcome for outcome in merge_execution["outcomes"]
+    }
+    assert merge_execution["status"] == "failed"
+    assert outcomes["edit-a"]["status"] == "invalid_changeset_path"
+    assert outcomes["edit-a"]["postimage_path"] == "docs/elsewhere.txt"
+    assert outcomes["edit-b"]["status"] == "scope_violation"
+    assert outcomes["edit-b"]["reason"] == "missing_or_invalid_write_scope"
+    assert not (tmp_path / "docs").exists()
+    assert not (tmp_path / "src").exists()
+    assert snapshots == []
 
 
 def test_subagent_merge_refuses_on_baseline_drift(tmp_path: Path):
@@ -4290,9 +4479,7 @@ def test_subagent_merge_refuses_on_baseline_drift(tmp_path: Path):
 
     assert merge_execution["status"] == "failed"
     assert merge_execution["outcomes"][0]["status"] == "baseline_drift"
-    assert (tmp_path / "src" / "a.txt").read_text(
-        encoding="utf-8"
-    ) == "someone else\n"
+    assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "someone else\n"
     assert snapshots == []
 
 
@@ -4368,7 +4555,11 @@ def test_subagent_merge_rollback_transaction_undoes_one_child(tmp_path: Path):
 
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.txt").write_text("baseline\n", encoding="utf-8")
-    baseline_sha = hashlib.sha256(b"baseline\n").hexdigest()
+    # Capture the preimage from the real workspace: hand-crafted byte counts
+    # break on Windows, where write_text translates newlines to CRLF.
+    baseline_preimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path, path="src/a.txt"
+    )
     changeset = {
         "schema_version": 1,
         "write_scope": ["src"],
@@ -4377,17 +4568,7 @@ def test_subagent_merge_rollback_transaction_undoes_one_child(tmp_path: Path):
             {
                 "path": "src/a.txt",
                 "exportable": True,
-                "preimage": {
-                    "path": "src/a.txt",
-                    "exists": True,
-                    "type": "file",
-                    "bytes": len("baseline\n"),
-                    "content": "baseline\n",
-                    "content_encoding": "utf-8",
-                    "content_truncated": False,
-                    "content_sha256": baseline_sha,
-                    "line_count": 1,
-                },
+                "preimage": baseline_preimage,
                 "postimage": {
                     "path": "src/a.txt",
                     "exists": True,
@@ -4409,9 +4590,13 @@ def test_subagent_merge_rollback_transaction_undoes_one_child(tmp_path: Path):
         mutation_snapshots=snapshots,
     )
     assert merge_execution["status"] == "applied"
-    assert (tmp_path / "src" / "a.txt").read_text(
-        encoding="utf-8"
-    ) == "child change\n"
+    assert merge_execution["outcomes"][0]["mutation_snapshot_id"] == (
+        "subagent_merge-1"
+    )
+    # Checkpoint integrity validation requires workspace_guard on every
+    # checkpoint-referenced snapshot.
+    assert snapshots[0]["workspace_guard"]["status"] == "captured"
+    assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "child change\n"
     assert len(snapshots) == 1
 
     rollback = execute_generic_edit_transaction_rollback(

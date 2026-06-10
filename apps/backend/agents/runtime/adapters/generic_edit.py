@@ -2531,6 +2531,20 @@ class GenericEditRuntimeSession:
             "applied",
             "noop",
         }
+        # Surface applied-merge snapshots/paths so transaction summaries see
+        # the parent-side mutations: a later failing action in the same turn
+        # must record partial_failure (with a recovery plan), not plain failed.
+        merged_snapshot_ids: list[str] = []
+        merged_paths: list[str] = []
+        if merge_execution is not None:
+            for outcome in merge_execution.get("outcomes") or []:
+                if outcome.get("status") != "applied":
+                    continue
+                if outcome.get("mutation_snapshot_id"):
+                    merged_snapshot_ids.append(str(outcome["mutation_snapshot_id"]))
+                merged_paths.extend(
+                    str(path) for path in outcome.get("applied_paths") or []
+                )
         merge_suffix = (
             f" Parent merge {merge_execution['status']}: "
             f"{len(merge_execution['applied_result_ids'])} changeset(s) applied."
@@ -2550,6 +2564,9 @@ class GenericEditRuntimeSession:
                 "cancelled": run.cancelled,
                 "merge_plan": merge_plan,
                 "merge_execution": merge_execution,
+                "mutation_snapshot_ids": list(dict.fromkeys(merged_snapshot_ids)),
+                "mutated_paths": list(dict.fromkeys(merged_paths)),
+                "affected_paths": list(dict.fromkeys(merged_paths)),
                 "support": run_payload["support"],
                 "summary": run_payload["summary"],
                 "results": [
@@ -4070,16 +4087,43 @@ def _apply_one_subagent_changeset(
     snapshot_index: int,
     mutation_snapshots: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Apply one child changeset transactionally onto the parent workspace."""
-    write_scope = tuple(
-        str(path) for path in changeset.get("write_scope") or () if path
-    )
+    """Apply one child changeset transactionally onto the parent workspace.
+
+    The parent merge is the last confinement boundary, so the changeset is
+    treated as untrusted input: the declared write scope must be non-empty
+    and valid, and every entry's declared path must match the paths inside
+    its pre/postimages (the postimage path is what actually gets written).
+    """
+    try:
+        write_scope = normalize_write_scope_entries(
+            [str(path) for path in changeset.get("write_scope") or () if path]
+        )
+    except ValueError:
+        write_scope = None
     entries = list(changeset.get("entries") or [])
+    if not write_scope:
+        return _subagent_merge_outcome(
+            result_id,
+            "scope_violation",
+            violating_paths=[],
+            reason="missing_or_invalid_write_scope",
+        )
+    for entry in entries:
+        entry_path = str(entry.get("path") or "")
+        preimage_path = str((entry.get("preimage") or {}).get("path") or "")
+        postimage_path = str((entry.get("postimage") or {}).get("path") or "")
+        if len({entry_path, preimage_path, postimage_path}) != 1:
+            return _subagent_merge_outcome(
+                result_id,
+                "invalid_changeset_path",
+                entry_path=entry_path,
+                preimage_path=preimage_path,
+                postimage_path=postimage_path,
+            )
     scope_violations = [
         str(entry.get("path"))
         for entry in entries
-        if write_scope
-        and not path_within_write_scope(str(entry.get("path")), write_scope)
+        if not path_within_write_scope(str(entry.get("path")), write_scope)
     ]
     if scope_violations:
         return _subagent_merge_outcome(
@@ -4123,34 +4167,39 @@ def _apply_one_subagent_changeset(
         )
 
     transaction_id = subagent_merge_transaction_id(result_id)
-    mutation_snapshots.append(
-        {
-            "id": f"{SUBAGENT_MERGE_TRANSACTION_PREFIX}-{snapshot_index}",
-            "transaction_id": transaction_id,
-            "batch_id": None,
-            "loop": SUBAGENT_MERGE_TRANSACTION_PREFIX,
-            "iteration": 0,
-            "action_index": snapshot_index,
-            "tool": "apply_subagent_changeset",
-            "paths": paths,
-            "preimages": rollback_baseline,
-            "postimages": applied_states,
-            "rollback": {
-                "strategy": "restore_preimages",
-                "restorable": all(
-                    bool(preimage.get("restorable")) for preimage in rollback_baseline
-                ),
-                "instructions": [
-                    "For existing file preimages, restore the captured content.",
-                    "For missing file preimages, delete the created file if rollback is selected.",
-                    "If a preimage is not restorable, inspect git_diff and repair manually.",
-                ],
-            },
-        }
-    )
+    snapshot_id = f"{SUBAGENT_MERGE_TRANSACTION_PREFIX}-{snapshot_index}"
+    snapshot: dict[str, Any] = {
+        "id": snapshot_id,
+        "transaction_id": transaction_id,
+        "batch_id": None,
+        "loop": SUBAGENT_MERGE_TRANSACTION_PREFIX,
+        "iteration": 0,
+        "action_index": snapshot_index,
+        "tool": "apply_subagent_changeset",
+        "paths": paths,
+        "preimages": rollback_baseline,
+        "postimages": applied_states,
+        "rollback": {
+            "strategy": "restore_preimages",
+            "restorable": all(
+                bool(preimage.get("restorable")) for preimage in rollback_baseline
+            ),
+            "instructions": [
+                "For existing file preimages, restore the captured content.",
+                "For missing file preimages, delete the created file if rollback is selected.",
+                "If a preimage is not restorable, inspect git_diff and repair manually.",
+            ],
+        },
+    }
+    # Checkpoint integrity validation treats workspace_guard as mandatory for
+    # any checkpoint-referenced snapshot; without it a recoverable stop after
+    # a subagent_merge rollback would fail resume validation.
+    snapshot["workspace_guard"] = build_generic_edit_snapshot_workspace_guard(snapshot)
+    mutation_snapshots.append(snapshot)
     return _subagent_merge_outcome(
         result_id,
         "applied",
+        mutation_snapshot_id=snapshot_id,
         applied_paths=paths,
         transaction_id=transaction_id,
     )
