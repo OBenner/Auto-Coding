@@ -1178,9 +1178,10 @@ def test_direct_api_autonomous_runtime_policy_enables_subagents_for_bold_level(
     assert "subagents" in policy.granted_capabilities()
 
 
-def test_direct_api_autonomous_runtime_policy_keeps_subagents_off_for_safe_level(
+def test_direct_api_autonomous_runtime_policy_enables_subagents_for_safe_level(
     monkeypatch: pytest.MonkeyPatch,
 ):
+    """Phase 1.2 complete: safe grants the hardened mutating-subagent surface."""
     from agents.runtime.adapters.direct_api_autonomous import (
         DirectApiAutonomousRuntimeSession,
     )
@@ -1191,8 +1192,8 @@ def test_direct_api_autonomous_runtime_policy_keeps_subagents_off_for_safe_level
         DirectApiAutonomousRuntimeSession
     )
 
-    assert session.runtime_policy.mutating_subagents_enabled is False
-    assert "subagents" not in session.runtime_policy.granted_capabilities()
+    assert session.runtime_policy.mutating_subagents_enabled is True
+    assert "subagents" in session.runtime_policy.granted_capabilities()
 
 
 def test_direct_api_autonomous_runtime_policy_grants_sandbox_when_host_supports(

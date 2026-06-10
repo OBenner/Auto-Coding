@@ -57,7 +57,7 @@ AUTO_CODE_AUTONOMY=off | claude | safe | bold
 |-------|--------|------------|
 | `off` | Agent never writes the workspace; analysis and patch suggestions only. | `AUTO_CODE_RUNTIME_MODE=analysis_only`; runtime fallback OFF; direct API gate OFF; CLI runner router OFF. |
 | `claude` (default) | Claude / Codex CLI full autonomy. Direct API providers refused with a clear capability error. | `AUTO_CODE_RUNTIME_MODE=full_autonomous`; runtime fallback OFF; direct API gate OFF; CLI runner router OFF. Today's default. |
-| `safe` | + direct API providers run through generic_edit, and a passed AutonomyPolicy gate promotes them to coder full_autonomous. Still fail-fast on missing capability. | `AUTO_CODE_RUNTIME_MODE=full_autonomous`; runtime fallback ON; direct API gate ON. |
+| `safe` | + direct API providers run through generic_edit, and a passed AutonomyPolicy gate promotes them to coder full_autonomous. Mutating parallel subagents are enabled (write-scope confined, changeset export, transactional parent merge, explicit conflict resolution — evidence-gated via subagent_merge_probe). Still fail-fast on missing capability. | `AUTO_CODE_RUNTIME_MODE=full_autonomous`; runtime fallback ON; direct API gate ON; mutating subagents ON. |
 | `bold` | + direct providers can run promoted-edit without waiting for the gate. Power-user mode for benchmarking and experiments. CI uses this to seed evidence. | + skip AutonomyPolicy gate; treat evidence as advisory. |
 
 `AutonomyPolicy` thresholds simplify to three presets selected by an

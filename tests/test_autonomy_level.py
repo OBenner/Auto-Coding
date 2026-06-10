@@ -339,9 +339,26 @@ def test_mutating_subagents_off_for_default_claude_level():
     assert settings.mutating_subagents_enabled is False
 
 
-def test_mutating_subagents_off_for_safe_level():
-    """Safe stays read-only; mutating merge protocol is bold-only opt-in."""
+def test_mutating_subagents_on_for_safe_level():
+    """Safe ships mutating subagents: the transactional merge protocol is
+    hardened (write-scope confinement, changeset export, per-child rollback,
+    explicit conflict resolution) and evidence-gated via the
+    subagent_merge_probe."""
     settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "safe"})
+
+    assert settings.mutating_subagents_enabled is True
+
+
+def test_explicit_mutating_subagents_env_can_disable_safe_default():
+    """The explicit low-level env override still wins for opting out."""
+    from core.autonomy_level import MUTATING_SUBAGENTS_ENV
+
+    settings = resolve_autonomy_settings(
+        env={
+            AUTONOMY_LEVEL_ENV: "safe",
+            MUTATING_SUBAGENTS_ENV: "false",
+        },
+    )
 
     assert settings.mutating_subagents_enabled is False
 

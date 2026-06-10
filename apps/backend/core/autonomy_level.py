@@ -158,9 +158,11 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         # Graphiti, Linear, Electron, Puppeteer, and custom servers; this
         # is the only way they can match the Claude SDK MCP surface.
         "external_mcp_client_enabled": True,
-        # Mutating subagents stay off for safe: the conflict-aware merge
-        # protocol is only scaffolded. Power users opt in via bold.
-        "mutating_subagents_enabled": False,
+        # Phase 1.2 complete: mutating subagents are write-scope confined,
+        # export changesets, merge transactionally with per-child rollback,
+        # and real conflicts require explicit resolution — all covered by the
+        # deterministic subagent_merge_probe the promotion gate requires.
+        "mutating_subagents_enabled": True,
         # Direct providers run shell actions through Generic Edit;
         # request the sandbox by default so safe gets a real
         # confinement layer whenever the host platform has one.
