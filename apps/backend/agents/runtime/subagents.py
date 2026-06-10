@@ -33,7 +33,7 @@ SUPPORTED_SUBAGENT_MERGE_POLICIES = frozenset(
 )
 
 
-def is_mutating_subagent_task(task: "RuntimeSubagentTask") -> bool:
+def is_mutating_subagent_task(task: RuntimeSubagentTask) -> bool:
     """Return whether a child task may mutate the workspace."""
     return (
         task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY

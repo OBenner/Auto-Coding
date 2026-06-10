@@ -88,7 +88,9 @@ Rules:
 - Prefer apply_patch for multi-file edits. Use replace_text, move_file, delete_file,
   or write_file for small targeted file changes.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
-- Use run_subagents only for read-only exploration, review, or comparison work.
+- Use run_subagents for parallel work: read_only children for exploration, review,
+  or comparison; transactional_write children (each declaring an explicit
+  write_scope) only when the runtime policy allows mutating subagents.
 - Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Use begin_batch before a multi-step mutation group, then commit_batch or abort_batch before finish.
 - Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
@@ -111,9 +113,11 @@ NATIVE_TOOL_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
 You do not have provider-native filesystem, shell, or external MCP. Auto Code
 exposes a small set of local tools as function calls. Use those tools to inspect
-and edit the workspace. When run_subagents is available, it runs bounded
-read-only child sessions for parallel analysis; it is not Claude SDK Task tool
-parity. Keep iterating until the task is done, then call finish.
+and edit the workspace. When run_subagents is available, it runs bounded child
+sessions for parallel work: read_only children analyze, and (when policy allows)
+transactional_write children edit files only inside a declared write_scope that
+the runtime enforces; it is not Claude SDK Task tool parity. Keep iterating
+until the task is done, then call finish.
 
 __AUTO_CODE_MCP_BRIDGE__
 
@@ -124,7 +128,9 @@ Rules:
 - Prefer apply_patch for multi-file edits. Use replace_text, move_file, delete_file,
   or write_file for small targeted file changes.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
-- Use run_subagents only for read-only exploration, review, or comparison work.
+- Use run_subagents for parallel work: read_only children for exploration, review,
+  or comparison; transactional_write children (each declaring an explicit
+  write_scope) only when the runtime policy allows mutating subagents.
 - Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Use begin_batch before a multi-step mutation group, then commit_batch or abort_batch before finish.
 - Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
@@ -1799,13 +1805,16 @@ class GenericEditRuntimeSession:
         phase: Any,
         subtask_id: str | None,
     ) -> ToolActionResult:
-        isolation_error = self._opaque_batch_mutation_result(action)
-        if isolation_error is not None:
-            return isolation_error
-
+        # Scope confinement outranks batch isolation: a guarded session must
+        # report write_scope_violation for run_command even inside an open
+        # batch, not a batch-boundary error.
         scope_error = self._write_scope_violation_result(action)
         if scope_error is not None:
             return scope_error
+
+        isolation_error = self._opaque_batch_mutation_result(action)
+        if isolation_error is not None:
+            return isolation_error
 
         tool = action_tool(action)
         try:
@@ -2906,7 +2915,7 @@ def parse_subagent_write_scope(
     normalized to forward-slash relative paths and deduplicated.
     """
     if merge_policy == DEFAULT_SUBAGENT_MERGE_POLICY:
-        if raw_scope in (None, [], ()):
+        if raw_scope is None:
             return ()
         raise GenericEditRuntimeError(
             f"run_subagents task #{index} declares write_scope but its "
@@ -4467,9 +4476,7 @@ def normalize_write_scope_path(value: str) -> str | None:
         return None
     if text.startswith("/") or _WINDOWS_DRIVE_PATH_RE.match(text):
         return None
-    segments = [
-        segment for segment in text.split("/") if segment not in ("", ".")
-    ]
+    segments = [segment for segment in text.split("/") if segment not in ("", ".")]
     if not segments or any(segment == ".." for segment in segments):
         return None
     return "/".join(segments)

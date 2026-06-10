@@ -3525,6 +3525,14 @@ def test_parse_subagent_task_transactional_write_contract():
             1,
             None,
         )
+    # Declaring an empty scope on a read_only task is rejected too: the
+    # contract is "read_only tasks do not declare write_scope at all".
+    with pytest.raises(GenericEditRuntimeError, match="read_only"):
+        parse_runtime_subagent_action_task(
+            {"id": "x", "prompt": "p", "write_scope": []},
+            1,
+            None,
+        )
     with pytest.raises(GenericEditRuntimeError, match="not supported"):
         parse_runtime_subagent_action_task(
             {"id": "x", "prompt": "p", "merge_policy": "yolo_write"},
@@ -3796,6 +3804,17 @@ async def test_write_scope_guard_blocks_out_of_scope_mutations(tmp_path: Path):
                 ],
             },
             {
+                "thought": "command inside an open batch",
+                "actions": [
+                    {"tool": "begin_batch", "batch_id": "scope-batch"},
+                    {
+                        "tool": "run_command",
+                        "command": "echo inside-batch",
+                    },
+                    {"tool": "abort_batch", "batch_id": "scope-batch"},
+                ],
+            },
+            {
                 "thought": "done",
                 "actions": [
                     {
@@ -3847,6 +3866,12 @@ async def test_write_scope_guard_blocks_out_of_scope_mutations(tmp_path: Path):
     assert outside["data"]["violating_paths"] == ["docs/outside.txt"]
     assert command["ok"] is False
     assert command["data"]["write_scope_violation"] is True
+    # Scope confinement outranks batch isolation: run_command inside an open
+    # batch still reports write_scope_violation, not a batch-boundary error.
+    batched_command = observation_lines[4]["result"]
+    assert batched_command["ok"] is False
+    assert batched_command["data"]["write_scope_violation"] is True
+    assert "batch_boundary_error" not in batched_command["data"]
 
 
 @pytest.mark.asyncio
