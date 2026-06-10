@@ -473,6 +473,29 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "cli.provider_smoke_commands._complete_provider_transaction_batch_smoke",
         fake_transaction_batch_smoke,
     )
+
+    async def fake_subagent_merge_smoke(**kwargs):
+        provider = kwargs["provider"]
+        observed_runtime_modes.append("subagent_merge_probe")
+        return ProviderSmokeResult(
+            success=True,
+            provider=provider.name,
+            model=kwargs["model"],
+            runtime_mode="subagent_merge_probe",
+            message="subagent merge probe passed",
+            runtime_diagnostics=_with_provider_contract_health(
+                {
+                    "provider": provider.name,
+                    "smoke_scope": "subagent_merge_probe",
+                },
+                success=True,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands._complete_provider_subagent_merge_smoke",
+        fake_subagent_merge_smoke,
+    )
     monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
     monkeypatch.setenv(
         "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
@@ -496,6 +519,7 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "generic_edit",
         "mini_pipeline",
         "transaction_batch_probe",
+        "subagent_merge_probe",
     ]
     assert result.runtime_diagnostics["smoke_scope"] == "direct_api_full_autonomy_e2e"
     assert result.runtime_diagnostics["provider_e2e_suite"] == {
@@ -515,6 +539,11 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
                 "runtime_mode": "transaction_batch_probe",
                 "status": "passed",
                 "message": "transaction batch probe passed",
+            },
+            {
+                "runtime_mode": "subagent_merge_probe",
+                "status": "passed",
+                "message": "subagent merge probe passed",
             },
             {
                 "runtime_mode": "unsupported_tools_probe",
@@ -669,8 +698,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "last_status": "passed",
         "last_reliability_status": "complete",
         "last_provider_e2e_status": "passed",
-        "e2e_case_count": 11,
-        "e2e_passed_case_count": 11,
+        "e2e_case_count": 12,
+        "e2e_passed_case_count": 12,
         "e2e_failed_case_count": 0,
         "reliability_observed_case_count": 8,
         "reliability_passed_case_count": 8,
@@ -782,8 +811,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     assert history["runs"][0]["status"] == "passed"
     assert history["runs"][0]["reliability_status"] == "complete"
     assert history["runs"][0]["provider_e2e_status"] == "passed"
-    assert history["runs"][0]["e2e_case_count"] == 11
-    assert history["runs"][0]["e2e_passed_case_count"] == 11
+    assert history["runs"][0]["e2e_case_count"] == 12
+    assert history["runs"][0]["e2e_passed_case_count"] == 12
     assert history["runs"][0]["e2e_failed_case_count"] == 0
     assert history["runs"][0]["reliability_observed_case_count"] == 8
     assert history["runs"][0]["reliability_passed_case_count"] == 8
@@ -4214,6 +4243,46 @@ async def test_transaction_batch_probe_commits_via_scripted_session():
 
     assert result.success is True, result.error_details
     assert result.runtime_mode == "transaction_batch_probe"
+
+
+@pytest.mark.asyncio
+async def test_subagent_merge_probe_applies_and_resolves_via_scripted_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The scripted subagent-merge probe drives the REAL runtime end to end.
+
+    Case 1 proves two write-confined children's changesets apply
+    transactionally; case 2 proves a real conflict blocks finish until the
+    scripted parent resolves it explicitly (apply one, discard the other).
+    The probe grants the mutating-subagents policy locally, so the ambient
+    autonomy level must not matter.
+    """
+    from cli.provider_smoke_commands import (
+        _complete_provider_subagent_merge_smoke,
+    )
+    from core.providers.base import SessionConfig
+
+    # The probe must not depend on the ambient autonomy level.
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.delenv("AUTO_CODE_MUTATING_SUBAGENTS", raising=False)
+
+    class _FakeProvider:
+        name = "openai"
+
+    result = await _complete_provider_subagent_merge_smoke(
+        provider=_FakeProvider(),
+        session_config=SessionConfig(name="t", provider="openai", model="gpt-4o"),
+        prompt=None,
+        timeout_seconds=30,
+        model="gpt-4o",
+        runtime_diagnostics={},
+    )
+
+    assert result.success is True, result.error_details
+    assert result.runtime_mode == "subagent_merge_probe"
+    assert result.runtime_diagnostics["smoke_scope"] == "subagent_merge_probe"
+    # The probe-local policy grant is restored afterwards.
+    assert os.environ.get("AUTO_CODE_MUTATING_SUBAGENTS") is None
 
 
 @pytest.mark.asyncio
