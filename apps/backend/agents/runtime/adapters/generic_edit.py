@@ -91,6 +91,8 @@ Rules:
 - Use run_subagents for parallel work: read_only children for exploration, review,
   or comparison; transactional_write children (each declaring an explicit
   write_scope) only when the runtime policy allows mutating subagents.
+- If run_subagents reports conflicted changesets, resolve each with
+  resolve_subagent_conflict (apply or discard) before finish.
 - Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Use begin_batch before a multi-step mutation group, then commit_batch or abort_batch before finish.
 - Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
@@ -131,6 +133,8 @@ Rules:
 - Use run_subagents for parallel work: read_only children for exploration, review,
   or comparison; transactional_write children (each declaring an explicit
   write_scope) only when the runtime policy allows mutating subagents.
+- If run_subagents reports conflicted changesets, resolve each with
+  resolve_subagent_conflict (apply or discard) before finish.
 - Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Use begin_batch before a multi-step mutation group, then commit_batch or abort_batch before finish.
 - Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
@@ -362,6 +366,9 @@ GENERIC_EDIT_CHANGESET_SCHEMA_VERSION = 1
 # parent transaction with this id prefix, so rollback_transaction can undo a
 # single child's merge without touching its siblings.
 SUBAGENT_MERGE_TRANSACTION_PREFIX = "subagent_merge"
+# Phase 1.2 conflict path: explicit parent resolution of a conflicted
+# subagent changeset — apply it onto the current workspace, or discard it.
+RESOLVE_SUBAGENT_CONFLICT_TOOL = "resolve_subagent_conflict"
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -373,6 +380,7 @@ MUTATING_LOCAL_ACTIONS = frozenset(
         ROLLBACK_TRANSACTION_TOOL,
         REPAIR_MUTATION_TOOL,
         ABORT_BATCH_TOOL,
+        RESOLVE_SUBAGENT_CONFLICT_TOOL,
     }
 )
 WORKSPACE_RECOVERY_TOOLS = frozenset(
@@ -412,6 +420,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
         "open_batch",
         "parse_error",
         "unresolved_partial_failure",
+        "unresolved_subagent_conflicts",
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
@@ -623,6 +632,9 @@ class GenericEditRuntimeSession:
         # workspace; transaction batching is runtime-owned in this mode.
         self.changeset_export = bool(changeset_export)
         self._exported_changeset: dict[str, Any] | None = None
+        # Phase 1.2 conflict path: conflicted child changesets the parent has
+        # not explicitly resolved yet. Non-empty blocks finish.
+        self._pending_subagent_conflicts: dict[str, dict[str, Any]] = {}
         self._subagent_session_factory = subagent_session_factory
         self._max_subagent_concurrency = max(1, max_subagent_concurrency)
         self._max_subagent_task_seconds = max_subagent_task_seconds
@@ -1180,6 +1192,13 @@ class GenericEditRuntimeSession:
             results=action_results,
         )
         finish_trace = [*trace, iteration_entry]
+        if self._pending_subagent_conflicts:
+            return self._unresolved_subagent_conflict_finish_result(
+                trace=finish_trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
         # In a changeset-exporting session the only possible open batch is the
         # runtime-owned staging batch (model batch control is rejected), and
         # finish finalizes it into the exported changeset — so the open-batch
@@ -1672,6 +1691,13 @@ class GenericEditRuntimeSession:
             results=action_results,
         )
         finish_trace = [*trace, iteration_entry]
+        if self._pending_subagent_conflicts:
+            return self._unresolved_subagent_conflict_finish_result(
+                trace=finish_trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
         # See the JSON finish path: the open-batch veto only applies to
         # model-managed batches, never to the runtime-owned staging batch.
         if not self.changeset_export and has_open_transaction_batch(finish_trace):
@@ -1878,6 +1904,8 @@ class GenericEditRuntimeSession:
             result = self._batch_control_action(action)
         elif tool == ROLLBACK_TRANSACTION_TOOL:
             result = self._rollback_transaction_action(action)
+        elif tool == RESOLVE_SUBAGENT_CONFLICT_TOOL:
+            result = self._resolve_subagent_conflict_action(action)
         elif self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
             result = await self._mcp_bridge.execute(action)
         elif is_mcp_action_name(tool):
@@ -2082,6 +2110,161 @@ class GenericEditRuntimeSession:
             self._active_batch_id = None
         self._exported_changeset = changeset
         return changeset
+
+    def _register_pending_subagent_conflicts(
+        self,
+        *,
+        merge_execution: dict[str, Any],
+        results: list[Any],
+    ) -> None:
+        """Track conflicted child changesets until the parent resolves them."""
+        results_by_id = {str(result.id): result for result in results}
+        for outcome in merge_execution.get("outcomes") or []:
+            if outcome.get("status") != "conflicted_unresolved":
+                continue
+            result_id = str(outcome.get("result_id") or "")
+            result = results_by_id.get(result_id)
+            changeset = getattr(result, "changeset", None) if result else None
+            if not result_id or changeset is None:
+                continue
+            self._pending_subagent_conflicts[result_id] = {
+                "changeset": changeset,
+                "conflict_paths": list(outcome.get("conflict_paths") or []),
+            }
+
+    def _resolve_subagent_conflict_action(
+        self,
+        action: dict[str, Any],
+    ) -> ToolActionResult:
+        """Apply or discard one conflicted subagent changeset explicitly."""
+        result_id = str(action.get("result_id") or "").strip()
+        resolution = str(action.get("resolution") or "").strip().lower()
+        pending_ids = sorted(self._pending_subagent_conflicts)
+        if not result_id or result_id not in self._pending_subagent_conflicts:
+            return ToolActionResult(
+                tool=RESOLVE_SUBAGENT_CONFLICT_TOOL,
+                ok=False,
+                message=(
+                    f"No pending subagent conflict for result_id "
+                    f"'{result_id or '<missing>'}'. Pending: "
+                    f"{', '.join(pending_ids) or '<none>'}."
+                ),
+                data={"pending_result_ids": pending_ids},
+            )
+        if resolution not in {"apply", "discard"}:
+            return ToolActionResult(
+                tool=RESOLVE_SUBAGENT_CONFLICT_TOOL,
+                ok=False,
+                message=(
+                    "resolve_subagent_conflict requires resolution 'apply' "
+                    "(merge the changeset onto the current workspace) or "
+                    "'discard' (drop it)."
+                ),
+                data={"pending_result_ids": pending_ids},
+            )
+        pending = self._pending_subagent_conflicts[result_id]
+        if resolution == "discard":
+            self._pending_subagent_conflicts.pop(result_id, None)
+            return ToolActionResult(
+                tool=RESOLVE_SUBAGENT_CONFLICT_TOOL,
+                ok=True,
+                message=(
+                    f"Discarded conflicted changeset from subagent "
+                    f"'{result_id}'. Re-implement its work explicitly if it "
+                    "is still needed."
+                ),
+                data={
+                    "result_id": result_id,
+                    "resolution": "discard",
+                    "remaining_conflict_ids": [
+                        pending_id
+                        for pending_id in pending_ids
+                        if pending_id != result_id
+                    ],
+                },
+            )
+        outcome = _apply_one_subagent_changeset(
+            project_dir=self._executor.project_dir,
+            result_id=result_id,
+            changeset=pending["changeset"],
+            snapshot_index=len(self._mutation_snapshots) + 1,
+            mutation_snapshots=self._mutation_snapshots,
+        )
+        if outcome["status"] != "applied":
+            # Keep the conflict pending: the parent can reconcile the
+            # workspace (for example roll back a sibling) and retry, or
+            # discard explicitly.
+            return ToolActionResult(
+                tool=RESOLVE_SUBAGENT_CONFLICT_TOOL,
+                ok=False,
+                message=(
+                    f"Could not apply conflicted changeset '{result_id}': "
+                    f"{outcome['status']}. Reconcile the workspace and retry, "
+                    "or resolve with 'discard'."
+                ),
+                data={"outcome": outcome},
+            )
+        self._pending_subagent_conflicts.pop(result_id, None)
+        return ToolActionResult(
+            tool=RESOLVE_SUBAGENT_CONFLICT_TOOL,
+            ok=True,
+            message=(
+                f"Applied conflicted changeset from subagent '{result_id}' "
+                f"as transaction {outcome['transaction_id']}."
+            ),
+            data={
+                "result_id": result_id,
+                "resolution": "apply",
+                "outcome": outcome,
+                # Plural keys feed transaction summaries the same way an
+                # applied run_subagents merge does.
+                "mutation_snapshot_ids": (
+                    [str(outcome["mutation_snapshot_id"])]
+                    if outcome.get("mutation_snapshot_id")
+                    else []
+                ),
+                "mutated_paths": list(outcome.get("applied_paths") or []),
+                "affected_paths": list(outcome.get("applied_paths") or []),
+                "remaining_conflict_ids": [
+                    pending_id for pending_id in pending_ids if pending_id != result_id
+                ],
+            },
+        )
+
+    def _unresolved_subagent_conflict_finish_result(
+        self,
+        *,
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Reject finish while conflicted subagent changesets await resolution."""
+        pending_ids = sorted(self._pending_subagent_conflicts)
+        message = (
+            "Generic edit runtime rejected finish because conflicted subagent "
+            f"changeset(s) remain unresolved: {', '.join(pending_ids)}. Use "
+            f"{RESOLVE_SUBAGENT_CONFLICT_TOOL} with resolution 'apply' or "
+            "'discard' for each before finishing."
+        )
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="error",
+            stop_reason="unresolved_subagent_conflicts",
+            message=message,
+            trace=trace,
+            summary=message,
+            observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
+            mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
+        )
+        return AgentRunResult(
+            status="error",
+            response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
+        )
 
     def _opaque_batch_mutation_result(
         self,
@@ -2527,6 +2710,10 @@ class GenericEditRuntimeSession:
                 merge_plan=merge_plan,
                 mutation_snapshots=self._mutation_snapshots,
             )
+            self._register_pending_subagent_conflicts(
+                merge_execution=merge_execution,
+                results=run.results,
+            )
         merge_ok = merge_execution is None or merge_execution["status"] in {
             "applied",
             "noop",
@@ -2545,9 +2732,20 @@ class GenericEditRuntimeSession:
                 merged_paths.extend(
                     str(path) for path in outcome.get("applied_paths") or []
                 )
+        conflict_suffix = (
+            (
+                " Conflicted changeset(s) "
+                f"{', '.join(sorted(self._pending_subagent_conflicts))} await "
+                f"explicit resolution via {RESOLVE_SUBAGENT_CONFLICT_TOOL} "
+                "(resolution: apply or discard); finish is blocked until then."
+            )
+            if self._pending_subagent_conflicts
+            else ""
+        )
         merge_suffix = (
             f" Parent merge {merge_execution['status']}: "
             f"{len(merge_execution['applied_result_ids'])} changeset(s) applied."
+            f"{conflict_suffix}"
             if merge_execution is not None
             else ""
         )
@@ -4205,6 +4403,41 @@ def _apply_one_subagent_changeset(
     )
 
 
+def _real_subagent_conflict_paths(
+    *,
+    conflict_ids: set[str],
+    results_by_id: dict[str, Any],
+) -> dict[str, set[str]]:
+    """Return per-child ACTUAL conflicting paths among declared conflicts.
+
+    The merge plan flags children whose DECLARED write scopes overlap; the
+    executor only treats a child as conflicted when its changeset's actual
+    paths intersect another declared-conflicted child's actual paths.
+    """
+    actual_paths: dict[str, set[str]] = {}
+    for result_id in conflict_ids:
+        result = results_by_id.get(result_id)
+        changeset = getattr(result, "changeset", None) if result else None
+        if changeset is None:
+            continue
+        actual_paths[result_id] = {
+            str(entry.get("path") or "")
+            for entry in changeset.get("entries") or []
+            if entry.get("path")
+        }
+    real: dict[str, set[str]] = {}
+    for result_id, paths in actual_paths.items():
+        overlapping = {
+            path
+            for other_id, other_paths in actual_paths.items()
+            if other_id != result_id
+            for path in paths & other_paths
+        }
+        if overlapping:
+            real[result_id] = overlapping
+    return real
+
+
 def execute_subagent_changeset_merge(
     *,
     project_dir: Path,
@@ -4228,6 +4461,13 @@ def execute_subagent_changeset_merge(
         str(result_id) for result_id in merge_plan.get("conflict_result_ids") or []
     }
     results_by_id = {str(result.id): result for result in results}
+    # Declared scope overlap is only a REAL conflict when the children's
+    # actual changed paths intersect — overlapping declared scopes with
+    # disjoint edits auto-apply deterministically.
+    real_conflict_paths = _real_subagent_conflict_paths(
+        conflict_ids=conflict_ids,
+        results_by_id=results_by_id,
+    )
 
     outcomes: list[dict[str, Any]] = []
     snapshot_index = 0
@@ -4237,8 +4477,14 @@ def execute_subagent_changeset_merge(
         if result is None or changeset is None:
             outcomes.append(_subagent_merge_outcome(result_id, "missing_changeset"))
             continue
-        if result_id in conflict_ids:
-            outcomes.append(_subagent_merge_outcome(result_id, "conflicted_unresolved"))
+        if result_id in real_conflict_paths:
+            outcomes.append(
+                _subagent_merge_outcome(
+                    result_id,
+                    "conflicted_unresolved",
+                    conflict_paths=sorted(real_conflict_paths[result_id]),
+                )
+            )
             continue
         if not changeset.get("exportable", False):
             outcomes.append(

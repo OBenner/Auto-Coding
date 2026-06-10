@@ -2552,6 +2552,7 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "run_command",
         "rollback_transaction",
         "repair_mutation",
+        "resolve_subagent_conflict",
         "git_status",
         "git_diff",
         "run_subagents",
@@ -4749,6 +4750,297 @@ async def test_mutating_subagents_refused_inside_open_parent_batch(
     assert delegation["data"]["batch_boundary_error_reason"] == (
         "mutating_subagents_in_open_batch"
     )
+
+
+def test_declared_scope_overlap_with_disjoint_edits_auto_applies(tmp_path: Path):
+    """Overlapping declared scopes with disjoint actual edits are no conflict."""
+    from agents.runtime.adapters.generic_edit import (
+        execute_subagent_changeset_merge,
+    )
+
+    def changeset_for(path: str, content: str) -> dict:
+        return {
+            "schema_version": 1,
+            "write_scope": ["src"],
+            "exportable": True,
+            "entries": [
+                {
+                    "path": path,
+                    "exportable": True,
+                    "preimage": {"path": path, "exists": False, "type": "missing"},
+                    "postimage": {
+                        "path": path,
+                        "exists": True,
+                        "type": "file",
+                        "content": content,
+                        "content_encoding": "utf-8",
+                        "content_truncated": False,
+                    },
+                }
+            ],
+        }
+
+    results = [
+        SimpleNamespace(id="edit-a", changeset=changeset_for("src/a.txt", "from a\n")),
+        SimpleNamespace(id="edit-b", changeset=changeset_for("src/b.txt", "from b\n")),
+    ]
+    snapshots: list[dict] = []
+
+    merge_execution = execute_subagent_changeset_merge(
+        project_dir=tmp_path,
+        results=results,
+        merge_plan={
+            "mutating_result_ids": ["edit-a", "edit-b"],
+            # The plan flags both via declared write-scope overlap...
+            "conflict_result_ids": ["edit-a", "edit-b"],
+        },
+        mutation_snapshots=snapshots,
+    )
+
+    # ...but their actual edits are disjoint, so both apply deterministically.
+    assert merge_execution["status"] == "applied"
+    assert merge_execution["applied_result_ids"] == ["edit-a", "edit-b"]
+    assert (tmp_path / "src" / "a.txt").read_text(encoding="utf-8") == "from a\n"
+    assert (tmp_path / "src" / "b.txt").read_text(encoding="utf-8") == "from b\n"
+    assert len(snapshots) == 2
+
+
+def _conflicting_children_factory(tmp_path: Path):
+    """Two real changeset children that edit the SAME path differently."""
+
+    def session_factory(task: RuntimeSubagentTask):
+        content = "from a\n" if task.id == "edit-a" else "from b\n"
+        child_agent_session = FakeGenericEditSession(
+            _changeset_child_payloads("src/shared/file.txt", content)
+        )
+        return create_runtime_session(
+            provider_name="openai",
+            agent_session=child_agent_session,
+            runtime_mode="generic_edit",
+            project_dir=tmp_path,
+            write_scope_guard=tuple(task.write_scope),
+            changeset_export=True,
+        )
+
+    return session_factory
+
+
+def _conflicting_run_subagents_action() -> dict:
+    return {
+        "tool": "run_subagents",
+        "tasks": [
+            {
+                "id": "edit-a",
+                "prompt": "Edit shared file",
+                "merge_policy": "transactional_write",
+                "write_scope": ["src/shared"],
+            },
+            {
+                "id": "edit-b",
+                "prompt": "Edit shared file differently",
+                "merge_policy": "transactional_write",
+                "write_scope": ["src/shared"],
+            },
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_unresolved_subagent_conflicts_block_finish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Finishing with pending conflicted changesets terminates recoverably."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    parent_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "delegate conflicting edits",
+                "actions": [_conflicting_run_subagents_action()],
+            },
+            {
+                "thought": "try to finish anyway",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "ignoring conflicts",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=parent_session,
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+        subagent_session_factory=_conflicting_children_factory(tmp_path),
+        allow_direct_api_autonomous=True,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "delegate conflicting edits",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "error"
+    assert "resolve_subagent_conflict" in result.response_text
+    # Nothing landed on the shared workspace.
+    assert not (tmp_path / "src" / "shared" / "file.txt").exists()
+    session_state = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_session_state.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert session_state["stop_reason"] == "unresolved_subagent_conflicts"
+    assert session_state["resumable"] is True
+
+
+@pytest.mark.asyncio
+async def test_resolving_conflicts_unblocks_finish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """apply + discard resolutions clear the conflicts and let finish pass."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    parent_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "delegate conflicting edits",
+                "actions": [_conflicting_run_subagents_action()],
+            },
+            {
+                "thought": "resolve explicitly: keep a, drop b",
+                "actions": [
+                    {
+                        "tool": "resolve_subagent_conflict",
+                        "result_id": "edit-a",
+                        "resolution": "apply",
+                    },
+                    {
+                        "tool": "resolve_subagent_conflict",
+                        "result_id": "edit-b",
+                        "resolution": "discard",
+                    },
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "conflicts resolved",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=parent_session,
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+        subagent_session_factory=_conflicting_children_factory(tmp_path),
+        allow_direct_api_autonomous=True,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "delegate and resolve",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    # The applied resolution landed edit-a's content transactionally.
+    assert (tmp_path / "src" / "shared" / "file.txt").read_text(
+        encoding="utf-8"
+    ) == "from a\n"
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    delegation = observation_lines[0]["result"]
+    assert delegation["ok"] is False
+    conflicted = [
+        outcome
+        for outcome in delegation["data"]["merge_execution"]["outcomes"]
+        if outcome["status"] == "conflicted_unresolved"
+    ]
+    assert {outcome["result_id"] for outcome in conflicted} == {"edit-a", "edit-b"}
+    assert conflicted[0]["conflict_paths"] == ["src/shared/file.txt"]
+    apply_result = observation_lines[1]["result"]
+    assert apply_result["ok"] is True
+    assert apply_result["data"]["outcome"]["transaction_id"] == (
+        "subagent_merge:edit-a"
+    )
+    discard_result = observation_lines[2]["result"]
+    assert discard_result["ok"] is True
+    assert discard_result["data"]["remaining_conflict_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_resolve_subagent_conflict_validates_input(tmp_path: Path):
+    """Unknown ids and bad resolutions are rejected with the pending list."""
+    parent_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "resolve nothing",
+                "actions": [
+                    {
+                        "tool": "resolve_subagent_conflict",
+                        "result_id": "ghost",
+                        "resolution": "apply",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "nothing to resolve",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=parent_session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    await run_runtime_session(
+        runtime_session,
+        "validate resolve action",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    ghost = observation_lines[0]["result"]
+    assert ghost["ok"] is False
+    assert ghost["data"]["pending_result_ids"] == []
 
 
 @pytest.mark.asyncio

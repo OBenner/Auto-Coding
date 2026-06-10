@@ -416,6 +416,36 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="resolve_subagent_conflict",
+        description=(
+            "Resolve one conflicted subagent changeset reported by "
+            "run_subagents: apply it onto the current workspace (baseline-"
+            "verified, transactional) or discard it. Unresolved conflicts "
+            "block finish."
+        ),
+        parameters={
+            "result_id": {
+                "type": "string",
+                "maxLength": MAX_SUBAGENT_ID_CHARS,
+                "description": "Conflicted subagent result id from run_subagents.",
+            },
+            "resolution": {
+                "type": "string",
+                "enum": ["apply", "discard"],
+                "description": (
+                    "apply merges the child's changeset transactionally; "
+                    "discard drops it."
+                ),
+            },
+        },
+        required=("result_id", "resolution"),
+        example={
+            "tool": "resolve_subagent_conflict",
+            "result_id": "edit-a",
+            "resolution": "apply",
+        },
+    ),
+    LocalActionToolSpec(
         name="write_file",
         description="Write complete UTF-8 text content to a workspace file.",
         parameters={
