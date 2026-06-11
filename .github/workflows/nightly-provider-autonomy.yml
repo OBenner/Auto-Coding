@@ -70,6 +70,11 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Probe runs use OpenRouter's free gpt-oss-120b route so nightly
+      # evidence costs zero credits. The production default
+      # (DEFAULT_OPENROUTER_MODEL) is unaffected; override per run via the
+      # OPENROUTER_MODEL repository variable when the free pool is congested.
+      OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'openai/gpt-oss-120b:free' }}
       LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
       LITELLM_API_BASE: ${{ secrets.LITELLM_API_BASE }}
       ZHIPUAI_API_KEY: ${{ secrets.ZHIPUAI_API_KEY }}
