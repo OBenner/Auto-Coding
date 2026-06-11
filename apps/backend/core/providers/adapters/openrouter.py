@@ -15,8 +15,10 @@ OpenRouter supports models from:
 
 Environment Variables:
     OPENROUTER_API_KEY: API key from openrouter.ai (required)
-    OPENROUTER_MODEL: Model identifier (default: anthropic/claude-sonnet-4)
+    OPENROUTER_MODEL: Model identifier (default: openai/gpt-4o-mini)
     OPENROUTER_BASE_URL: API base URL (default: https://openrouter.ai/api/v1)
+    OPENROUTER_MAX_TOKENS: Default completion cap when a session sets none
+        (default: 16384; OpenRouter pre-reserves credits for the full cap)
 
 Note:
     OpenRouter uses the OpenAI-compatible API format, so we use the openai
@@ -53,9 +55,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# Default OpenRouter configuration
+# Default OpenRouter configuration (kept in sync with core.providers.config).
+# gpt-4o-mini: cheap (~1/25 of claude-sonnet-4) with reliable native tool
+# calling. OpenRouter pre-reserves credits for the completion budget at the
+# routed model's output price, so the default model and cap together decide
+# how much account headroom every request demands.
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
+DEFAULT_OPENROUTER_MAX_TOKENS = 16384
 
 # Popular models available through OpenRouter
 OPENROUTER_MODELS = [
@@ -377,7 +384,7 @@ class OpenRouterProvider(AIEngineProvider):
         session_config = SessionConfig(
             name="coder-session",
             system_prompt="You are an expert developer.",
-            model="anthropic/claude-sonnet-4"
+            model="openai/gpt-4o-mini"
         )
         session = provider.create_session(session_config)
 
@@ -457,6 +464,17 @@ class OpenRouterProvider(AIEngineProvider):
         # Generate session ID
         session_id = f"openrouter-{uuid.uuid4().hex[:12]}"
 
+        # Always send an explicit completion cap: OpenRouter pre-reserves
+        # credits for max_tokens (or the model's maximum output when unset)
+        # at the routed model's output price, so leaving it unset makes
+        # every request demand the model-max worth of account headroom.
+        max_tokens = config.max_tokens
+        if max_tokens is None:
+            max_tokens = (
+                getattr(self._config, "openrouter_max_tokens", None)
+                or DEFAULT_OPENROUTER_MAX_TOKENS
+            )
+
         # Create session
         session = OpenRouterSession(
             session_id=session_id,
@@ -465,7 +483,7 @@ class OpenRouterProvider(AIEngineProvider):
             system_prompt=config.system_prompt,
             base_url=base_url,
             temperature=config.temperature,
-            max_tokens=config.max_tokens,
+            max_tokens=max_tokens,
         )
 
         self._active_session = session

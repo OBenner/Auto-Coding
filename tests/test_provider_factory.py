@@ -32,8 +32,9 @@ class TestProviderConfig:
         assert config.anthropic_api_key == ""
         assert config.claude_model == "claude-sonnet-4-5-20250929"
         assert config.litellm_model == ""
-        assert config.openrouter_model == "anthropic/claude-sonnet-4"
+        assert config.openrouter_model == "openai/gpt-4o-mini"
         assert config.openrouter_base_url == "https://openrouter.ai/api/v1"
+        assert config.openrouter_max_tokens == 16384
 
     def test_from_env_default_provider(self):
         """Tests from_env() defaults to claude when no env var set."""
