@@ -43,8 +43,10 @@ Environment Variables:
 
     # OpenRouter
     OPENROUTER_API_KEY: Required for OpenRouter provider
-    OPENROUTER_MODEL: Model identifier (default: anthropic/claude-sonnet-4)
+    OPENROUTER_MODEL: Model identifier (default: openai/gpt-4o-mini)
     OPENROUTER_BASE_URL: API base URL (default: https://openrouter.ai/api/v1)
+    OPENROUTER_MAX_TOKENS: Default completion cap when a session sets none
+        (default: 16384; OpenRouter pre-reserves credits for the full cap)
 
     # Zhipu AI (GLM)
     ZHIPUAI_API_KEY: Required for ZhipuAI provider
@@ -79,11 +81,35 @@ class AIEngineProvider(str, Enum):
 # Default values
 DEFAULT_PROVIDER = "claude"
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
+# Cheap, reliable native-tool-calling default. OpenRouter pre-reserves
+# credits for the whole completion budget at the routed model's output
+# price, so an expensive default (claude-sonnet-4 at $15/M output) makes
+# every request demand ~$1 of account headroom. gpt-4o-mini speaks the
+# same OpenAI-compatible tool protocol at ~1/25 the price; set
+# OPENROUTER_MODEL to opt into heavier models.
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
+# Completion cap applied when a session does not request its own
+# max_tokens. Without an explicit value OpenRouter assumes the model's
+# maximum output (64k for claude-sonnet-4) and requires the account to
+# afford ALL of it up front — small balances hit 402 even though actual
+# usage is tiny.
+DEFAULT_OPENROUTER_MAX_TOKENS = 16384
 DEFAULT_ZHIPUAI_MODEL = "glm-4-flash"
 DEFAULT_OPENAI_MODEL = "gpt-5.2"
 DEFAULT_CODEX_MODEL = "codex-default"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    """Return a positive int from ``name`` or ``default`` on missing/invalid."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
 
 
 def _has_claude_oauth_credentials() -> bool:
@@ -166,6 +192,7 @@ class ProviderConfig:
     openrouter_api_key: str = ""
     openrouter_model: str = DEFAULT_OPENROUTER_MODEL
     openrouter_base_url: str = DEFAULT_OPENROUTER_BASE_URL
+    openrouter_max_tokens: int = DEFAULT_OPENROUTER_MAX_TOKENS
 
     # Zhipu AI settings
     zhipuai_api_key: str = ""
@@ -233,6 +260,9 @@ class ProviderConfig:
         openrouter_base_url = os.environ.get(
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         )
+        openrouter_max_tokens = _env_positive_int(
+            "OPENROUTER_MAX_TOKENS", DEFAULT_OPENROUTER_MAX_TOKENS
+        )
 
         # Zhipu AI settings
         zhipuai_api_key = os.environ.get("ZHIPUAI_API_KEY", "")
@@ -280,6 +310,7 @@ class ProviderConfig:
             openrouter_api_key=openrouter_api_key,
             openrouter_model=openrouter_model,
             openrouter_base_url=openrouter_base_url,
+            openrouter_max_tokens=openrouter_max_tokens,
             zhipuai_api_key=zhipuai_api_key,
             zhipuai_model=zhipuai_model,
             ollama_model=ollama_model,
