@@ -70,6 +70,32 @@ from ui import (
 # Configuration - uses shorthand that resolves via API Profile if configured
 DEFAULT_MODEL = "sonnet"  # Changed from "opus" (fix #433)
 
+# Agent roles a build/QA run spawns directly. Auth validation resolves each
+# role's provider the same way the runtime factory does, so the Claude OAuth
+# requirement only applies when one of these roles actually runs on claude.
+# Utility agents (insights, commit_message, merge_resolver) are best-effort
+# and degrade gracefully without Claude auth.
+CORE_AGENT_ROLES: tuple[str, ...] = ("planner", "coder", "qa_reviewer", "qa_fixer")
+
+
+def resolve_agent_providers(
+    roles: tuple[str, ...] = CORE_AGENT_ROLES,
+) -> dict[str, str]:
+    """
+    Map each agent role to the AI provider it resolves to at runtime.
+
+    Mirrors core.providers.factory.create_agent_session, which resolves via
+    ProviderConfig.from_env: AGENT_PROVIDER_<ROLE> > AI_ENGINE_PROVIDER >
+    claude default (invalid names fall back to claude).
+
+    Returns:
+        Dict of role -> provider name, in the order roles were given
+    """
+    # Lazy import: core.providers pulls in the full adapter registry
+    from core.providers.config import ProviderConfig
+
+    return {role: ProviderConfig.from_env(agent_type=role).provider for role in roles}
+
 
 def is_ci_mode() -> bool:
     """
@@ -192,13 +218,35 @@ def validate_environment(spec_dir: Path) -> bool:
 
     valid = True
 
+    # Resolve which provider each agent role runs on. The Claude OAuth token
+    # is only required when at least one role resolves to the claude provider;
+    # codex and the direct-API providers carry their own credentials.
+    agent_providers = resolve_agent_providers()
+    claude_roles = [
+        role for role, provider in agent_providers.items() if provider == "claude"
+    ]
+    non_claude_providers = sorted(set(agent_providers.values()) - {"claude"})
+
+    if non_claude_providers:
+        summary = ", ".join(
+            f"{role}={provider}" for role, provider in agent_providers.items()
+        )
+        print(f"AI providers: {summary}")
+
     # Check for OAuth token (API keys are not supported)
-    if not get_auth_token():
+    if not claude_roles:
+        print("Claude auth: not required (no agent role uses the claude provider)")
+    elif not get_auth_token():
         print("Error: No OAuth token found")
-        print("\nAuto-Code requires Claude Code OAuth authentication.")
+        print("\nAuto-Code requires Claude Code OAuth authentication because")
+        print(f"these agent roles use the claude provider: {', '.join(claude_roles)}.")
         print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
         print("\nTo authenticate, run:")
         print("  claude setup-token")
+        print("\nOr configure every agent role to use a non-Claude provider via")
+        print(
+            "AI_ENGINE_PROVIDER or AGENT_PROVIDER_<ROLE> (e.g. AGENT_PROVIDER_CODER=openai)."
+        )
         valid = False
     else:
         # Show which auth source is being used
@@ -210,6 +258,25 @@ def validate_environment(spec_dir: Path) -> bool:
         base_url = os.environ.get("ANTHROPIC_BASE_URL")
         if base_url:
             print(f"API Endpoint: {base_url}")
+
+    # Surface missing credentials for non-claude providers without blocking:
+    # the task router can still fall back to another available provider.
+    if non_claude_providers:
+        from dataclasses import replace
+
+        from core.providers.config import ProviderConfig
+
+        env_config = ProviderConfig.from_env()
+        for provider_name in non_claude_providers:
+            if env_config.is_provider_available(provider_name):
+                continue
+            errors = replace(env_config, provider=provider_name).get_validation_errors()
+            detail = (
+                errors[0]
+                if errors
+                else f"{provider_name} provider is missing required configuration"
+            )
+            print(f"Warning: {detail}")
 
     # Check for spec.md in spec directory
     spec_file = spec_dir / "spec.md"
