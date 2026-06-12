@@ -13,7 +13,7 @@ from pathlib import Path
 
 from context.constants import SKIP_DIRS
 from core.file_utils import write_json_atomic
-from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.model_fallback import get_fallback_model
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
@@ -1775,26 +1775,18 @@ async def run_autonomous_agent(
 
                     # Set model fallback if recommended
                     if recovery_action.use_model_fallback:
-                        # Extract current model shorthand and get fallback
-                        current_model_shorthand = "sonnet"  # Default
-                        if "opus" in phase_model.lower():
-                            current_model_shorthand = "opus"
-                        elif "sonnet" in phase_model.lower():
-                            current_model_shorthand = "sonnet"
-                        elif "haiku" in phase_model.lower():
-                            current_model_shorthand = "haiku"
-
-                        # Get fallback model from chain
-                        fallback_chain = MODEL_FALLBACK_CHAIN.get(
-                            current_model_shorthand, []
-                        )
-                        if fallback_chain:
-                            override_model = fallback_chain[0]  # Use first fallback
+                        # Provider-aware lookup: the chain maps the ACTUAL
+                        # current model (claude/openai/google/ollama) to its
+                        # same-provider fallback. The old claude-shorthand
+                        # guess defaulted any non-Claude model to "sonnet",
+                        # which sent claude-haiku to direct providers and
+                        # 404'd the whole build (live-build finding,
+                        # 2026-06-12).
+                        override_model = get_fallback_model(phase_model)
+                        if override_model:
                             print_status(
                                 f"Will try fallback model: {override_model}", "info"
                             )
-                        else:
-                            override_model = None
 
                     # Set recovery guidance from strategy
                     if recovery_action.strategy:
