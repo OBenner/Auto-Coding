@@ -962,12 +962,21 @@ async def run_autonomous_agent(
         ):
             route_allowed_providers = {"claude", "codex"}
 
+        explicit_provider_pin = os.environ.get(
+            f"AGENT_PROVIDER_{agent_type_for_session.upper()}"
+        )
         if (
             next_subtask
             and current_phase == "coding"
             and not override_model
             and model is None
             and not is_phase_model_locked(spec_dir, current_phase)
+            # ADR-006 precedence: an explicit per-agent provider pin is the
+            # strongest operator intent; cost-based smart routing must not
+            # silently re-route the session to another provider (live-build
+            # finding, 2026-06-12: AGENT_PROVIDER_CODER=openai was discarded
+            # in favor of claude).
+            and not explicit_provider_pin
         ):
             route = TaskComplexityRouter().route(
                 next_subtask,
@@ -985,6 +994,13 @@ async def run_autonomous_agent(
                 "info",
             )
             logger.info("Smart routing selected: %s", route)
+        elif explicit_provider_pin and next_subtask and current_phase == "coding":
+            print_status(
+                "Smart routing skipped: AGENT_PROVIDER_"
+                f"{agent_type_for_session.upper()}={explicit_provider_pin} "
+                "pins the provider",
+                "info",
+            )
 
         runner_route = resolve_runtime_runner_route(
             provider_config=provider_config,

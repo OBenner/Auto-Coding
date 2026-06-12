@@ -317,7 +317,11 @@ def handle_build_command(
                     )
                 else:
                     reason = "review_required"
-                    details = "This spec requires human approval before building."
+                    details = (
+                        "This spec requires human approval before building. "
+                        "Approve it in the Auto Code UI, or pass --force to "
+                        "bypass the approval check in CI/headless runs."
+                    )
                 print(
                     format_build_result(
                         status=ExitCode.BUILD_FAILED,
