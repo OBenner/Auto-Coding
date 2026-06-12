@@ -1032,6 +1032,26 @@ async def run_autonomous_agent(
             )
             print_status(f"Runner route details: {route_artifact}", "info")
 
+        # Provider/model coherence: the phase-model default is Claude-centric
+        # (phase_config tiers resolve to claude-* ids). When the resolved
+        # provider is a non-Claude provider and nothing pinned a model for it
+        # (no --model, no smart route, no runner route, no task_metadata
+        # phase model), sending the Claude id verbatim 404s the session
+        # (live-build finding, 2026-06-12). Fall back to the provider's own
+        # configured model (AGENT_MODEL_<TYPE> / <PROVIDER>_MODEL / default).
+        if provider_config.provider != "claude" and (phase_model or "").startswith(
+            "claude"
+        ):
+            provider_model = provider_config.get_model_for(provider_config.provider)
+            if provider_model:
+                phase_model = provider_model
+                print_status(
+                    "Provider model: "
+                    f"{provider_config.provider}/{phase_model} "
+                    "(claude-family phase default replaced)",
+                    "info",
+                )
+
         # Filled after provider/runtime resolution so plugin hooks can see the
         # runtime context client before the session starts.
         client = None
