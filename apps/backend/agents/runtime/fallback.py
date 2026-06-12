@@ -58,8 +58,21 @@ class RuntimeFallbackDecision:
 
 
 def runtime_fallback_enabled() -> bool:
-    """Return true when degraded runtime fallback is explicitly enabled."""
-    return os.environ.get(RUNTIME_FALLBACK_ENV, "").strip().lower() in _TRUTHY
+    """Return true when degraded runtime fallback is enabled.
+
+    Resolution follows ADR-006: the explicit ``AUTO_CODE_RUNTIME_FALLBACK``
+    env var wins when set; otherwise the ``AUTO_CODE_AUTONOMY`` level
+    default applies (safe/bold enable fallback, off/claude keep it off).
+    Reading the raw env var here used to ignore the autonomy level, which
+    silently forced non-Claude coder sessions back onto Claude under
+    ``AUTO_CODE_AUTONOMY=safe`` (live-build finding, 2026-06-12).
+    """
+    explicit = os.environ.get(RUNTIME_FALLBACK_ENV, "").strip().lower()
+    if explicit:
+        return explicit in _TRUTHY
+    from core.autonomy_level import resolve_autonomy_settings
+
+    return resolve_autonomy_settings().runtime_fallback_enabled
 
 
 def capabilities_for_runtime_mode(
