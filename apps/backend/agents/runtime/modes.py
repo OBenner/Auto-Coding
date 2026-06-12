@@ -31,7 +31,14 @@ def normalize_runtime_mode(value: str | None) -> RuntimeMode:
 
 
 def get_runtime_mode(agent_type: str) -> RuntimeMode:
-    """Resolve runtime mode from per-agent or global environment."""
+    """Resolve runtime mode from per-agent env, global env, or autonomy level.
+
+    Per ADR-006 precedence: the per-agent ``AGENT_RUNTIME_MODE_<TYPE>`` env
+    var wins, then the explicit global ``AUTO_CODE_RUNTIME_MODE`` (or its
+    legacy alias), then the ``AUTO_CODE_AUTONOMY`` level default — so
+    ``off`` yields ``analysis_only`` without any legacy env vars while
+    claude/safe/bold keep ``full_autonomous``.
+    """
     per_agent = os.environ.get(f"AGENT_RUNTIME_MODE_{agent_type.upper()}")
     if per_agent:
         return normalize_runtime_mode(per_agent)
@@ -44,4 +51,6 @@ def get_runtime_mode(agent_type: str) -> RuntimeMode:
     if legacy_global_mode:
         return normalize_runtime_mode(legacy_global_mode)
 
-    return "full_autonomous"
+    from core.autonomy_level import resolve_autonomy_settings
+
+    return normalize_runtime_mode(resolve_autonomy_settings().runtime_mode)

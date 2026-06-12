@@ -13411,6 +13411,7 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.delenv("AUTO_CODE_RUNTIME_FALLBACK", raising=False)
+    monkeypatch.delenv("AUTO_CODE_AUTONOMY", raising=False)
     assert runtime_fallback_enabled() is False
 
     fail_fast = resolve_runtime_mode_with_fallback(
