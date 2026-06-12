@@ -1608,6 +1608,64 @@ class GenericEditRuntimeSession:
             action_results=[],
             executed_actions=[],
         )
+        answered_tool_call_ids: set[str] = set()
+        try:
+            return await self._run_native_tool_call_loop(
+                tool_actions=tool_actions,
+                execution=execution,
+                answered_tool_call_ids=answered_tool_call_ids,
+                iteration_entry=iteration_entry,
+                observation_path=observation_path,
+                iteration=iteration,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id,
+                trace=trace,
+            )
+        finally:
+            # Tool-call protocol invariant: EVERY tool_call in the assistant
+            # message must receive a tool response before the next
+            # completion. Early exits (an action failure stops the batch,
+            # cancellation, or an exception) used to leave the remaining
+            # calls unanswered, poisoning the session history — the next
+            # completion then failed with provider 400 "tool_call_ids did
+            # not have response messages" (live-build finding, 2026-06-12).
+            for tool_call, action in tool_actions:
+                call_id = str(getattr(tool_call, "id", "") or "")
+                if not call_id or call_id in answered_tool_call_ids:
+                    continue
+                self.agent_session.add_tool_result(
+                    call_id,
+                    action_tool(action),
+                    ToolActionResult(
+                        tool=action_tool(action),
+                        ok=False,
+                        message=(
+                            "not executed: an earlier tool call in this "
+                            "batch failed or the run was interrupted"
+                        ),
+                        data={"error_code": "tool_call_not_executed"},
+                    ).to_dict(),
+                )
+                answered_tool_call_ids.add(call_id)
+
+    async def _run_native_tool_call_loop(
+        self,
+        *,
+        tool_actions: list[tuple[Any, dict[str, Any]]],
+        execution: NativeToolExecutionResult,
+        answered_tool_call_ids: set[str],
+        iteration_entry: dict[str, Any],
+        observation_path: Path,
+        iteration: int,
+        spec_dir: Path,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+        trace: list[dict[str, Any]],
+    ) -> NativeToolExecutionResult:
+        """Run the native tool-call loop; the caller backfills unanswered ids."""
         for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
             if self._cancel_requested:
                 execution.cancelled = True
@@ -1653,11 +1711,14 @@ class GenericEditRuntimeSession:
                 request=safe_request,
                 result=result,
             )
+            tool_call_id = str(getattr(tool_call, "id", "") or "")
             self.agent_session.add_tool_result(
-                str(getattr(tool_call, "id", "") or ""),
+                tool_call_id,
                 action_tool(action),
                 result.to_dict(),
             )
+            if tool_call_id:
+                answered_tool_call_ids.add(tool_call_id)
             if action_tool(action) == "finish":
                 execution.finish_action = action
                 execution.finish_result = result

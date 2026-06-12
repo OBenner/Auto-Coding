@@ -12326,6 +12326,59 @@ def test_generic_edit_mutation_snapshot_artifact_rejects_count_mismatch(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_native_tools_backfill_unanswered_batch_calls(
+    tmp_path: Path,
+):
+    """Every tool_call in a batch gets a tool response even when an early
+    call fails and stops the batch — otherwise the next completion sends
+    assistant tool_calls without responses and the provider rejects the
+    whole session with 400 (live-build finding, 2026-06-12)."""
+    session = FakeNativeToolCallSession(
+        [
+            [
+                # Fails (missing file) and stops the batch...
+                {"name": "read_file", "arguments": {"path": "missing.txt"}},
+                # ...leaving this one unexecuted: it must still be answered.
+                {
+                    "name": "write_file",
+                    "arguments": {"path": "later.txt", "content": "x\n"},
+                },
+            ],
+            [{"name": "finish", "arguments": {"summary": "wrap up"}}],
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    await run_runtime_session(
+        runtime_session,
+        "exercise unanswered tool-call backfill",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    first_batch = [
+        entry
+        for entry in session.tool_results
+        if entry["tool_call_id"].startswith("call_1_")
+    ]
+    assert [entry["tool_call_id"] for entry in first_batch] == [
+        "call_1_1",
+        "call_1_2",
+    ]
+    assert first_batch[0]["result"]["ok"] is False
+    backfilled = first_batch[1]["result"]
+    assert backfilled["ok"] is False
+    assert backfilled["data"]["error_code"] == "tool_call_not_executed"
+    # later.txt was never executed — only answered.
+    assert not (tmp_path / "later.txt").exists()
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_native_tools_reject_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):
