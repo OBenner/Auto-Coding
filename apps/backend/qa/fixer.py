@@ -10,9 +10,11 @@ Memory Integration:
 """
 
 import asyncio
+import inspect
+import json
 import logging
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Memory integration for cross-session learning
 from agents.memory_manager import (
@@ -78,6 +80,7 @@ def build_qa_fixer_prompt(
     failure_patterns: str | None,
     spec_dir: Path,
     fix_session: int,
+    runtime_status_relspec: str | None = None,
 ) -> str:
     """Assemble the QA fixer prompt (pure, provider-neutral).
 
@@ -86,6 +89,16 @@ def build_qa_fixer_prompt(
     ``qa_signoff``, so the same prompt yields the same contract on any
     provider. The Claude path keeps its additional per-iteration recovery
     guidance; this is the common base both paths build on.
+
+    ``runtime_status_relspec`` switches the prompt to the generic_edit
+    contract. The base ``qa_fixer.md`` tells the model to record completion
+    by editing ``implementation_plan.json``'s ``qa_signoff`` with the Claude
+    ``Write``/``Edit`` tools and absolute paths — none of which exist on a
+    direct-API runtime, where the tools are ``write_file``/``replace_text``
+    and ``resolve_workspace_path`` rejects absolute paths. When set (to the
+    spec dir relative to the project root, POSIX), an addendum OVERRIDES that
+    guidance: the model writes a workspace-relative ``qa_status.json`` instead,
+    which the orchestrator folds into ``qa_signoff`` deterministically.
     """
     prompt = base_prompt
     if fixer_memory_context:
@@ -97,7 +110,146 @@ def build_qa_fixer_prompt(
     prompt += f"**Spec Name**: {spec_dir.name}\n"
     prompt += f"\n**IMPORTANT**: All spec files are located in: `{spec_dir}/`\n"
     prompt += f"The fix request file is at: `{spec_dir}/QA_FIX_REQUEST.md`\n"
+    if runtime_status_relspec is not None:
+        prompt += _runtime_fixer_addendum(runtime_status_relspec, fix_session)
     return prompt
+
+
+def _runtime_fixer_addendum(status_relspec: str, fix_session: int) -> str:
+    """Direct-API (generic_edit) override for the Claude status-write guidance.
+
+    Built only for the runtime path. ``status_relspec`` is the spec directory
+    relative to the project root (POSIX); the status artifact lives directly
+    inside it so the merge step can find it at ``<spec_dir>/qa_status.json``.
+    """
+    status_path = (PurePosixPath(status_relspec) / "qa_status.json").as_posix()
+    return f"""
+
+---
+
+## 🚨 RUNTIME EXECUTION OVERRIDE (direct-API / generic_edit) 🚨
+
+You are running on a **direct-API runtime**, NOT Claude Code. This OVERRIDES the
+tool and path guidance above (Phases 6–8 of the base instructions):
+
+- The Claude `Write` / `Edit` tools do **not** exist here. Edit files with
+  `write_file`, `replace_text`, or `apply_patch`.
+- **Absolute paths are rejected** ("Patch path must be relative"). Every path
+  you pass must be **relative to the project root** (the workspace root).
+- Apply the code fixes from `QA_FIX_REQUEST.md` exactly as described, using the
+  runtime edit tools.
+
+### How to record completion (REQUIRED — replaces the qa_signoff edit)
+
+Do **NOT** try to edit `implementation_plan.json`'s `qa_signoff` directly — on
+this runtime that write is not reliable. Instead, once every issue is fixed and
+verified, use `write_file` to create this exact workspace-relative file:
+
+- **Path** (relative to project root): `{status_path}`
+- **Contents** (JSON):
+
+```json
+{{
+  "status": "fixes_applied",
+  "ready_for_qa_revalidation": true,
+  "fix_session": {fix_session},
+  "fixes_summary": "<one or two sentences describing what you fixed>"
+}}
+```
+
+Then call `finish`. The orchestrator folds this artifact into `qa_signoff`
+for you, so QA re-validation can pick the build back up. If you skip this file,
+your fixes will not be recorded and the QA loop will stall.
+"""
+
+
+def _runtime_relative_spec_dir(project_dir: Path, spec_dir: Path) -> str | None:
+    """Return ``spec_dir`` relative to ``project_dir`` as POSIX, or None.
+
+    The generic_edit runtime resolves every tool path against the project
+    root and rejects absolute paths, so the fixer's status artifact must be
+    addressed workspace-relative. Returns None when the spec dir is not under
+    the project root (an unexpected layout) — the caller then falls back to the
+    Claude-style prompt with no runtime addendum.
+    """
+    try:
+        return spec_dir.resolve().relative_to(project_dir.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def merge_runtime_qa_fixer_status_artifact(spec_dir: Path) -> bool:
+    """Fold a runtime-written ``qa_status.json`` into ``qa_signoff``.
+
+    The Claude fixer records completion by editing ``implementation_plan.json``
+    directly; the generic_edit runtime can't (no ``Write``/``Edit`` tool,
+    absolute paths rejected), so it drops a workspace-relative
+    ``qa_status.json`` instead. This deterministically merges that artifact
+    into ``qa_signoff`` — forcing ``status="fixes_applied"`` and carrying the
+    fixer's ``ready_for_qa_revalidation`` flag — so ``is_fixes_applied`` reads
+    true exactly as on the Claude path. Returns True only when a
+    ``fixes_applied`` artifact was merged and persisted.
+    """
+    # Lazy import to avoid the qa.criteria -> ... -> qa.reviewer/fixer cycle.
+    from .criteria import load_implementation_plan, save_implementation_plan
+
+    status_file = spec_dir / "qa_status.json"
+    if not status_file.exists():
+        return False
+    try:
+        artifact = json.loads(status_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return False
+    if not isinstance(artifact, dict) or artifact.get("status") != "fixes_applied":
+        return False
+
+    plan = load_implementation_plan(spec_dir)
+    if plan is None:
+        return False
+
+    signoff = plan.get("qa_signoff")
+    if not isinstance(signoff, dict):
+        signoff = {}
+    signoff["status"] = "fixes_applied"
+    signoff["ready_for_qa_revalidation"] = bool(
+        artifact.get("ready_for_qa_revalidation", True)
+    )
+    # Carry forward optional fixer-provided detail when present.
+    for key in ("fixes_summary", "fix_session", "issues_fixed"):
+        if key in artifact:
+            signoff[key] = artifact[key]
+    plan["qa_signoff"] = signoff
+    return save_implementation_plan(spec_dir, plan)
+
+
+async def _aclose_agent_session(runtime_session: object) -> None:
+    """Best-effort async-close the provider session behind a runtime adapter.
+
+    The runtime adapter wraps a provider ``agent_session`` (see
+    ``GenericEditRuntimeSession``); for direct-API providers that session owns
+    an ``AsyncOpenAI`` client whose connection pool must be awaited closed in
+    the running loop. The recovery loop rebuilds a session per attempt, so
+    closing here (rather than at interpreter exit) prevents socket leaks.
+    Prefers ``aclose`` (awaitable) and falls back to a sync ``close``; swallows
+    all errors so cleanup never masks the fixer's real verdict.
+    """
+    session = getattr(runtime_session, "agent_session", runtime_session)
+    aclose = getattr(session, "aclose", None)
+    if callable(aclose):
+        try:
+            result = aclose()
+            if inspect.isawaitable(result):
+                await result
+            return
+        except Exception as e:  # noqa: BLE001 - cleanup is best-effort
+            debug_error("qa_fixer", f"runtime session aclose failed: {e}")
+            return
+    close = getattr(session, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception as e:  # noqa: BLE001 - cleanup is best-effort
+            debug_error("qa_fixer", f"runtime session close failed: {e}")
 
 
 async def run_qa_fixer_via_runtime(
@@ -152,6 +304,7 @@ async def run_qa_fixer_via_runtime(
         failure_patterns=failure_patterns,
         spec_dir=spec_dir,
         fix_session=fix_session,
+        runtime_status_relspec=_runtime_relative_spec_dir(project_dir, spec_dir),
     )
     if recovery_guidance:
         prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
@@ -165,12 +318,21 @@ async def run_qa_fixer_via_runtime(
     )
     response_text = result.response_text or ""
 
+    # The Claude fixer writes qa_signoff into implementation_plan.json itself;
+    # the generic_edit runtime instead drops a workspace-relative
+    # qa_status.json (the Claude Write/Edit tools and absolute paths do not
+    # exist here). Fold that artifact into qa_signoff so is_fixes_applied reads
+    # true exactly as on the Claude path.
+    fixes_applied = is_fixes_applied(spec_dir)
+    if not fixes_applied and merge_runtime_qa_fixer_status_artifact(spec_dir):
+        fixes_applied = is_fixes_applied(spec_dir)
+
     fixer_discoveries = {
         "files_understood": {},
         "patterns_found": [],
         "gotchas_encountered": [],
     }
-    if is_fixes_applied(spec_dir):
+    if fixes_applied:
         debug_success("qa_fixer", "Fixes applied (runtime path)")
         fixer_discoveries["patterns_found"].append(
             f"QA fixer session {fix_session}: fixes applied via runtime path"
@@ -281,6 +443,7 @@ async def run_qa_fixer_runtime_session(
             ),
         )
 
+        runtime_session: object | None = None
         try:
             runtime_session = _build_qa_fixer_runtime_session(
                 provider_name=provider_name,
@@ -307,6 +470,12 @@ async def run_qa_fixer_runtime_session(
             last_error = str(e)
             error_message = f"QA fixer runtime error: {e}"
             debug_error("qa_fixer", error_message)
+        finally:
+            # Async-close the per-attempt provider session in this loop so its
+            # AsyncOpenAI connection pool is released before the next attempt
+            # rebuilds one (and before we return on success).
+            if runtime_session is not None:
+                await _aclose_agent_session(runtime_session)
 
         failure_type = recovery_manager.classify_failure(
             error_message, fixer_subtask_id

@@ -9,6 +9,7 @@ This avoids code duplication across adapters that share the same
 streaming/completion logic.
 """
 
+import inspect
 import json
 import logging
 import uuid
@@ -216,6 +217,32 @@ class OpenAICompatibleSession(AgentSession):
         logger.debug(
             f"{self.provider_name.capitalize()} session {self.session_id} closed"
         )
+
+    async def aclose(self) -> None:
+        """Async-close the session and its underlying ``AsyncOpenAI`` client.
+
+        The sync :meth:`close` only drops references; the ``AsyncOpenAI``
+        client owns an httpx connection pool that must be awaited closed in
+        the running event loop, or the sockets leak (and asyncio emits
+        "Unclosed client session" warnings on GC). Callers that build a
+        session inside an event loop — e.g. the direct-API QA fixer/reviewer
+        recovery loops, which rebuild a session per attempt — should prefer
+        this over :meth:`close`. Best-effort and idempotent.
+        """
+        client = self._client
+        if client is not None:
+            aclose = getattr(client, "close", None)
+            if callable(aclose):
+                try:
+                    result = aclose()
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception as e:  # noqa: BLE001 - cleanup is best-effort
+                    logger.debug(
+                        f"{self.provider_name.capitalize()} async client close "
+                        f"failed: {e}"
+                    )
+        self.close()
 
 
 def format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
