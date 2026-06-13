@@ -882,6 +882,9 @@ def test_direct_api_autonomous_gate_blocks_missing_corrupt_and_stale_history(
     assert corrupt_gate.reason == "provider_history_unreadable"
     assert corrupt_gate.missing_requirements == ["provider_e2e_history"]
 
+    # Freshness expiry is disabled by default now, so stale evidence only
+    # blocks when a finite window is explicitly configured.
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS", "7")
     stale_run_at = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
     _write_direct_api_autonomous_history(tmp_path, run_at=stale_run_at)
     stale_gate = resolve_direct_api_autonomous_gate(
@@ -1057,6 +1060,9 @@ def test_direct_api_autonomous_gate_loosened_max_history_age_passes_stale_run(
     from datetime import timedelta as _td
 
     monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    # Configure a finite 7-day window first (default disables expiry), so the
+    # 8-day-old run is initially rejected and the loosening below is meaningful.
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS", "7")
     stale_run_at = (datetime.now(timezone.utc) - _td(days=8)).isoformat()
     _write_direct_api_autonomous_history(tmp_path, run_at=stale_run_at)
 

@@ -358,8 +358,11 @@ PROVIDER_E2E_LIVE_TASK_FAMILIES = {
     },
 }
 PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = DEFAULT_MIN_STABLE_RUNS
+# ``None`` means the freshness window is disabled (evidence never expires).
 PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = (
     DEFAULT_MAX_HISTORY_AGE_DAYS * 24 * 60 * 60
+    if DEFAULT_MAX_HISTORY_AGE_DAYS and DEFAULT_MAX_HISTORY_AGE_DAYS > 0
+    else None
 )
 PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = (
     DEFAULT_REQUIRED_LIVE_FAULT_CASES
@@ -1598,11 +1601,13 @@ def _provider_readiness_requirements(
         if policy is not None
         else PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
     )
-    max_history_age_seconds = (
-        int(policy.max_history_age.total_seconds())
-        if policy is not None
-        else PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
-    )
+    if policy is not None:
+        policy_age = policy.max_history_age
+        max_history_age_seconds = (
+            int(policy_age.total_seconds()) if policy_age is not None else None
+        )
+    else:
+        max_history_age_seconds = PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
     recent_window = _provider_readiness_recent_window(history_summary)
     consecutive_passes = _provider_readiness_consecutive_passes(history_summary)
     required_live_fault_cases = sorted(
@@ -1699,15 +1704,25 @@ def _provider_readiness_history_freshness_complete(
     *,
     policy: AutonomyPolicy | None = None,
 ) -> bool:
-    """Return whether latest provider smoke evidence is recent enough."""
+    """Return whether latest provider smoke evidence is recent enough.
+
+    When the freshness window is disabled (``max_history_age`` is ``None``),
+    recorded evidence never expires, so this always reports complete and a
+    proven provider is never rolled back from ``ready``.
+    """
+    if policy is not None:
+        max_age = policy.max_history_age
+    elif PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS is not None:
+        max_age = timedelta(
+            seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
+        )
+    else:
+        max_age = None
+    if max_age is None:
+        return True
     last_run_at = _provider_readiness_last_run_datetime(history_summary)
     if last_run_at is None:
         return False
-    max_age = (
-        policy.max_history_age
-        if policy is not None
-        else timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
-    )
     return datetime.now(UTC) - last_run_at <= max_age
 
 
