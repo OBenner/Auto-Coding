@@ -212,10 +212,12 @@ def _build_qa_fixer_runtime_session(
             f"routed={provider_name}, env={config.provider}"
         )
     provider = create_engine_provider(config)
+    # Keep a Claude-family QA phase default from 404ing a direct provider
+    # (the QA-path analog of #337). See ProviderConfig.coherent_session_model.
     session = provider.create_session(
         SessionConfig(
             name=f"qa_fixer-runtime-{fix_session}",
-            model=model,
+            model=config.coherent_session_model(model),
             extra={"agent_type": "qa_fixer"},
         )
     )
