@@ -372,6 +372,25 @@ class ProviderConfig:
             return self.ollama_model or None
         return None
 
+    def coherent_session_model(self, requested_model: str | None) -> str | None:
+        """Return a model id coherent with this config's provider.
+
+        The phase-model default is Claude-centric (``phase_config`` tiers
+        resolve to ``claude-*`` ids). When the configured provider is a
+        non-Claude provider and ``requested_model`` is a Claude-family id,
+        return the provider's OWN configured model instead, so a direct-API
+        session does not receive a Claude id it cannot serve (404
+        model_not_found). Otherwise return ``requested_model`` unchanged.
+
+        This is the QA-path analog of the coder fix in #337; both keep a
+        Claude-family phase default from leaking into a non-Claude session.
+        """
+        if self.provider != "claude" and (requested_model or "").startswith("claude"):
+            provider_model = self.get_model_for(self.provider)
+            if provider_model:
+                return provider_model
+        return requested_model
+
     def with_provider_model(self, provider: str, model: str) -> "ProviderConfig":
         """Return a copy configured to use the given provider/model pair."""
         provider = provider.lower()
