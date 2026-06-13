@@ -1595,14 +1595,32 @@ Begin by loading context (Phase 0 in your prompt).
             task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
-    # Run the agent session
+    # Run the agent session.
+    #
+    # ClaudeSDKClient has no `create_agent_session` method — agent turns are
+    # driven by run_agent_session() (agents/session.py) inside `async with
+    # client`. The agent role prompt leads the message since the SDK client
+    # only carries the generic base system prompt.
+    from .session import run_agent_session
+
     print_status("Running Test Generator Agent...", "progress")
     try:
-        response = await client.create_agent_session(
-            name="test-generator-session",
-            starting_message=starting_message,
-            system_prompt=prompt,
-        )
+        session_message = f"{prompt}\n\n{starting_message}"
+        async with client:
+            status, response, _usage, _decisions = await run_agent_session(
+                client=client,
+                message=session_message,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=LogPhase.CODING,
+            )
+
+        if status == "error":
+            error_msg = f"Test Generator Agent session failed: {response}"
+            logger.error(error_msg)
+            if task_logger:
+                task_logger.log_error(error_msg)
+            return {"generated_files": [], "success": False, "error": error_msg}
 
         if verbose:
             logger.info(f"Test Generator Agent response: {response}")
@@ -1714,16 +1732,28 @@ Review the coverage gaps above and generate additional test cases to cover the m
 Generate additional test cases to improve coverage to at least {min_threshold:.0f}%.
 """
 
-            # Run improvement iteration
+            # Run improvement iteration. A fresh connected session (the prior
+            # `async with client` above already disconnected) — the
+            # improvement_message is self-contained and the agent re-reads the
+            # test files it wrote earlier from disk.
             try:
                 print_status(
                     "Running Test Generator Agent improvement iteration...", "progress"
                 )
-                response = await client.create_agent_session(
-                    name="test-generator-improvement",
-                    starting_message=improvement_message,
-                    system_prompt=prompt,
-                )
+                improvement_session_message = f"{prompt}\n\n{improvement_message}"
+                async with client:
+                    status, response, _usage, _decisions = await run_agent_session(
+                        client=client,
+                        message=improvement_session_message,
+                        spec_dir=spec_dir,
+                        verbose=verbose,
+                        phase=LogPhase.CODING,
+                    )
+
+                if status == "error":
+                    # Non-fatal: keep the tests already generated above.
+                    logger.warning(f"Test improvement iteration failed: {response}")
+                    print_status(f"Improvement iteration failed: {response}", "warning")
 
                 if verbose:
                     logger.info(f"Test Generator improvement response: {response}")

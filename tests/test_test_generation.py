@@ -585,11 +585,20 @@ class TestRunTestGeneratorSession:
     @pytest.fixture(autouse=True)
     def _mock_test_generator_deps(self, monkeypatch):
         """Apply common monkeypatches for all test generator session tests."""
-        # Store a default mock client for tests to override if needed
+        # ClaudeSDKClient is driven as an async context manager; the pytest
+        # writer/improvement sessions are driven by
+        # agents.session.run_agent_session (NOT the removed
+        # client.create_agent_session). Provide an async-CM mock client and a
+        # default-success session runner. Tests reconfigure self._mock_run
+        # (e.g. side_effect) to simulate a failing session.
         self._mock_client = MagicMock()
-        self._mock_client.create_agent_session = AsyncMock(
-            return_value={"success": True}
+        self._mock_client.__aenter__ = AsyncMock(return_value=self._mock_client)
+        self._mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        self._mock_run = AsyncMock(
+            return_value=("complete", "tests written", None, MagicMock())
         )
+        monkeypatch.setattr("agents.session.run_agent_session", self._mock_run)
 
         monkeypatch.setattr(
             "agents.test_generator.create_client",
@@ -735,9 +744,8 @@ class TestRunTestGeneratorSession:
         project_dir = temp_dir / "project"
         spec_dir = temp_dir / "spec"
 
-        self._mock_client.create_agent_session = AsyncMock(
-            side_effect=RuntimeError("API Error")
-        )
+        # The shared session driver raises mid-session.
+        self._mock_run.side_effect = RuntimeError("API Error")
 
         analysis = {"functions": [], "classes": []}
         result = await run_test_generator_session(project_dir, spec_dir, analysis)
@@ -787,7 +795,8 @@ class TestRunTestGeneratorSession:
         def mock_create_client(**kwargs):
             client_kwargs.update(kwargs)
             mock_client = MagicMock()
-            mock_client.create_agent_session = AsyncMock(return_value={"success": True})
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
             return mock_client
 
         monkeypatch.setattr("agents.test_generator.create_client", mock_create_client)

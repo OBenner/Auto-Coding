@@ -149,7 +149,14 @@ async def run_agent_session(
     Returns:
         Dictionary with session results
     """
+    # ClaudeSDKClient has no `create_agent_session` method. Drive the session
+    # with the shared run_agent_session() helper (agents/session.py) inside
+    # `async with client` — the same API the planner/coder/qa phases use.
+    # Imported under an alias so it does not shadow this module's own
+    # run_agent_session() wrapper (defined above).
+    from agents.session import run_agent_session as run_sdk_session
     from core.client import create_client
+    from task_logger import LogPhase
 
     _debug(f"Starting {agent_type} agent session in subprocess")
     _debug_verbose(f"Project: {project_dir}")
@@ -168,23 +175,44 @@ async def run_agent_session(
 
         _debug(f"Client created, starting agent session: {session_name}")
 
-        # Run the agent session
-        session_kwargs = {
-            "name": session_name,
-            "starting_message": starting_message,
-        }
+        # Drive the session through the shared helper. The role prompt
+        # (system_prompt) leads the message when provided; the SDK client only
+        # carries the generic base system prompt.
+        session_message = (
+            f"{system_prompt}\n\n{starting_message}"
+            if system_prompt
+            else starting_message
+        )
+        phase = (
+            LogPhase.PLANNING
+            if agent_type == "planner"
+            else LogPhase.VALIDATION
+            if agent_type in ("qa_reviewer", "qa_fixer")
+            else LogPhase.CODING
+        )
 
-        if system_prompt:
-            session_kwargs["system_prompt"] = system_prompt
+        async with client:
+            status, response_text, _usage, _decisions = await run_sdk_session(
+                client=client,
+                message=session_message,
+                spec_dir=spec_dir,
+                phase=phase,
+            )
 
-        response = await client.create_agent_session(**session_kwargs)
+        if status == "error":
+            _debug_error(f"Agent session failed: {response_text}")
+            return {
+                "success": False,
+                "output": None,
+                "error": response_text,
+            }
 
         _debug_success("Agent session completed successfully")
 
         return {
             "success": True,
             "output": {
-                "response": str(response) if response else None,
+                "response": response_text or None,
                 "agent_type": agent_type,
                 "session_name": session_name,
             },

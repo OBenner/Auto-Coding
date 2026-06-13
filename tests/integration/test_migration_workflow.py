@@ -15,7 +15,7 @@ import platform
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -353,6 +353,21 @@ class TestMigrationPlannerIntegration:
 class TestMigrationWorkflowEndToEnd:
     """End-to-end tests for complete migration workflow."""
 
+    @pytest.fixture(autouse=True)
+    def mock_session_runner(self):
+        """Patch the shared session driver used by run_migration_assistant.
+
+        ``ClaudeSDKClient`` has no ``create_agent_session`` method; the inline
+        migration session is driven by ``agents.session.run_agent_session``
+        inside ``async with client``. Patch it to a success 4-tuple; tests that
+        need a failure reconfigure ``self._mock_run`` (e.g. ``side_effect``).
+        """
+        self._mock_run = AsyncMock(
+            return_value=("complete", "migration done", None, MagicMock())
+        )
+        with patch("agents.session.run_agent_session", new=self._mock_run):
+            yield self._mock_run
+
     @pytest.mark.asyncio
     @patch("agents.migration_assistant.get_phase_thinking_budget")
     @patch("agents.migration_assistant.get_phase_model")
@@ -377,7 +392,6 @@ class TestMigrationWorkflowEndToEnd:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"status": "ok"})
         mock_create_client.return_value = mock_client
 
         migration_context = {
@@ -400,10 +414,12 @@ class TestMigrationWorkflowEndToEnd:
         assert call_kwargs["project_dir"] == project_dir
         assert call_kwargs["spec_dir"] == spec_dir
 
-        # Verify session was created
-        mock_client.create_agent_session.assert_called_once()
-        session_call = mock_client.create_agent_session.call_args
-        assert "migration-assistant-session" in str(session_call)
+        # Verify the session was driven through the shared helper, with the
+        # migration context carried in the message.
+        self._mock_run.assert_awaited_once()
+        message = self._mock_run.await_args.kwargs["message"]
+        assert "React 16" in message
+        assert "React 18" in message
 
     @pytest.mark.asyncio
     @patch("agents.migration_assistant.get_phase_thinking_budget")
@@ -429,7 +445,6 @@ class TestMigrationWorkflowEndToEnd:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"status": "ok"})
         mock_create_client.return_value = mock_client
 
         # Pre-create checkpoint structure to simulate agent creating it
@@ -479,14 +494,12 @@ class TestMigrationWorkflowEndToEnd:
         mock_get_phase_model.return_value = "claude-sonnet-4-5-20250929"
         mock_get_phase_thinking_budget.return_value = 4096
 
-        # Mock client that raises an exception
+        # Mock client; the shared session driver raises mid-session.
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            side_effect=Exception("Simulated failure")
-        )
         mock_create_client.return_value = mock_client
+        self._mock_run.side_effect = Exception("Simulated failure")
 
         result = await run_migration_assistant(
             project_dir=project_dir, spec_dir=spec_dir

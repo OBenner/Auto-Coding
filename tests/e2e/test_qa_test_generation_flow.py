@@ -329,16 +329,14 @@ async def test_e2e_test_generation_flow(
     # Import after fixtures are set up
     from qa.loop import run_qa_validation_loop
 
-    # Mock the client creation and QA agent sessions to avoid actual API calls
+    # Mock the client creation and QA agent sessions to avoid actual API calls.
+    # The client is only ever used as an async context manager here — the test
+    # generation and QA sessions are mocked at the qa.loop boundary
+    # (run_test_generator_session / run_qa_agent_session below), so no real
+    # session API is invoked on it.
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    # Mock create_agent_session to return a valid response
-    async def mock_agent_session(*args, **kwargs):
-        return {"test_files": ["test_utils.py", "test_auth.py"]}
-
-    mock_client.create_agent_session = mock_agent_session
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch("qa.loop.create_client", return_value=mock_client))
