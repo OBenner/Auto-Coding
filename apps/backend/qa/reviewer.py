@@ -373,11 +373,20 @@ def merge_runtime_qa_signoff_artifact(spec_dir: Path, qa_session: int) -> bool:
     tests_passed = raw.get("tests_passed")
     if isinstance(tests_passed, dict):
         signoff["tests_passed"] = tests_passed
-    if "coverage_passed" in raw:
-        signoff["coverage_passed"] = bool(raw["coverage_passed"])
+    # Only carry through a real boolean: bool("false") is True, so coercing a
+    # malformed model value would mis-record coverage. The authoritative
+    # coverage_results are added afterwards by update_qa_signoff_with_coverage.
+    if isinstance(raw.get("coverage_passed"), bool):
+        signoff["coverage_passed"] = raw["coverage_passed"]
     if status == "rejected":
+        # Downstream consumers call issue.get(...), so keep dict items only —
+        # a stray string would crash rejection handling and the QA report.
         issues = raw.get("issues_found")
-        signoff["issues_found"] = issues if isinstance(issues, list) else []
+        signoff["issues_found"] = (
+            [i for i in issues if isinstance(i, dict)]
+            if isinstance(issues, list)
+            else []
+        )
         signoff["fix_request_file"] = "QA_FIX_REQUEST.md"
 
     plan["qa_signoff"] = signoff
@@ -388,12 +397,31 @@ def merge_runtime_qa_signoff_artifact(spec_dir: Path, qa_session: int) -> bool:
         )
         return False
 
+    # Consume the artifact so a later session whose plan signoff was reset for
+    # revalidation can't replay this verdict. _clear_runtime_qa_signoff_artifact
+    # before the run is the primary guard; this is belt-and-suspenders.
+    with contextlib.suppress(OSError):
+        artifact.unlink()
+
     debug_success(
         "qa_reviewer",
         "Merged runtime qa_signoff.json into implementation_plan.json",
         status=status,
     )
     return True
+
+
+def _clear_runtime_qa_signoff_artifact(spec_dir: Path) -> None:
+    """Remove a leftover ``qa_signoff.json`` before a runtime reviewer run.
+
+    The verdict file is consumed by :func:`merge_runtime_qa_signoff_artifact`,
+    which trusts whatever is on disk. If a prior session's file survived (e.g.
+    the plan's ``qa_signoff`` was reset to null for revalidation), a reviewer
+    that fails to write a fresh verdict would otherwise replay the stale one.
+    Clearing it up front guarantees a merge only ever reflects the current run.
+    """
+    with contextlib.suppress(OSError):
+        (spec_dir / RUNTIME_QA_SIGNOFF_FILENAME).unlink()
 
 
 def _runtime_signoff_instructions(rel_spec: str) -> str:
@@ -686,6 +714,10 @@ async def run_qa_reviewer_via_runtime(
         runtime_signoff_relspec=_runtime_relative_spec_dir(project_dir, spec_dir),
     )
 
+    # Drop any verdict file left by a previous session so this run's merge can
+    # only ever reflect a sign-off this reviewer actually wrote.
+    _clear_runtime_qa_signoff_artifact(spec_dir)
+
     result = await run_runtime_session(
         runtime_session,
         message=prompt,
@@ -768,9 +800,11 @@ async def _aclose_agent_session(session: object) -> None:
     if callable(aclose):
         try:
             await aclose()
+            return
         except Exception as e:  # cleanup must never mask the QA result
+            # Fall through to the sync close() so a failed async close still
+            # gets a best-effort teardown.
             logger.debug(f"qa_reviewer runtime session aclose failed: {e}")
-        return
     close = getattr(session, "close", None)
     if callable(close):
         with contextlib.suppress(Exception):

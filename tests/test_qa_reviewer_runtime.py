@@ -400,3 +400,116 @@ async def test_runtime_reviewer_errors_when_no_verdict_written(tmp_path):
         )
 
     assert status == "error"
+
+
+# =============================================================================
+# Field sanitation and stale-artifact handling
+# =============================================================================
+
+
+def test_merge_runtime_qa_signoff_artifact_sanitizes_malformed_fields(tmp_path):
+    """A non-boolean coverage_passed is dropped (not coerced to True) and
+    non-dict issues_found items are filtered so downstream issue.get() is safe.
+    """
+    plan = _write_plan(tmp_path)
+    (tmp_path / "qa_signoff.json").write_text(
+        json.dumps(
+            {
+                "status": "rejected",
+                "coverage_passed": "false",  # bool("false") would be True
+                "issues_found": [
+                    {"type": "critical", "title": "real", "location": "a.py:1"},
+                    "not-a-dict",
+                    42,
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert merge_runtime_qa_signoff_artifact(tmp_path, qa_session=2) is True
+
+    signoff = json.loads(plan.read_text())["qa_signoff"]
+    assert "coverage_passed" not in signoff
+    assert signoff["issues_found"] == [
+        {"type": "critical", "title": "real", "location": "a.py:1"}
+    ]
+
+
+def test_merge_runtime_qa_signoff_artifact_keeps_real_bool_coverage(tmp_path):
+    _write_plan(tmp_path)
+    (tmp_path / "qa_signoff.json").write_text(
+        json.dumps({"status": "approved", "coverage_passed": False}),
+        encoding="utf-8",
+    )
+
+    assert merge_runtime_qa_signoff_artifact(tmp_path, qa_session=1) is True
+
+    signoff = json.loads(
+        (tmp_path / "implementation_plan.json").read_text()
+    )["qa_signoff"]
+    assert signoff["coverage_passed"] is False
+
+
+def test_merge_runtime_qa_signoff_artifact_consumes_file(tmp_path):
+    """The verdict file is removed after a successful merge so it can't be
+    replayed by a later session whose plan signoff was reset.
+    """
+    _write_plan(tmp_path)
+    artifact = tmp_path / "qa_signoff.json"
+    artifact.write_text(json.dumps({"status": "approved"}), encoding="utf-8")
+
+    assert merge_runtime_qa_signoff_artifact(tmp_path, qa_session=1) is True
+    assert not artifact.exists()
+
+
+@pytest.mark.asyncio
+async def test_runtime_reviewer_clears_stale_signoff_before_run(tmp_path):
+    """A stale qa_signoff.json is cleared before the run, so a reviewer that
+    writes no fresh verdict reports an error instead of replaying the old one.
+    """
+    _write_plan(tmp_path)
+    stale = tmp_path / "qa_signoff.json"
+    stale.write_text(json.dumps({"status": "approved"}), encoding="utf-8")
+
+    with contextlib.ExitStack() as stack:
+        for patcher in _patch_reviewer_io():
+            stack.enter_context(patcher)
+        stack.enter_context(
+            patch(
+                "agents.runtime.run_runtime_session",
+                new=_scripted_runtime_session(lambda spec_dir: None),  # writes nothing
+            )
+        )
+        status, _ = await run_qa_reviewer_via_runtime(
+            MagicMock(), tmp_path, tmp_path, qa_session=2, max_iterations=50
+        )
+
+    assert status == "error"
+    assert not stale.exists()
+
+
+# =============================================================================
+# Session cleanup fallback
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_aclose_agent_session_falls_back_to_sync_close_on_error():
+    """When aclose() raises, the best-effort sync close() still runs."""
+    from qa.reviewer import _aclose_agent_session
+
+    class _Session:
+        def __init__(self) -> None:
+            self.sync_closed = False
+
+        async def aclose(self) -> None:
+            raise RuntimeError("async close boom")
+
+        def close(self) -> None:
+            self.sync_closed = True
+
+    session = _Session()
+    await _aclose_agent_session(session)  # must not raise
+
+    assert session.sync_closed is True
