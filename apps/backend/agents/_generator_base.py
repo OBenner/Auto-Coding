@@ -128,19 +128,42 @@ async def run_generator_session(
             task_logger.log_error(error_msg)
         return {"success": False, "error": error_msg}
 
-    # Run the agent session
+    # Run the agent session.
+    #
+    # ClaudeSDKClient has no `create_agent_session` method. Agent turns are
+    # driven by run_agent_session() (agents/session.py) — the same helper the
+    # planner/coder/qa phases use. It sends the message, streams the response,
+    # and returns (status, response_text, usage_metadata, decision_tracker).
+    # The client must be connected first, so we drive it inside `async with`.
+    #
+    # The agent-specific role prompt is delivered as the leading message (the
+    # SDK client only carries the generic base system prompt), matching how the
+    # planner / performance_profiler sessions pass their prompts.
+    from .session import run_agent_session
+
     print_status(
         f"Running {session_title.title().replace('Session', 'Agent')}...", "progress"
     )
+    session_message = f"{prompt}\n\n{starting_message}"
     try:
-        response = await client.create_agent_session(
-            name=session_name,
-            starting_message=starting_message,
-            system_prompt=prompt,
-        )
+        async with client:
+            status, response_text, _usage, _decisions = await run_agent_session(
+                client=client,
+                message=session_message,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=log_phase,
+            )
+
+        if status == "error":
+            error_msg = f"{session_name} failed: {response_text}"
+            logger.error(error_msg)
+            if task_logger:
+                task_logger.log_error(error_msg)
+            return {"success": False, "error": error_msg}
 
         if verbose:
-            logger.info(f"{session_name} response: {response}")
+            logger.info(f"{session_name} response: {response_text}")
 
         if task_logger:
             task_logger.log_success(f"{session_name} completed")
