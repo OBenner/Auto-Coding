@@ -9,6 +9,7 @@ This avoids code duplication across adapters that share the same
 streaming/completion logic.
 """
 
+import inspect
 import json
 import logging
 import uuid
@@ -216,6 +217,39 @@ class OpenAICompatibleSession(AgentSession):
         logger.debug(
             f"{self.provider_name.capitalize()} session {self.session_id} closed"
         )
+
+    async def aclose(self) -> None:
+        """Asynchronously close the session and its underlying HTTP client.
+
+        Synchronous :meth:`close` can only drop the client reference. The
+        ``AsyncOpenAI`` / ``httpx.AsyncClient`` created in :meth:`_get_client`
+        owns a TCP transport bound to the event loop it was constructed in;
+        letting the garbage collector reclaim it *after* that loop has closed
+        raises noisy ``RuntimeError: unable to perform operation on
+        <TCPTransport closed=True ...>`` errors and leaks sockets across a
+        multi-iteration loop (e.g. the QA reviewer loop, where every iteration
+        builds a fresh session under one ``asyncio.run``). Awaiting the
+        client's own ``close()`` tears the transport down in the same loop that
+        created it. Prefer this over :meth:`close` from async code.
+        """
+        client = self._client
+        # Drop the reference up front so a failed close still detaches the
+        # leaked client from the session.
+        self._client = None
+        if client is not None:
+            closer = getattr(client, "close", None)
+            if callable(closer):
+                try:
+                    outcome = closer()
+                    if inspect.isawaitable(outcome):
+                        await outcome
+                except Exception as e:  # cleanup must never raise
+                    logger.debug(
+                        f"{self.provider_name.capitalize()} async client close "
+                        f"failed: {e}"
+                    )
+        # Run the synchronous bookkeeping (history clear, _is_active flip).
+        self.close()
 
 
 def format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:

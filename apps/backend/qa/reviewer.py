@@ -15,8 +15,10 @@ Coverage Integration:
 - Coverage results included in qa_signoff
 """
 
+import contextlib
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agents.memory_manager import get_graphiti_context, save_session_memory
@@ -286,6 +288,217 @@ def update_qa_signoff_with_coverage(
 
 
 # =============================================================================
+# RUNTIME (DIRECT-API) SIGN-OFF PERSISTENCE
+# =============================================================================
+
+# Direct-API reviewers run through the generic_edit runtime, which only accepts
+# workspace-relative paths and exposes write_file/replace_text (not the Claude
+# SDK Write/Edit tools). Editing the large implementation_plan.json from that
+# runtime is brittle, so the runtime reviewer prompt asks the model to drop this
+# small, self-contained verdict file next to the plan; Python then merges it into
+# implementation_plan.json deterministically.
+RUNTIME_QA_SIGNOFF_FILENAME = "qa_signoff.json"
+
+
+def _runtime_relative_spec_dir(project_dir: Path, spec_dir: Path) -> str | None:
+    """Return ``spec_dir`` as a workspace-relative POSIX path, or None.
+
+    The generic_edit runtime resolves every path against the project root and
+    rejects absolute paths, so the runtime reviewer needs the spec directory
+    expressed relative to ``project_dir`` to read the spec/plan and write its
+    verdict file. Returns None when ``spec_dir`` is not inside ``project_dir``
+    (the prompt then falls back to its Claude-oriented instructions).
+    """
+    try:
+        rel = spec_dir.resolve().relative_to(project_dir.resolve())
+    except ValueError:
+        return None
+    return rel.as_posix() or "."
+
+
+def merge_runtime_qa_signoff_artifact(spec_dir: Path, qa_session: int) -> bool:
+    """Merge a runtime reviewer's ``qa_signoff.json`` into the plan.
+
+    The direct-API reviewer writes its verdict to
+    ``spec_dir/qa_signoff.json`` (see ``RUNTIME_QA_SIGNOFF_FILENAME``); this
+    normalizes it into a full ``qa_signoff`` object and persists it into
+    ``implementation_plan.json`` via the same atomic writer the rest of the QA
+    code uses, so ``get_qa_signoff_status`` reads it back exactly as it would a
+    Claude SDK sign-off.
+
+    Returns True when a valid verdict was merged, False otherwise (missing or
+    malformed file, unknown status, or unreadable/unwritable plan).
+    """
+    artifact = spec_dir / RUNTIME_QA_SIGNOFF_FILENAME
+    if not artifact.exists():
+        return False
+    try:
+        raw = json.loads(artifact.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        debug_error("qa_reviewer", f"Unreadable {RUNTIME_QA_SIGNOFF_FILENAME}: {e}")
+        return False
+    if not isinstance(raw, dict):
+        debug_error(
+            "qa_reviewer",
+            f"{RUNTIME_QA_SIGNOFF_FILENAME} must be a JSON object",
+        )
+        return False
+
+    status = raw.get("status")
+    if status not in ("approved", "rejected"):
+        debug_error(
+            "qa_reviewer",
+            f"{RUNTIME_QA_SIGNOFF_FILENAME} has unsupported status: {status!r}",
+        )
+        return False
+
+    # Lazy import to avoid the qa.criteria -> ... -> qa.reviewer import cycle.
+    from .criteria import load_implementation_plan, save_implementation_plan
+
+    plan = load_implementation_plan(spec_dir)
+    if plan is None:
+        debug_error(
+            "qa_reviewer",
+            "Cannot merge runtime qa_signoff: implementation_plan.json missing",
+        )
+        return False
+
+    signoff: dict = {
+        "status": status,
+        "qa_session": raw.get("qa_session", qa_session),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "report_file": "qa_report.md",
+        "verified_by": "qa_agent_runtime",
+    }
+    tests_passed = raw.get("tests_passed")
+    if isinstance(tests_passed, dict):
+        signoff["tests_passed"] = tests_passed
+    # Only carry through a real boolean: bool("false") is True, so coercing a
+    # malformed model value would mis-record coverage. The authoritative
+    # coverage_results are added afterwards by update_qa_signoff_with_coverage.
+    if isinstance(raw.get("coverage_passed"), bool):
+        signoff["coverage_passed"] = raw["coverage_passed"]
+    if status == "rejected":
+        # Downstream consumers call issue.get(...), so keep dict items only —
+        # a stray string would crash rejection handling and the QA report.
+        issues = raw.get("issues_found")
+        signoff["issues_found"] = (
+            [i for i in issues if isinstance(i, dict)]
+            if isinstance(issues, list)
+            else []
+        )
+        signoff["fix_request_file"] = "QA_FIX_REQUEST.md"
+
+    plan["qa_signoff"] = signoff
+    if not save_implementation_plan(spec_dir, plan):
+        debug_error(
+            "qa_reviewer",
+            "Failed to write merged runtime qa_signoff into implementation_plan.json",
+        )
+        return False
+
+    # Consume the artifact so a later session whose plan signoff was reset for
+    # revalidation can't replay this verdict. _clear_runtime_qa_signoff_artifact
+    # before the run is the primary guard; this is belt-and-suspenders.
+    with contextlib.suppress(OSError):
+        artifact.unlink()
+
+    debug_success(
+        "qa_reviewer",
+        "Merged runtime qa_signoff.json into implementation_plan.json",
+        status=status,
+    )
+    return True
+
+
+def _clear_runtime_qa_signoff_artifact(spec_dir: Path) -> None:
+    """Remove a leftover ``qa_signoff.json`` before a runtime reviewer run.
+
+    The verdict file is consumed by :func:`merge_runtime_qa_signoff_artifact`,
+    which trusts whatever is on disk. If a prior session's file survived (e.g.
+    the plan's ``qa_signoff`` was reset to null for revalidation), a reviewer
+    that fails to write a fresh verdict would otherwise replay the stale one.
+    Clearing it up front guarantees a merge only ever reflects the current run.
+    """
+    with contextlib.suppress(OSError):
+        (spec_dir / RUNTIME_QA_SIGNOFF_FILENAME).unlink()
+
+
+def _runtime_signoff_instructions(rel_spec: str) -> str:
+    """Authoritative generic_edit sign-off instructions for the runtime path.
+
+    Appended last so it overrides the base prompt's Claude-oriented guidance
+    (Write/Edit tools, absolute paths) that does not apply to the portable
+    runtime.
+    """
+    plan_path = f"{rel_spec}/implementation_plan.json"
+    spec_path = f"{rel_spec}/spec.md"
+    signoff_path = f"{rel_spec}/{RUNTIME_QA_SIGNOFF_FILENAME}"
+    report_path = f"{rel_spec}/qa_report.md"
+    fix_path = f"{rel_spec}/QA_FIX_REQUEST.md"
+    approved_example = json.dumps(
+        {
+            "status": "approved",
+            "tests_passed": {"unit": "X/Y", "integration": "X/Y", "e2e": "X/Y"},
+            "coverage_passed": True,
+        },
+        indent=2,
+    )
+    rejected_example = json.dumps(
+        {
+            "status": "rejected",
+            "issues_found": [
+                {
+                    "type": "critical",
+                    "title": "<short issue title>",
+                    "location": "<file:line>",
+                    "fix_required": "<what to fix>",
+                }
+            ],
+            "coverage_passed": False,
+        },
+        indent=2,
+    )
+    return f"""
+
+---
+
+## ⚙️ RUNTIME EXECUTION MODE — READ FILES AND RECORD YOUR VERDICT (AUTHORITATIVE)
+
+You are running through Auto Code's portable runtime as a direct-provider
+model, NOT the Claude SDK. **These instructions OVERRIDE any earlier mention of
+the `Write`, `Edit`, or `Read` tools and any absolute paths** — those do not
+exist here. Use the generic_edit local tools (`read_file`, `run_command`,
+`write_file`, `replace_text`, `finish`, …) and **workspace-relative paths only**
+(absolute paths are rejected by the runtime).
+
+Read the spec and plan with `read_file` using these relative paths:
+- Spec: `{spec_path}`
+- Implementation plan: `{plan_path}`
+
+**Recording your verdict is REQUIRED.** Do NOT edit `{plan_path}` directly —
+the framework records the official sign-off from a dedicated verdict file.
+Use the `write_file` tool to create `{signoff_path}` containing EXACTLY one JSON
+object (no prose, no markdown fences):
+
+If APPROVED:
+```json
+{approved_example}
+```
+
+If REJECTED:
+```json
+{rejected_example}
+```
+
+Also write your human-readable report with `write_file` to `{report_path}`
+(and, when rejected, the fix request to `{fix_path}`). You MUST write
+`{signoff_path}` before you call `finish`; without it the QA run is recorded as
+an error and retried.
+"""
+
+
+# =============================================================================
 # QA REVIEWER SESSION
 # =============================================================================
 
@@ -301,14 +514,22 @@ def build_qa_reviewer_prompt(
     qa_session: int,
     max_iterations: int,
     previous_error: dict | None,
+    runtime_signoff_relspec: str | None = None,
 ) -> str:
     """Assemble the QA reviewer prompt (pure, provider-neutral).
 
     Shared by the Claude Agent SDK path (:func:`run_qa_agent_session`) and
     the runtime-adapter path (:func:`run_qa_reviewer_via_runtime`) so both
-    drive the reviewer with identical instructions. The verdict itself is
+    drive the reviewer with identical core instructions. The verdict itself is
     file-based (``qa_signoff`` in ``implementation_plan.json``), so the
     same prompt yields the same contract on any provider.
+
+    ``runtime_signoff_relspec`` is the workspace-relative spec directory used
+    only by the direct-API runtime path. When set, an authoritative addendum is
+    appended that tells the model to use the generic_edit tools and relative
+    paths and to record its verdict in ``qa_signoff.json`` (which
+    :func:`merge_runtime_qa_signoff_artifact` folds into the plan). The Claude
+    SDK path leaves it None and is unaffected.
     """
     prompt = base_prompt
     if qa_memory_context:
@@ -431,6 +652,11 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
 
 """
 
+    # Runtime (direct-API) path: append the authoritative generic_edit sign-off
+    # instructions last so they override the Claude-oriented guidance above.
+    if runtime_signoff_relspec:
+        prompt += _runtime_signoff_instructions(runtime_signoff_relspec)
+
     return prompt
 
 
@@ -485,7 +711,12 @@ async def run_qa_reviewer_via_runtime(
         qa_session=qa_session,
         max_iterations=max_iterations,
         previous_error=previous_error,
+        runtime_signoff_relspec=_runtime_relative_spec_dir(project_dir, spec_dir),
     )
+
+    # Drop any verdict file left by a previous session so this run's merge can
+    # only ever reflect a sign-off this reviewer actually wrote.
+    _clear_runtime_qa_signoff_artifact(spec_dir)
 
     result = await run_runtime_session(
         runtime_session,
@@ -497,6 +728,13 @@ async def run_qa_reviewer_via_runtime(
     response_text = result.response_text or ""
 
     status = get_qa_signoff_status(spec_dir)
+    if not status:
+        # The generic_edit reviewer can't reliably edit the large
+        # implementation_plan.json (no Claude Write/Edit tools, relative paths
+        # only), so it drops its verdict in qa_signoff.json instead. Fold that
+        # into the plan deterministically, then re-read the canonical status.
+        if merge_runtime_qa_signoff_artifact(spec_dir, qa_session):
+            status = get_qa_signoff_status(spec_dir)
     if status and coverage_data is not None:
         update_qa_signoff_with_coverage(spec_dir, coverage_data)
         status = get_qa_signoff_status(spec_dir)
@@ -548,6 +786,31 @@ async def run_qa_reviewer_via_runtime(
     )
 
 
+async def _aclose_agent_session(session: object) -> None:
+    """Close a provider session within the running event loop, best-effort.
+
+    Direct-API sessions (e.g. ``OpenAICompatibleSession``) own an
+    ``AsyncOpenAI`` / ``httpx`` transport bound to the loop they were created
+    in. The QA loop builds a fresh session every iteration under one
+    ``asyncio.run``; without an explicit in-loop close, each leaked transport
+    raises ``TCPTransport closed`` errors when the garbage collector reclaims
+    it later. Prefer the async ``aclose`` and fall back to the sync ``close``.
+    """
+    aclose = getattr(session, "aclose", None)
+    if callable(aclose):
+        try:
+            await aclose()
+            return
+        except Exception as e:  # cleanup must never mask the QA result
+            # Fall through to the sync close() so a failed async close still
+            # gets a best-effort teardown.
+            logger.debug(f"qa_reviewer runtime session aclose failed: {e}")
+    close = getattr(session, "close", None)
+    if callable(close):
+        with contextlib.suppress(Exception):
+            close()
+
+
 async def run_qa_reviewer_runtime_session(
     *,
     provider_name: str,
@@ -566,6 +829,8 @@ async def run_qa_reviewer_runtime_session(
     :func:`agents.runtime.qa_phase_routing.resolve_qa_runtime` permits the
     direct-API reviewer path: it constructs the provider session and the
     runtime adapter, then delegates to :func:`run_qa_reviewer_via_runtime`.
+    The provider session is closed in this same event loop afterwards so its
+    async HTTP transport never leaks into garbage-collector teardown.
     """
     from agents.runtime import create_runtime_session
 
@@ -595,15 +860,18 @@ async def run_qa_reviewer_runtime_session(
         project_dir=project_dir,
         agent_type="qa_reviewer",
     )
-    return await run_qa_reviewer_via_runtime(
-        runtime_session,
-        project_dir,
-        spec_dir,
-        qa_session,
-        max_iterations,
-        verbose=verbose,
-        previous_error=previous_error,
-    )
+    try:
+        return await run_qa_reviewer_via_runtime(
+            runtime_session,
+            project_dir,
+            spec_dir,
+            qa_session,
+            max_iterations,
+            verbose=verbose,
+            previous_error=previous_error,
+        )
+    finally:
+        await _aclose_agent_session(session)
 
 
 async def run_qa_agent_session(
