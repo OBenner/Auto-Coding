@@ -146,9 +146,9 @@ async def run_documentation_generator_session(
             f"{len(analysis_results.get('classes', []))} classes for documentation",
         )
 
-    # Validate the documentation generator prompt exists
+    # Load the documentation generator prompt (delivered as the leading message)
     try:
-        get_agent_prompt("documentation_generator")
+        prompt = get_agent_prompt("documentation_generator")
     except Exception as e:
         error_msg = f"Failed to load documentation_generator prompt: {e}"
         logger.error(error_msg)
@@ -202,14 +202,34 @@ Begin by loading context (Phase 0 in your prompt).
             task_logger.log_entry(LogEntryType.ERROR, error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
-    # Run the agent session
+    # Run the agent session.
+    #
+    # ClaudeSDKClient has no `create_agent_session` method — agent turns are
+    # driven by run_agent_session() (agents/session.py) inside `async with
+    # client`, the same session API the planner/coder/qa phases use. The agent
+    # role prompt leads the message since the SDK client only carries the
+    # generic base system prompt.
+    from .session import run_agent_session
+
     try:
         print_status("Starting documentation generation session...", "progress")
 
-        await client.create_agent_session(
-            name="documentation-generator-session",
-            starting_message=starting_message,
-        )
+        session_message = f"{prompt}\n\n{starting_message}"
+        async with client:
+            status, response_text, _usage, _decisions = await run_agent_session(
+                client=client,
+                message=session_message,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=LogPhase.CODING,
+            )
+
+        if status == "error":
+            error_msg = f"Documentation generation session failed: {response_text}"
+            logger.error(error_msg)
+            if task_logger:
+                task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            return {"generated_files": [], "success": False, "error": error_msg}
 
         if task_logger:
             task_logger.log_entry(

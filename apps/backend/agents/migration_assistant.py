@@ -272,12 +272,34 @@ Begin by loading context (Phase 0 in your prompt).
     print_status("Running migration assistant...", "progress")
     print()
 
+    # ClaudeSDKClient has no `create_agent_session` method — drive the session
+    # with run_agent_session() (agents/session.py) inside `async with client`,
+    # the same session API the planner/coder/qa phases use. The agent role
+    # prompt leads the message since the SDK client only carries the generic
+    # base system prompt.
+    from .session import run_agent_session
+
     try:
+        session_message = f"{_prompt}\n\n{starting_message}"
         async with client:
-            await client.create_agent_session(
-                name="migration-assistant-session",
-                starting_message=starting_message,
+            status, response_text, _usage, _decisions = await run_agent_session(
+                client=client,
+                message=session_message,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=LogPhase.CODING,
             )
+
+        if status == "error":
+            error_msg = f"Migration session failed: {response_text}"
+            logger.error(error_msg)
+            if task_logger:
+                task_logger.log(error_msg, LogEntryType.ERROR)
+            return {
+                "checkpoints_created": 0,
+                "success": False,
+                "error": error_msg,
+            }
 
         # Log completion
         if task_logger:

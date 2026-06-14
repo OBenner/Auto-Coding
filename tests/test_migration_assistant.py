@@ -13,7 +13,7 @@ Tests the migration_assistant.py module functionality including:
 import platform
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -223,6 +223,22 @@ class TestMigrationCheckpointValidation:
 class TestMigrationAssistantSession:
     """Tests for run_migration_assistant() async function."""
 
+    @pytest.fixture(autouse=True)
+    def mock_session_runner(self):
+        """Patch the shared session driver used by run_migration_assistant.
+
+        ``ClaudeSDKClient`` has no ``create_agent_session`` method; the inline
+        migration session is driven by ``agents.session.run_agent_session``
+        (inside ``async with client``). Patch it to a success 4-tuple so these
+        tests exercise the migration logic without a live SDK session. Tests
+        that need a failure reconfigure the returned mock (e.g. ``side_effect``).
+        """
+        mock_run = AsyncMock(
+            return_value=("complete", "migration done", None, MagicMock())
+        )
+        with patch("agents.session.run_agent_session", new=mock_run):
+            yield mock_run
+
     @pytest.mark.asyncio
     async def test_run_fails_when_prompt_load_fails(self, tmp_path):
         """Verify run_migration_assistant fails gracefully when prompt can't be loaded."""
@@ -295,9 +311,6 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            return_value={"response": "success"}
-        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
@@ -323,8 +336,10 @@ class TestMigrationAssistantSession:
         assert result["checkpoints_created"] == 0  # No checkpoints created yet
 
     @pytest.mark.asyncio
-    async def test_run_includes_migration_context_in_message(self, tmp_path):
-        """Verify migration context is included in starting message when provided."""
+    async def test_run_includes_migration_context_in_message(
+        self, tmp_path, mock_session_runner
+    ):
+        """Verify migration context is included in the session message when provided."""
         project_dir = tmp_path / "project"
         spec_dir = tmp_path / "spec"
         project_dir.mkdir()
@@ -339,9 +354,6 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            return_value={"response": "success"}
-        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
@@ -365,12 +377,12 @@ class TestMigrationAssistantSession:
                                 migration_context=migration_context,
                             )
 
-        # Verify create_agent_session was called with migration context
-        call_args = mock_client.create_agent_session.call_args
-        starting_message = call_args.kwargs["starting_message"]
-        assert "Migration Context" in starting_message
-        assert "React 17" in starting_message
-        assert "React 18" in starting_message
+        # The migration context is carried in the message passed to the shared
+        # session driver (the agent role prompt leads it).
+        message = mock_session_runner.await_args.kwargs["message"]
+        assert "Migration Context" in message
+        assert "React 17" in message
+        assert "React 18" in message
 
     @pytest.mark.asyncio
     async def test_run_counts_checkpoints_correctly(self, tmp_path):
@@ -397,9 +409,6 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            return_value={"response": "success"}
-        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
@@ -439,9 +448,6 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            return_value={"response": "success"}
-        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
@@ -467,7 +473,7 @@ class TestMigrationAssistantSession:
         assert result["migration_plan_path"] == "migration_plan.md"
 
     @pytest.mark.asyncio
-    async def test_run_handles_session_exception(self, tmp_path):
+    async def test_run_handles_session_exception(self, tmp_path, mock_session_runner):
         """Verify run_migration_assistant handles exceptions during session execution."""
         project_dir = tmp_path / "project"
         spec_dir = tmp_path / "spec"
@@ -477,9 +483,9 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            side_effect=RuntimeError("Session failed")
-        )
+
+        # The shared session driver raises mid-session.
+        mock_session_runner.side_effect = RuntimeError("Session failed")
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
@@ -516,9 +522,6 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            return_value={"response": "success"}
-        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
@@ -559,9 +562,6 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(
-            return_value={"response": "success"}
-        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
             with patch(
