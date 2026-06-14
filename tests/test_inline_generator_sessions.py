@@ -25,6 +25,7 @@ method — and that the agent role prompt leads the message.
 
 import sys
 from contextlib import ExitStack
+from importlib.util import find_spec
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -40,9 +41,7 @@ sys.path.insert(0, str(backend_path))
 # absent — mirroring tests/test_fixture_generator_session.py and how
 # tests/conftest.py pre-mocks the Claude SDK.
 if "numpy" not in sys.modules:
-    try:
-        import numpy  # noqa: F401
-    except ModuleNotFoundError:
+    if find_spec("numpy") is None:
         sys.modules["numpy"] = MagicMock()
 
 
