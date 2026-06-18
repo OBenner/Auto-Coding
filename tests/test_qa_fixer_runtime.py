@@ -11,6 +11,7 @@ is the file-based `is_fixes_applied` signal, matching the Claude path.
 from __future__ import annotations
 
 import contextlib
+import json
 import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -48,6 +49,49 @@ def test_build_qa_fixer_prompt_minimal():
     assert prompt.startswith("B")
     assert "MEM" not in prompt
     assert "**Fix Session**: 1" in prompt
+
+
+def test_build_qa_fixer_prompt_no_runtime_addendum_by_default():
+    """Without runtime_status_relspec the prompt keeps the Claude contract."""
+    prompt = build_qa_fixer_prompt(
+        base_prompt="B",
+        fixer_memory_context=None,
+        failure_patterns=None,
+        spec_dir=Path("/proj/.auto-claude/specs/001-x"),
+        fix_session=1,
+    )
+
+    assert "qa_status.json" not in prompt
+    assert "RUNTIME EXECUTION OVERRIDE" not in prompt
+
+
+def test_build_qa_fixer_prompt_runtime_addendum_overrides_claude_guidance():
+    """The runtime addendum redirects status persistence to qa_status.json.
+
+    On generic_edit the Claude Write/Edit tools and absolute paths don't
+    exist, so the addendum must (a) forbid the direct implementation_plan.json
+    edit, (b) point at write_file with a workspace-relative path, and (c) spell
+    out the exact qa_status.json contract the merge step reads back.
+    """
+    prompt = build_qa_fixer_prompt(
+        base_prompt="B",
+        fixer_memory_context=None,
+        failure_patterns=None,
+        spec_dir=Path("/proj/.auto-claude/specs/001-x"),
+        fix_session=7,
+        runtime_status_relspec=".auto-claude/specs/001-x",
+    )
+
+    assert "RUNTIME EXECUTION OVERRIDE" in prompt
+    assert "write_file" in prompt
+    # Workspace-relative status artifact path, not an absolute path.
+    assert ".auto-claude/specs/001-x/qa_status.json" in prompt
+    assert "/proj/.auto-claude/specs/001-x/qa_status.json" not in prompt
+    # The exact contract the merge step keys on.
+    assert '"status": "fixes_applied"' in prompt
+    assert '"ready_for_qa_revalidation": true' in prompt
+    assert '"fix_session": 7' in prompt
+    assert "fixes_summary" in prompt
 
 
 def _patch_fixer_runtime(*, fixes_applied: bool, response_text: str = "fixed-text"):
@@ -127,6 +171,93 @@ async def test_run_qa_fixer_via_runtime_drives_runtime_session(tmp_path):
     assert kwargs["message"].startswith("FIXER_PROMPT")
     assert "**Fix Session**: 4" in kwargs["message"]
     assert kwargs["spec_dir"] == tmp_path
+
+
+@pytest.mark.asyncio
+async def test_run_qa_fixer_via_runtime_merges_qa_status_artifact(tmp_path):
+    """generic_edit writes qa_status.json -> merged into qa_signoff -> 'fixed'.
+
+    This is the bug being fixed: on a direct-API provider the fixer can't edit
+    implementation_plan.json's qa_signoff (no Write/Edit tool, absolute paths
+    rejected). It drops a workspace-relative qa_status.json instead, and the
+    orchestrator folds that into qa_signoff so is_fixes_applied reads true —
+    without this, the REJECTED -> fix -> re-QA loop stalls. Uses the REAL
+    is_fixes_applied / load+save implementation plan (only the runtime session
+    and memory are faked).
+    """
+    (tmp_path / "QA_FIX_REQUEST.md").write_text("fix these", encoding="utf-8")
+    # Pre-fix state: a rejected signoff that is_fixes_applied() reads as False.
+    (tmp_path / "implementation_plan.json").write_text(
+        json.dumps({"qa_signoff": {"status": "rejected", "qa_session": 2}}),
+        encoding="utf-8",
+    )
+
+    async def fake_run_session(
+        runtime_session, *, message, spec_dir, verbose=False, requirements=None
+    ):
+        # Mirror the generic_edit fixer: write the status artifact rather than
+        # editing implementation_plan.json directly.
+        (spec_dir / "qa_status.json").write_text(
+            json.dumps(
+                {
+                    "status": "fixes_applied",
+                    "ready_for_qa_revalidation": True,
+                    "fix_session": 1,
+                    "fixes_summary": "patched the failing assertion",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return types.SimpleNamespace(response_text="done")
+
+    with (
+        patch("qa.fixer.load_qa_fixer_prompt", return_value="FIXER_PROMPT"),
+        patch("qa.fixer.get_graphiti_context", new=AsyncMock(return_value="")),
+        patch("qa.fixer.get_failure_patterns", new=AsyncMock(return_value="")),
+        patch("qa.fixer.save_session_memory", new=AsyncMock(return_value=None)),
+        patch("agents.runtime.run_runtime_session", new=fake_run_session),
+    ):
+        status, response = await run_qa_fixer_via_runtime(
+            MagicMock(), tmp_path, tmp_path, fix_session=1
+        )
+
+    assert status == "fixed"
+    assert response == "done"
+    # The artifact was deterministically folded into qa_signoff.
+    plan = json.loads((tmp_path / "implementation_plan.json").read_text())
+    signoff = plan["qa_signoff"]
+    assert signoff["status"] == "fixes_applied"
+    assert signoff["ready_for_qa_revalidation"] is True
+    assert signoff["fixes_summary"] == "patched the failing assertion"
+    # Pre-existing fields on the signoff are preserved through the merge.
+    assert signoff["qa_session"] == 2
+
+
+@pytest.mark.asyncio
+async def test_run_qa_fixer_via_runtime_no_artifact_stays_error(tmp_path):
+    """No qa_status.json and no plan edit => still 'error' (loop must not pass)."""
+    (tmp_path / "QA_FIX_REQUEST.md").write_text("fix these", encoding="utf-8")
+    (tmp_path / "implementation_plan.json").write_text(
+        json.dumps({"qa_signoff": {"status": "rejected"}}), encoding="utf-8"
+    )
+
+    async def fake_run_session(runtime_session, **kwargs):
+        return types.SimpleNamespace(response_text="did nothing")
+
+    with (
+        patch("qa.fixer.load_qa_fixer_prompt", return_value="FIXER_PROMPT"),
+        patch("qa.fixer.get_graphiti_context", new=AsyncMock(return_value="")),
+        patch("qa.fixer.get_failure_patterns", new=AsyncMock(return_value="")),
+        patch("qa.fixer.save_session_memory", new=AsyncMock(return_value=None)),
+        patch("agents.runtime.run_runtime_session", new=fake_run_session),
+    ):
+        status, _ = await run_qa_fixer_via_runtime(
+            MagicMock(), tmp_path, tmp_path, fix_session=1
+        )
+
+    assert status == "error"
+    plan = json.loads((tmp_path / "implementation_plan.json").read_text())
+    assert plan["qa_signoff"]["status"] == "rejected"  # untouched
 
 
 # ---------------------------------------------------------------------------
@@ -307,3 +438,94 @@ async def test_runtime_fixer_marks_stuck_on_skip(tmp_path):
     assert status == "stuck"
     assert "circular_fix" in response
     assert fake_rm.outcomes == [False]
+
+
+# ---------------------------------------------------------------------------
+# Same-loop async session close (no leaked AsyncOpenAI connection pools)
+# ---------------------------------------------------------------------------
+
+
+class _AsyncClosableSession:
+    def __init__(self):
+        self.aclose_calls = 0
+
+    async def aclose(self):
+        self.aclose_calls += 1
+
+
+class _RuntimeWithSession:
+    def __init__(self):
+        self.agent_session = _AsyncClosableSession()
+
+
+@pytest.mark.asyncio
+async def test_runtime_fixer_acloses_session_each_attempt(tmp_path):
+    """Every per-attempt runtime session is async-closed in the same loop."""
+    from qa import fixer
+
+    runtimes = [_RuntimeWithSession(), _RuntimeWithSession()]
+    built = iter(runtimes)
+
+    def fake_build(**kwargs):
+        return next(built)
+
+    via = AsyncMock(side_effect=[("error", "boom"), ("fixed", "done")])
+    fake_rm = _FakeRecoveryManager(action_script=[_recovery_action("retry")])
+
+    with (
+        patch("qa.fixer._build_qa_fixer_runtime_session", side_effect=fake_build),
+        patch("qa.fixer.run_qa_fixer_via_runtime", new=via),
+        patch("qa.fixer.RecoveryManager", return_value=fake_rm),
+    ):
+        status, _ = await fixer.run_qa_fixer_runtime_session(
+            provider_name="openai",
+            runtime_mode="generic_edit",
+            model="gpt-5.2",
+            project_dir=tmp_path,
+            spec_dir=tmp_path,
+            fix_session=1,
+        )
+
+    assert status == "fixed"
+    # Both the failed first attempt and the successful second attempt closed
+    # their session exactly once (the finally runs even before the success
+    # return).
+    assert [r.agent_session.aclose_calls for r in runtimes] == [1, 1]
+
+
+@pytest.mark.asyncio
+async def test_aclose_agent_session_falls_back_to_sync_close():
+    """A session exposing only a sync close() is still closed."""
+    from qa.fixer import _aclose_agent_session
+
+    class _SyncOnlySession:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class _Runtime:
+        def __init__(self):
+            self.agent_session = _SyncOnlySession()
+
+    runtime = _Runtime()
+    await _aclose_agent_session(runtime)
+    assert runtime.agent_session.closed is True
+
+
+@pytest.mark.asyncio
+async def test_aclose_agent_session_swallows_errors():
+    """Cleanup must never raise — a failing aclose is logged and absorbed."""
+    from qa.fixer import _aclose_agent_session
+
+    class _BoomSession:
+        async def aclose(self):
+            raise RuntimeError("close exploded")
+
+    class _Runtime:
+        def __init__(self):
+            self.agent_session = _BoomSession()
+
+    # Must not raise.
+    await _aclose_agent_session(_Runtime())
