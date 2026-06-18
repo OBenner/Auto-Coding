@@ -15,9 +15,10 @@ Coverage Integration:
 - Coverage results included in qa_signoff
 """
 
+import inspect
 import json
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from agents.memory_manager import get_graphiti_context, save_session_memory
 from agents.session import save_token_stats
@@ -301,6 +302,7 @@ def build_qa_reviewer_prompt(
     qa_session: int,
     max_iterations: int,
     previous_error: dict | None,
+    runtime_status_relspec: str | None = None,
 ) -> str:
     """Assemble the QA reviewer prompt (pure, provider-neutral).
 
@@ -309,6 +311,18 @@ def build_qa_reviewer_prompt(
     drive the reviewer with identical instructions. The verdict itself is
     file-based (``qa_signoff`` in ``implementation_plan.json``), so the
     same prompt yields the same contract on any provider.
+
+    ``runtime_status_relspec`` switches the prompt to the generic_edit
+    contract. The base reviewer prompt — and, in particular, the
+    ``previous_error`` self-correction branch below — tells the model to
+    record its verdict by editing ``implementation_plan.json``'s ``qa_signoff``
+    with the Claude ``Write``/``Edit`` tools and absolute paths, none of which
+    exist on a direct-API runtime (the tools are ``write_file``/``replace_text``
+    and ``resolve_workspace_path`` rejects absolute paths). When set (to the
+    spec dir relative to the project root, POSIX), an addendum appended last
+    OVERRIDES that guidance: the model writes a workspace-relative
+    ``qa_status.json`` instead, which the orchestrator folds into
+    ``qa_signoff`` deterministically.
     """
     prompt = base_prompt
     if qa_memory_context:
@@ -431,7 +445,178 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
 
 """
 
+    if runtime_status_relspec is not None:
+        prompt += _runtime_reviewer_addendum(runtime_status_relspec, qa_session)
     return prompt
+
+
+def _runtime_reviewer_addendum(status_relspec: str, qa_session: int) -> str:
+    """Direct-API (generic_edit) override for the Claude verdict-write guidance.
+
+    Built only for the runtime path. ``status_relspec`` is the spec directory
+    relative to the project root (POSIX); the status artifact lives directly
+    inside it so the merge step can find it at ``<spec_dir>/qa_status.json``.
+    Unlike the fixer's single ``fixes_applied`` flag, the reviewer records a
+    full verdict — ``approved`` or ``rejected`` (with ``issues_found`` when
+    rejected) — which :func:`merge_runtime_qa_reviewer_status_artifact` folds
+    into ``qa_signoff``.
+    """
+    status_path = (PurePosixPath(status_relspec) / "qa_status.json").as_posix()
+    return f"""
+
+---
+
+## 🚨 RUNTIME EXECUTION OVERRIDE (direct-API / generic_edit) 🚨
+
+You are running on a **direct-API runtime**, NOT Claude Code. This OVERRIDES the
+tool and path guidance above — including any self-correction instructions that
+tell you to edit `implementation_plan.json` with `Write`/`Edit` and absolute
+paths:
+
+- The Claude `Write` / `Edit` tools do **not** exist here. Read files with
+  `read_file` and edit them with `write_file`, `replace_text`, or `apply_patch`.
+- **Absolute paths are rejected** ("Patch path must be relative"). Every path
+  you pass must be **relative to the project root** (the workspace root).
+
+### How to record your verdict (REQUIRED — replaces the qa_signoff edit)
+
+Do **NOT** try to edit `implementation_plan.json`'s `qa_signoff` directly — on
+this runtime that write is not reliable. Instead, once your review is complete,
+use `write_file` to create this exact workspace-relative file:
+
+- **Path** (relative to project root): `{status_path}`
+- **Contents** (JSON) — if the build PASSES every acceptance criterion:
+
+```json
+{{
+  "status": "approved",
+  "qa_session": {qa_session}
+}}
+```
+
+- **Contents** (JSON) — if the build FAILS any acceptance criterion:
+
+```json
+{{
+  "status": "rejected",
+  "qa_session": {qa_session},
+  "issues_found": [
+    {{"type": "critical", "title": "<short title>", "location": "<file:line>", "fix_required": "<what to change>"}}
+  ]
+}}
+```
+
+`status` must be exactly `"approved"` or `"rejected"` — nothing else. When
+rejected, `issues_found` must be a **non-empty** list describing every blocking
+issue (the QA fixer reads it to know what to repair). Coverage results are
+recorded for you automatically, so you do not need to add them. After writing
+the file, call `finish`. If you skip this file, your verdict will not be
+recorded and the QA loop will stall.
+"""
+
+
+def _runtime_relative_spec_dir(project_dir: Path, spec_dir: Path) -> str | None:
+    """Return ``spec_dir`` relative to ``project_dir`` as POSIX, or None.
+
+    Mirrors the qa_fixer helper: the generic_edit runtime resolves every tool
+    path against the project root and rejects absolute paths, so the reviewer's
+    status artifact must be addressed workspace-relative. Returns None when the
+    spec dir is not under the project root (an unexpected layout) — the caller
+    then falls back to the Claude-style prompt with no runtime addendum.
+    """
+    try:
+        return spec_dir.resolve().relative_to(project_dir.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def merge_runtime_qa_reviewer_status_artifact(spec_dir: Path) -> bool:
+    """Fold a runtime-written ``qa_status.json`` verdict into ``qa_signoff``.
+
+    The Claude reviewer records its verdict by editing
+    ``implementation_plan.json`` directly; the generic_edit runtime can't (no
+    ``Write``/``Edit`` tool, absolute paths rejected), so it drops a
+    workspace-relative ``qa_status.json`` instead. This deterministically
+    merges that artifact into ``qa_signoff`` — carrying the ``approved`` /
+    ``rejected`` verdict, the ``issues_found`` list when rejected, and any
+    optional reviewer detail — so ``get_qa_signoff_status`` reads the verdict
+    exactly as on the Claude path. Returns True only when an ``approved`` /
+    ``rejected`` artifact was merged and persisted (mirror of
+    :func:`qa.fixer.merge_runtime_qa_fixer_status_artifact`, whose artifact
+    carries the fixer's single ``fixes_applied`` flag instead).
+    """
+    # Lazy import to avoid the qa.criteria -> ... -> qa.reviewer import cycle.
+    from .criteria import load_implementation_plan, save_implementation_plan
+
+    status_file = spec_dir / "qa_status.json"
+    if not status_file.exists():
+        return False
+    try:
+        artifact = json.loads(status_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return False
+    if not isinstance(artifact, dict) or artifact.get("status") not in (
+        "approved",
+        "rejected",
+    ):
+        return False
+
+    plan = load_implementation_plan(spec_dir)
+    if plan is None:
+        return False
+
+    signoff = plan.get("qa_signoff")
+    if not isinstance(signoff, dict):
+        signoff = {}
+    signoff["status"] = artifact["status"]
+    # A rejected verdict must carry the issue list the fixer reads back; always
+    # land a list so the schema is present even if the model omitted it.
+    if artifact["status"] == "rejected":
+        issues = artifact.get("issues_found")
+        signoff["issues_found"] = issues if isinstance(issues, list) else []
+    # Carry forward optional reviewer-provided detail when present.
+    for key in (
+        "qa_session",
+        "coverage_results",
+        "report_file",
+        "fix_request_file",
+        "tests_passed",
+        "verified_by",
+        "timestamp",
+    ):
+        if key in artifact:
+            signoff[key] = artifact[key]
+    plan["qa_signoff"] = signoff
+    return save_implementation_plan(spec_dir, plan)
+
+
+async def _aclose_agent_session(runtime_session: object) -> None:
+    """Best-effort async-close the provider session behind a runtime adapter.
+
+    Mirror of :func:`qa.fixer._aclose_agent_session`. The runtime adapter wraps
+    a provider ``agent_session``; for direct-API providers that session owns an
+    ``AsyncOpenAI`` client whose connection pool must be awaited closed in the
+    running loop, or sockets leak (and asyncio warns on GC). Prefers ``aclose``
+    (awaitable) and falls back to a sync ``close``; swallows all errors so
+    cleanup never masks the reviewer's real verdict.
+    """
+    session = getattr(runtime_session, "agent_session", runtime_session)
+    aclose = getattr(session, "aclose", None)
+    if callable(aclose):
+        try:
+            result = aclose()
+            if inspect.isawaitable(result):
+                await result
+            return
+        except Exception as e:  # noqa: BLE001 - cleanup is best-effort
+            debug_error("qa_reviewer", f"runtime session aclose failed: {e}")
+            return
+    close = getattr(session, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception as e:  # noqa: BLE001 - cleanup is best-effort
+            debug_error("qa_reviewer", f"runtime session close failed: {e}")
 
 
 async def run_qa_reviewer_via_runtime(
@@ -485,6 +670,7 @@ async def run_qa_reviewer_via_runtime(
         qa_session=qa_session,
         max_iterations=max_iterations,
         previous_error=previous_error,
+        runtime_status_relspec=_runtime_relative_spec_dir(project_dir, spec_dir),
     )
 
     result = await run_runtime_session(
@@ -496,7 +682,18 @@ async def run_qa_reviewer_via_runtime(
     )
     response_text = result.response_text or ""
 
+    # The Claude reviewer writes its verdict into implementation_plan.json's
+    # qa_signoff itself; the generic_edit runtime instead drops a
+    # workspace-relative qa_status.json (the Claude Write/Edit tools and
+    # absolute paths do not exist here). When no usable verdict landed in the
+    # plan, fold that artifact into qa_signoff so get_qa_signoff_status reads
+    # the approved/rejected verdict exactly as on the Claude path.
     status = get_qa_signoff_status(spec_dir)
+    if (
+        not status or status.get("status") not in ("approved", "rejected")
+    ) and merge_runtime_qa_reviewer_status_artifact(spec_dir):
+        status = get_qa_signoff_status(spec_dir)
+
     if status and coverage_data is not None:
         update_qa_signoff_with_coverage(spec_dir, coverage_data)
         status = get_qa_signoff_status(spec_dir)
@@ -595,15 +792,22 @@ async def run_qa_reviewer_runtime_session(
         project_dir=project_dir,
         agent_type="qa_reviewer",
     )
-    return await run_qa_reviewer_via_runtime(
-        runtime_session,
-        project_dir,
-        spec_dir,
-        qa_session,
-        max_iterations,
-        verbose=verbose,
-        previous_error=previous_error,
-    )
+    try:
+        return await run_qa_reviewer_via_runtime(
+            runtime_session,
+            project_dir,
+            spec_dir,
+            qa_session,
+            max_iterations,
+            verbose=verbose,
+            previous_error=previous_error,
+        )
+    finally:
+        # Async-close the provider session in this loop so its AsyncOpenAI
+        # connection pool is released in-loop, not at interpreter exit. The
+        # reviewer is a single pass (no per-attempt rebuild like the fixer's
+        # recovery loop), but the same pool leak applies if it is never closed.
+        await _aclose_agent_session(runtime_session)
 
 
 async def run_qa_agent_session(
