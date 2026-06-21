@@ -91,7 +91,7 @@ jobs:
       AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES: 'true'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Python backend
         uses: ./.github/actions/setup-python-backend
