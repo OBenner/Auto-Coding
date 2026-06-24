@@ -10,7 +10,7 @@ import json
 import logging
 import shutil
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 VERIFICATION_REPORT_FILENAME = "verification-report.json"
 VERIFICATION_REPORT_SCHEMA_VERSION = 1
 _ALLOWED_VERDICTS = ("approved", "rejected", "error")
+
+
+def _utc_timestamp() -> str:
+    """Timezone-aware UTC timestamp in ISO-8601 with a trailing ``Z``."""
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 class ArtifactManager:
@@ -104,7 +109,7 @@ class ArtifactManager:
             # Add metadata timestamp if not present (use a copy to avoid mutating caller's dict)
             if "timestamp" not in build_data:
                 build_data = dict(build_data)
-                build_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                build_data["timestamp"] = _utc_timestamp()
 
             # Write build log with pretty formatting
             with open(artifact_path, "w", encoding="utf-8") as f:
@@ -154,7 +159,7 @@ class ArtifactManager:
             # Add metadata timestamp if not present (use a copy to avoid mutating caller's dict)
             if "timestamp" not in test_data:
                 test_data = dict(test_data)
-                test_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                test_data["timestamp"] = _utc_timestamp()
 
             # Write test report with pretty formatting
             with open(artifact_path, "w", encoding="utf-8") as f:
@@ -204,7 +209,7 @@ class ArtifactManager:
             # Add metadata timestamp if not present (use a copy to avoid mutating caller's dict)
             if "timestamp" not in coverage_data:
                 coverage_data = dict(coverage_data)
-                coverage_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                coverage_data["timestamp"] = _utc_timestamp()
 
             # Write coverage report with pretty formatting
             with open(artifact_path, "w", encoding="utf-8") as f:
@@ -250,7 +255,7 @@ class ArtifactManager:
             # Add timestamp if not present (copy to avoid mutating caller's dict)
             if "timestamp" not in verification_data:
                 verification_data = dict(verification_data)
-                verification_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                verification_data["timestamp"] = _utc_timestamp()
 
             with open(artifact_path, "w", encoding="utf-8") as f:
                 json.dump(verification_data, f, indent=2)
@@ -317,7 +322,7 @@ class ArtifactManager:
                 # Add timestamp if not present (use a copy to avoid mutating caller's dict)
                 if "timestamp" not in data:
                     data = dict(data)
-                    data["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                    data["timestamp"] = _utc_timestamp()
 
                 # Write JSON data
                 with open(artifact_path, "w", encoding="utf-8") as f:
