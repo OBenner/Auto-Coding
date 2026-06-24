@@ -371,6 +371,8 @@ def load_token_stats(spec_dir: Path) -> TaskTokenStats | None:
                 input_tokens=phase_data["input_tokens"],
                 output_tokens=phase_data["output_tokens"],
                 session_count=phase_data.get("session_count", 0),
+                model=phase_data.get("model"),
+                provider=phase_data.get("provider"),
                 updated_at=datetime.fromisoformat(phase_data["updated_at"]),
             )
 
@@ -387,11 +389,31 @@ def load_token_stats(spec_dir: Path) -> TaskTokenStats | None:
         return None
 
 
+def _resolve_active_provider() -> str | None:
+    """Best-effort resolve the active AI provider name (for cost attribution).
+
+    Returns the configured provider string (e.g. "claude", "openai") or None
+    if it cannot be determined. Never raises — token stats must persist even
+    when provider config is unavailable.
+    """
+    try:
+        from core.providers.config import get_provider_config
+
+        provider_config = get_provider_config()
+        if provider_config is not None:
+            return getattr(provider_config, "provider", None)
+    except Exception:  # pragma: no cover - defensive, provider config optional
+        return None
+    return None
+
+
 def save_token_stats(
     spec_dir: Path,
     phase: PhaseType,
     input_tokens: int,
     output_tokens: int,
+    model: str | None = None,
+    provider: str | None = None,
 ) -> bool:
     """
     Update token statistics for a phase and persist to token_stats.json.
@@ -404,6 +426,9 @@ def save_token_stats(
         phase: Execution phase (planning, coding, validation)
         input_tokens: Number of input tokens used in this session
         output_tokens: Number of output tokens used in this session
+        model: Model used in this session (recorded for cost attribution).
+        provider: Provider used; when omitted, the active provider is resolved
+            from provider config so every caller records it without changes.
 
     Returns:
         True if saved successfully, False otherwise
@@ -412,6 +437,10 @@ def save_token_stats(
         # Load existing stats or create new
         existing_stats = load_token_stats(spec_dir)
         now = datetime.now()
+
+        # Resolve provider once so every caller records it without changes.
+        if provider is None:
+            provider = _resolve_active_provider()
 
         if existing_stats:
             phases = existing_stats.phases.copy()
@@ -427,12 +456,20 @@ def save_token_stats(
             phase_stats.output_tokens += output_tokens
             phase_stats.session_count += 1
             phase_stats.updated_at = now
+            # Last non-empty value wins; don't clobber a known model/provider
+            # with None from a later session that didn't supply one.
+            if model:
+                phase_stats.model = model
+            if provider:
+                phase_stats.provider = provider
         else:
             phase_stats = PhaseTokenStats(
                 phase=phase,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 session_count=1,
+                model=model,
+                provider=provider,
                 updated_at=now,
             )
             phases[phase] = phase_stats
@@ -1502,6 +1539,7 @@ async def run_agent_session(
                     phase_type,
                     usage_metadata["input_tokens"],
                     usage_metadata["output_tokens"],
+                    model=getattr(client, "model", None),
                 )
                 if saved:
                     print_status(

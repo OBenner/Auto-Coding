@@ -21,6 +21,8 @@ class PhaseTokenStats:
     input_tokens: int = 0
     output_tokens: int = 0
     session_count: int = 0  # Number of agent sessions in this phase
+    model: str | None = None  # Most recent model used in this phase
+    provider: str | None = None  # Most recent provider used in this phase
     updated_at: datetime = field(default_factory=datetime.now)
 
     @property
@@ -50,6 +52,8 @@ class TaskTokenStats:
                     "output_tokens": stats.output_tokens,
                     "total_tokens": stats.total_tokens,
                     "session_count": stats.session_count,
+                    "model": stats.model,
+                    "provider": stats.provider,
                     "updated_at": stats.updated_at.isoformat(),
                 }
                 for name, stats in self.phases.items()
