@@ -81,14 +81,14 @@
 
 | # | Задача | Файлы | Критерий приёмки |
 |---|---|---|---|
-| T1 | Coder уважает уровень автономности (сейчас `allow_direct_api_autonomous=True` захардкожен) | `agents/coder.py` | `AUTO_CODE_AUTONOMY=claude` блокирует автономный direct-API coder; `safe` — через gate; `bold` — мимо gate |
+| T1 | ✅ **Уже реализовано.** Coder уважает уровень автономности | `agents/coder.py:1282–1296` + `agents/runtime/direct_api_autonomy.py:124` | `AUTO_CODE_AUTONOMY=claude` блокирует автономный direct-API coder; `safe` — через gate; `bold` — мимо gate (хардкод `=True` остался только в смоук-тесте `cli/provider_smoke_commands.py`) |
 | T2 | Гейт для planner на не-Claude провайдерах | `agents/planner.py` | При `off` не-Claude planner блокируется |
 | T3 | Фабрика принимает `autonomy_settings` и логирует уровень | `agents/runtime/adapters/__init__.py` (`create_runtime_session`) | Уровень автономности виден в логе сессии |
 | T4 | Один тумблер в UI + вывод уровня в JSON | `cli/runtime_commands.py`, настройки фронта | UI показывает и задаёт один селектор автономности |
 | T5 | Доки: вести с `AUTO_CODE_AUTONOMY`, 30+ переменных — в приложение | `guides/QUICK-START.md`, `docs/` | Quickstart: «поставь `safe` — готово» |
 | T6 | Рецепт «данные не покидают периметр»: `safe` + `provider=ollama` | доки + проверка | Рабочий локальный рецепт задокументирован |
 
-**🚀 Начать с:** T1 (убрать хардкод — ядро корректности).
+**🚀 Начать с:** T1 уже сделан — оставшийся разрыв это UX/наблюдаемость: T4 (один тумблер в UI + уровень в JSON) и T5 (доки ведут с `AUTO_CODE_AUTONOMY`).
 
 ---
 
@@ -132,10 +132,17 @@
 
 ---
 
-## С чего начать сегодня (3 самых маленьких коммита)
+## Статус старта
 
-1. **P3·T1** — убрать хардкод `allow_direct_api_autonomous=True` в `agents/coder.py`, подставить `resolve_autonomy_settings()`.
+Проверка реального кода уточнила картину:
+
+- ✅ **P3·T1** — оказался **уже реализован** (см. таблицу P3). Переделывать не нужно.
+- ✅ **P1·T1** — **сделано** (`build_verification_report()` + `ArtifactManager.save_verification_report()` в `cli/artifacts.py`, тесты в `tests/test_verification_report.py`). Контракт `verification-report.json` заложен.
+
+**Следующие самые маленькие коммиты:**
+
+1. **P1·T1-wire** — вызвать `build_verification_report()` + `save_verification_report()` из QA-сессий (`qa/reviewer.py`, `qa/fixer.py`), наполнив отчёт уже доступными данными (вердикт, тесты, дифф, итерация).
 2. **P5·T1** — дописать `model`/`provider` в `core/token_stats.py` и проверить захват usage в `agents/session.py`.
-3. **P1·T1** — `save_verification_report()` в `cli/artifacts.py` + вызов из `run_qa_agent_session()`.
+3. **P1·T2** — детект правок вне scope (`qa/scope_check.py`), заполняющий `out_of_scope_edits` в отчёте.
 
 Каждая задача shippable отдельно и тянет тесты (`apps/backend/.venv/bin/pytest tests/<файл>` — точечно).
