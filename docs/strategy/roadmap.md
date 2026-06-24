@@ -150,3 +150,69 @@
 **Дальше отдельными PR:** P2 (GitHub App), P4 (облако/команды).
 
 Каждая задача shippable отдельно и тянет тесты (`apps/backend/.venv/bin/pytest tests/<файл>` — точечно).
+
+---
+
+## Облачная версия + новый общий UI (Tracks C & D) — расширение P4
+
+> Добавлено 2026-06-24. **Решение:** облако строится на **новом общем UI** (`libs/ui` по дизайну `.lazyweb`), а не на расширении старого `apps/web-frontend`. Источник дизайна: `.lazyweb/` (`_desktop-tokens.css` + ~199 мокапов всех экранов light/dark, есть `mobile-kanban-flow.html` + `DESKTOP_REDESIGN_PLAN.md`). Монорепо уже на workspaces `apps/*` + **`libs/*`**.
+
+«Облако» = **self-hosted многопользовательский** сервер (данные в периметре), не публичный SaaS. Одна кодовая база, два режима (`single` / `team`) через флаг `CLOUD_MODE`, всё вокруг **workspace** (single = авто-«Personal»).
+
+### Два режима и юз-кейсы
+
+- **Single (одиночный):** браузер вместо десктопа · удалённый/мощный билд-сервер · контроль с телефона · личный API-триггер. Auth минимален, 1 workspace, изоляция не нужна; критичны персистентность запусков + realtime.
+- **Team (многопользовательский):** командный workspace · роли owner/editor/viewer · изоляция между workspace · параллельные сборки · аудит/история (комплаенс) · общий бэклог/ревью · OAuth-репозитории.
+
+### Архитектура общих компонентов
+
+`libs/ui` — новый workspace-пакет, **презентационный и транспорт-агностичный**:
+- `tokens` (из `_desktop-tokens.css`, light/dark) · `theme` (ThemeProvider) · `shell` (AppShell, Sidebar icon-rail+context, CommandPalette, Notifications) · `primitives` (свод дублей `ui/*` из обоих app) · `screens` (KanbanBoard, TaskDetail, …).
+- Данные — паттерн **ports & adapters** (вариант B): `libs/ui` объявляет интерфейс `AutoCodeClient` + React Context, общие хуки (`useTasks`…) зовут инжектнутый клиент; каждое app даёт тонкий адаптер — Electron→IPC, web→REST/WS. На U0 данных нет (чисто презентационно), `AutoCodeClient` вводится на пилоте U1.
+- Долгосрочно возможна конвергенция к одному приложению (web-view в Electron) — **пока не делаем** (нужен нативный IPC: PTY/файлы/диалоги).
+
+### Track C — облако-бэкенд (`apps/web-backend`, данные)
+
+| Шаг | Что | Зависит |
+|---|---|---|
+| **C1** (P4·T1) | Workspace + WorkspaceUser + роли; `core/permissions.py` / `require_workspace_access`; миграции 003–004; single = авто-Personal | — |
+| **C2** (T2) | изоляция: спеки/запуски/репо скоупятся по workspace; отдельный worktree на исполнение | C1 |
+| **C3** (T3) | персистентность запусков (`AgentExecution` + миграция) — UC-S2/S3, аудит | C1 |
+| **C4** (T4) | спеки: ФС — источник истины + ORM-кэш/аудит | C1 |
+| **C5** (T5) | realtime / PTY-стрим в браузер | C2 |
+| **C6** (T6) | OAuth-репозитории, агент работает в них | C1 |
+| **C7** (T7) | командные процессы: инвайты/участники/общие спеки/ревью | C1–C4 |
+
+### Track D — UI / дизайн-система (`libs/ui`, desktop + web)
+
+| Слайс | Что | Общее? | Зависит |
+|---|---|---|---|
+| **U0** | фундамент `libs/ui`: токены, ThemeProvider, AppShell, новый Sidebar, примитивы, Storybook. **Блокирует всё.** | ✅ | — |
+| **U1** | пилот Kanban на `libs/ui` в обоих таргетах (вводим `AutoCodeClient`) | ✅ | U0 |
+| **U2** | канонические экраны: task-detail, create-spec wizard, worktrees-review, settings | ✅ | U1 |
+| **U3** | chrome: ⌘K command palette, notifications, shortcuts | ✅ | U0 |
+| **U4** | состояния: empty/loading/error/offline + reconnect | ✅ | U1 |
+| **U5** | остальные sidebar-вью (батчи B1–B5 из `DESKTOP_REDESIGN_PLAN`) | ✅ | U2 |
+| **U6** | новые вью: terminals, agent-inspector, insights, roadmap, sessions | ✅ + бэкенд | C3/C5, Graphiti |
+| **U7** | cleanup: удалить старый `Sidebar.tsx`; снять `-v2`; доки | — | всё выше |
+
+Cross-cutting: responsive/mobile (`mobile-kanban-flow.html`) · i18n EN+FR + гард · WCAG-контраст токенов · Windows/Mac/Linux матрица.
+
+### Сцепление C × D и порядок
+
+- **C** = данные облака, **D** = презентация; **облачный веб-UI = U-экраны на `libs/ui` + API из C**.
+- Зависимости: workspace-switcher (D) ← C1 · sessions-вью (U6) ← C3 · терминал (U6) ← C5.
+- **U0 ни от чего не зависит** — старт отсюда; одновременно двигает и desktop-redesign, и облачный UI.
+- **C и D идут параллельно.**
+
+### Зафиксированные решения
+
+1. ✅ Дом общих компонентов — **`libs/ui`** (workspace-глоб `libs/*`); туда сводим дубли `ui/*`.
+2. ✅ Транспорт — **ports & adapters** (`AutoCodeClient` инжектится per-app; data-хуки общие в `libs/ui`; адаптеры IPC / REST-WS). Альтернативы: A (чистые props — проще, но дублирует фетч), C (общий REST-клиент — заставляет IPC мимикрировать, отклонено), D (web-view в Electron — теряет нативный IPC, долгосрочно).
+3. ✅ Старт — **U0** (фундамент `libs/ui`).
+4. ✅ **C и D параллельно.**
+5. ✅ Старый `apps/web-frontend` — **оставляем как есть до полного замещения** (миграция страница-за-страницей; удаление — после).
+
+### Старт (первый PR)
+
+**U0.1–U0.3:** создать workspace-пакет `libs/ui`, перенести `_desktop-tokens.css` → токены (light/dark), `ThemeProvider`, `AppShell` + Storybook; подключить тонким импортом из обоих app, ничего не ломая. Затем — новый `Sidebar` (U0.4) и свод примитивов (U0.5).
