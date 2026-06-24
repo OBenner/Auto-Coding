@@ -212,9 +212,11 @@ def _generate_verification_report_data(
         verdict=verdict,
         qa_session=qa_signoff.get("qa_session") or qa_stats.get("last_iteration"),
         iteration=qa_stats.get("last_iteration") or qa_signoff.get("qa_session"),
+        confidence=qa_signoff.get("confidence"),
         tests_run=qa_signoff.get("test_results") or {},
         diff_summary=diff_summary,
         issues=qa_signoff.get("issues_found") or [],
+        uncertainty=qa_signoff.get("uncertainty") or [],
         out_of_scope_edits=out_of_scope,
         duration_seconds=total_duration,
     )

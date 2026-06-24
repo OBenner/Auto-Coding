@@ -378,6 +378,15 @@ def merge_runtime_qa_signoff_artifact(spec_dir: Path, qa_session: int) -> bool:
     # coverage_results are added afterwards by update_qa_signoff_with_coverage.
     if isinstance(raw.get("coverage_passed"), bool):
         signoff["coverage_passed"] = raw["coverage_passed"]
+    # Trust Layer signals (P1.T3): carry the model's self-reported confidence and
+    # uncertainty so the verification report can surface them. Sanitize like the
+    # other fields — a real number in [0, 1] only, and dict uncertainty items only.
+    confidence = raw.get("confidence")
+    if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+        signoff["confidence"] = max(0.0, min(1.0, float(confidence)))
+    uncertainty = raw.get("uncertainty")
+    if isinstance(uncertainty, list):
+        signoff["uncertainty"] = [u for u in uncertainty if isinstance(u, dict)]
     if status == "rejected":
         # Downstream consumers call issue.get(...), so keep dict items only —
         # a stray string would crash rejection handling and the QA report.
@@ -441,6 +450,8 @@ def _runtime_signoff_instructions(rel_spec: str) -> str:
             "status": "approved",
             "tests_passed": {"unit": "X/Y", "integration": "X/Y", "e2e": "X/Y"},
             "coverage_passed": True,
+            "confidence": 0.9,
+            "uncertainty": [],
         },
         indent=2,
     )
@@ -456,6 +467,10 @@ def _runtime_signoff_instructions(rel_spec: str) -> str:
                 }
             ],
             "coverage_passed": False,
+            "confidence": 0.6,
+            "uncertainty": [
+                {"area": "<area you could not fully verify>", "reason": "<why>"}
+            ],
         },
         indent=2,
     )
