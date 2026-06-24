@@ -9,6 +9,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from cli.build_commands import _generate_verification_report_data  # noqa: E402
@@ -37,7 +39,7 @@ def test_merge_carries_confidence_and_uncertainty(tmp_path):
     )
     assert merge_runtime_qa_signoff_artifact(tmp_path, qa_session=1) is True
     signoff = json.loads(plan.read_text())["qa_signoff"]
-    assert signoff["confidence"] == 0.83
+    assert signoff["confidence"] == pytest.approx(0.83)
     assert signoff["uncertainty"] == [{"area": "timeouts", "reason": "no test"}]
 
 
@@ -53,7 +55,7 @@ def test_merge_clamps_confidence_and_filters_uncertainty(tmp_path):
     )
     assert merge_runtime_qa_signoff_artifact(tmp_path, qa_session=1) is True
     signoff = json.loads(plan.read_text())["qa_signoff"]
-    assert signoff["confidence"] == 1.0
+    assert signoff["confidence"] == pytest.approx(1.0)
     assert signoff["uncertainty"] == [{"area": "ok"}]
 
 
@@ -87,5 +89,5 @@ def test_report_reads_confidence_and_uncertainty(tmp_path):
         json.dumps(plan), encoding="utf-8"
     )
     report = _generate_verification_report_data(tmp_path, qa_approved=True)
-    assert report["confidence"] == 0.77
+    assert report["confidence"] == pytest.approx(0.77)
     assert report["uncertainty"] == [{"area": "x", "reason": "y"}]

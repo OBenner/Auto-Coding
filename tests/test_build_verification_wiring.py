@@ -9,6 +9,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from cli.artifacts import VERIFICATION_REPORT_FILENAME  # noqa: E402
@@ -54,7 +56,7 @@ def test_generate_report_data_from_plan(tmp_path):
     assert report["diff_summary"]["files_changed"] == 2
     assert report["iteration"] == 3
     assert report["qa_session"] == 2
-    assert report["duration_seconds"] == 15.5
+    assert report["duration_seconds"] == pytest.approx(15.5)
 
 
 def test_generate_report_data_approved_overrides_status(tmp_path):

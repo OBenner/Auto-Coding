@@ -594,6 +594,7 @@ def build_verification_report(
         try:
             report["duration_seconds"] = round(float(duration_seconds), 2)
         except (TypeError, ValueError):
+            # Non-numeric duration is dropped rather than failing the report.
             pass
     return report
 

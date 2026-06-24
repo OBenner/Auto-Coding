@@ -145,6 +145,21 @@ def _generate_test_report_data(
     return test_report_data
 
 
+def _compute_out_of_scope(
+    impl_plan: dict[str, Any], changed_files: list[str] | None
+) -> list[dict[str, str]]:
+    """Best-effort out-of-scope edit detection (never fails the report)."""
+    try:
+        from qa.scope_check import detect_out_of_scope_edits, get_planned_files
+
+        return detect_out_of_scope_edits(
+            get_planned_files(impl_plan), changed_files or []
+        )
+    except Exception as e:  # noqa: BLE001 - best-effort enrichment
+        logger.debug("Could not compute out-of-scope edits: %s", e)
+        return []
+
+
 def _generate_verification_report_data(
     spec_dir: Path,
     qa_approved: bool,
@@ -197,21 +212,12 @@ def _generate_verification_report_data(
         }
 
     # Flag edits the agent made outside the plan's declared files (P1.T2).
-    # Best-effort: import lazily and never fail the report over it.
-    out_of_scope: list[dict[str, str]] = []
-    try:
-        from qa.scope_check import detect_out_of_scope_edits, get_planned_files
-
-        out_of_scope = detect_out_of_scope_edits(
-            get_planned_files(impl_plan), changed_files or []
-        )
-    except Exception as e:  # noqa: BLE001 - best-effort enrichment
-        logger.debug("Could not compute out-of-scope edits: %s", e)
+    out_of_scope = _compute_out_of_scope(impl_plan, changed_files)
 
     return build_verification_report(
         verdict=verdict,
-        qa_session=qa_signoff.get("qa_session") or qa_stats.get("last_iteration"),
-        iteration=qa_stats.get("last_iteration") or qa_signoff.get("qa_session"),
+        qa_session=qa_signoff.get("qa_session"),
+        iteration=qa_stats.get("last_iteration"),
         confidence=qa_signoff.get("confidence"),
         tests_run=qa_signoff.get("test_results") or {},
         diff_summary=diff_summary,

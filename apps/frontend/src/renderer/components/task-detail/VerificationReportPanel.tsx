@@ -3,9 +3,9 @@ import { ShieldCheck, ShieldX, ShieldQuestion, FileWarning, HelpCircle } from 'l
 import { Badge } from '../ui/badge';
 import type { VerificationReport } from '../../../shared/types';
 
-interface VerificationReportPanelProps {
+type VerificationReportPanelProps = Readonly<{
   report: VerificationReport;
-}
+}>;
 
 function verdictBadgeVariant(
   verdict: VerificationReport['verdict']
@@ -21,6 +21,12 @@ function isPrimitive(value: unknown): value is string | number | boolean {
   );
 }
 
+function VerdictIcon({ verdict }: Readonly<{ verdict: VerificationReport['verdict'] }>) {
+  if (verdict === 'approved') return <ShieldCheck className="h-3 w-3" />;
+  if (verdict === 'rejected') return <ShieldX className="h-3 w-3" />;
+  return <ShieldQuestion className="h-3 w-3" />;
+}
+
 /**
  * Trust Layer verification report — the structured "what was verified" summary
  * (verdict, confidence, tests, out-of-scope edits, uncertainty) read from
@@ -28,15 +34,6 @@ function isPrimitive(value: unknown): value is string | number | boolean {
  */
 export function VerificationReportPanel({ report }: VerificationReportPanelProps) {
   const { t } = useTranslation(['tasks', 'common']);
-
-  const verdictIcon =
-    report.verdict === 'approved' ? (
-      <ShieldCheck className="h-3 w-3" />
-    ) : report.verdict === 'rejected' ? (
-      <ShieldX className="h-3 w-3" />
-    ) : (
-      <ShieldQuestion className="h-3 w-3" />
-    );
 
   const testEntries = Object.entries(report.tests_run ?? {}).filter(([, v]) =>
     isPrimitive(v)
@@ -46,7 +43,7 @@ export function VerificationReportPanel({ report }: VerificationReportPanelProps
   return (
     <div>
       <div className="section-divider mb-4">
-        {verdictIcon}
+        <VerdictIcon verdict={report.verdict} />
         {t('tasks:overview.verificationReport')}
       </div>
 
@@ -92,8 +89,11 @@ export function VerificationReportPanel({ report }: VerificationReportPanelProps
               {t('tasks:overview.outOfScopeEdits')}
             </h4>
             <ul className="space-y-1">
-              {report.out_of_scope_edits.map((edit, idx) => (
-                <li key={idx} className="text-xs text-muted-foreground">
+              {report.out_of_scope_edits.map((edit) => (
+                <li
+                  key={`${edit.file ?? ''}|${edit.reason ?? ''}`}
+                  className="text-xs text-muted-foreground"
+                >
                   <span className="font-mono text-foreground">{edit.file ?? '?'}</span>
                   {edit.reason ? ` — ${edit.reason}` : ''}
                 </li>
@@ -110,8 +110,11 @@ export function VerificationReportPanel({ report }: VerificationReportPanelProps
               {t('tasks:overview.uncertainty')}
             </h4>
             <ul className="space-y-1">
-              {report.uncertainty.map((item, idx) => (
-                <li key={idx} className="text-xs text-muted-foreground">
+              {report.uncertainty.map((item) => (
+                <li
+                  key={`${item.area ?? ''}|${item.reason ?? ''}`}
+                  className="text-xs text-muted-foreground"
+                >
                   {item.area && (
                     <span className="font-medium text-foreground">{item.area}</span>
                   )}

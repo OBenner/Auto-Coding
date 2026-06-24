@@ -9,6 +9,8 @@ stamping, disabled no-op).
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from cli.artifacts import (  # noqa: E402
@@ -42,9 +44,9 @@ def test_build_normalizes_verdict():
 
 
 def test_build_clamps_confidence():
-    assert build_verification_report(verdict="approved", confidence=1.5)["confidence"] == 1.0
-    assert build_verification_report(verdict="approved", confidence=-0.3)["confidence"] == 0.0
-    assert build_verification_report(verdict="approved", confidence=0.42)["confidence"] == 0.42
+    assert build_verification_report(verdict="approved", confidence=1.5)["confidence"] == pytest.approx(1.0)
+    assert build_verification_report(verdict="approved", confidence=-0.3)["confidence"] == pytest.approx(0.0)
+    assert build_verification_report(verdict="approved", confidence=0.42)["confidence"] == pytest.approx(0.42)
     # Non-numeric confidence degrades to None rather than raising.
     assert build_verification_report(verdict="approved", confidence="oops")["confidence"] is None
 
@@ -58,7 +60,7 @@ def test_build_does_not_mutate_caller_collections():
 
 def test_build_rounds_duration():
     report = build_verification_report(verdict="approved", duration_seconds=12.3456)
-    assert report["duration_seconds"] == 12.35
+    assert report["duration_seconds"] == pytest.approx(12.35)
 
 
 def test_save_and_load_round_trip(tmp_path):

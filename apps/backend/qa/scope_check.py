@@ -27,6 +27,19 @@ def _normalize_path(path: str) -> str:
     return normalized
 
 
+def _subtask_planned_files(subtask: Any) -> set[str]:
+    """Normalized files_to_modify + files_to_create for a single subtask."""
+    files: set[str] = set()
+    if not isinstance(subtask, dict):
+        return files
+    for key in ("files_to_modify", "files_to_create"):
+        for file_path in subtask.get(key, []) or []:
+            normalized = _normalize_path(file_path)
+            if normalized:
+                files.add(normalized)
+    return files
+
+
 def get_planned_files(plan: dict[str, Any] | None) -> set[str]:
     """Collect the files the plan declared it would touch.
 
@@ -43,13 +56,7 @@ def get_planned_files(plan: dict[str, Any] | None) -> set[str]:
             continue
         subtasks = phase.get("subtasks") or phase.get("chunks") or []
         for subtask in subtasks:
-            if not isinstance(subtask, dict):
-                continue
-            for key in ("files_to_modify", "files_to_create"):
-                for file_path in subtask.get(key, []) or []:
-                    normalized = _normalize_path(file_path)
-                    if normalized:
-                        planned.add(normalized)
+            planned |= _subtask_planned_files(subtask)
     return planned
 
 
