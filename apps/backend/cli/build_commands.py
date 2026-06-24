@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Import only what we need at module level
 # Heavy imports are lazy-loaded in functions to avoid import errors
-from cli.artifacts import create_artifact_manager
+from cli.artifacts import build_verification_report, create_artifact_manager
 from cli.exit_codes import ExitCode
 from cli.json_output import format_build_result
 from progress import print_paused_banner
@@ -143,6 +143,92 @@ def _generate_test_report_data(
         test_report_data["averageDuration"] = round(sum(durations) / len(durations), 2)
 
     return test_report_data
+
+
+def _generate_verification_report_data(
+    spec_dir: Path,
+    qa_approved: bool,
+    changed_files: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Build the Trust Layer verification report from QA results.
+
+    Reads the QA sign-off and iteration history already persisted in
+    implementation_plan.json and assembles the normalized report via
+    cli.artifacts.build_verification_report. The confidence, uncertainty,
+    and out-of-scope fields stay at their contract defaults until P1.T2/T3
+    populate them (see docs/strategy/roadmap.md).
+    """
+    import json
+
+    qa_signoff: dict[str, Any] = {}
+    qa_stats: dict[str, Any] = {}
+    iteration_history: list[dict[str, Any]] = []
+
+    impl_plan_path = spec_dir / "implementation_plan.json"
+    if impl_plan_path.exists():
+        try:
+            with open(impl_plan_path, encoding="utf-8") as f:
+                impl_plan = json.load(f)
+            qa_signoff = impl_plan.get("qa_signoff") or {}
+            qa_stats = impl_plan.get("qa_stats") or {}
+            iteration_history = impl_plan.get("qa_iteration_history") or []
+        except (OSError, json.JSONDecodeError) as e:
+            logger.debug(
+                "Could not read implementation plan for verification report: %s", e
+            )
+
+    # qa_approved is the QA loop's authoritative final outcome.
+    verdict = "approved" if qa_approved else "rejected"
+
+    durations = [
+        it.get("duration_seconds", 0)
+        for it in iteration_history
+        if it.get("duration_seconds") is not None
+    ]
+    total_duration = round(sum(durations), 2) if durations else None
+
+    diff_summary: dict[str, Any] = {}
+    if changed_files:
+        diff_summary = {
+            "files_changed": len(changed_files),
+            "files": list(changed_files)[:50],
+        }
+
+    return build_verification_report(
+        verdict=verdict,
+        qa_session=qa_signoff.get("qa_session") or qa_stats.get("last_iteration"),
+        iteration=qa_stats.get("last_iteration") or qa_signoff.get("qa_session"),
+        tests_run=qa_signoff.get("test_results") or {},
+        diff_summary=diff_summary,
+        issues=qa_signoff.get("issues_found") or [],
+        duration_seconds=total_duration,
+    )
+
+
+def _save_verification_report(
+    spec_dir: Path,
+    qa_approved: bool,
+    changed_files: list[str] | None,
+    artifact_manager,
+) -> None:
+    """
+    Persist the verification report on every build (not only CI/json mode).
+
+    Reuses the build's artifact manager when present, otherwise creates one,
+    so the desktop UI and GitHub PR comments can always surface the report.
+    Best-effort: failures are logged and never interrupt the build.
+    """
+    try:
+        manager = artifact_manager or create_artifact_manager(
+            spec_dir=spec_dir, enabled=True
+        )
+        report = _generate_verification_report_data(
+            spec_dir, qa_approved, changed_files
+        )
+        manager.save_verification_report(report)
+    except Exception as e:  # best-effort artifact; must never break the build
+        logger.debug("Could not save verification report: %s", e)
 
 
 # Pattern management commands are available in pattern_commands.py
@@ -491,6 +577,13 @@ def handle_build_command(
                 if artifact_manager:
                     test_report_data = _generate_test_report_data(spec_dir, qa_approved)
                     artifact_manager.save_test_report(test_report_data)
+
+                # Persist the Trust Layer verification report on every build
+                # (not only CI/json) so the desktop UI and PR comments can
+                # surface what was verified. Best-effort — never breaks the build.
+                _save_verification_report(
+                    spec_dir, qa_approved, changed_files, artifact_manager
+                )
 
                 # Sync implementation plan to main project after QA
                 # This ensures the main project has the latest status (human_review)
