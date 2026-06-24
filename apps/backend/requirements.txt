@@ -1,5 +1,5 @@
 # Auto-Build Framework Dependencies
-claude-agent-sdk>=0.1.19
+claude-agent-sdk>=0.2.87
 python-dotenv>=1.2.2
 
 # TOML parsing fallback for Python < 3.11
@@ -12,11 +12,11 @@ secretstorage>=3.5.0; sys_platform == "linux"
 
 # Memory Integration - LadybugDB (embedded graph database)
 # Requires Python 3.12+ (no Docker required)
-real_ladybug>=0.13.0; python_version >= "3.12"
+real_ladybug>=0.15.3; python_version >= "3.12"
 graphiti-core>=0.5.0; python_version >= "3.12"
 # pandas is required by real_ladybug for get_as_df() method
 # pandas 3.0+ required for pre-built wheels on Python 3.12+
-pandas>=3.0.2; python_version >= "3.12"
+pandas>=3.0.3; python_version >= "3.12"
 
 # Windows-specific dependency for LadybugDB/Graphiti
 # pywin32 provides Windows system bindings required by real_ladybug
@@ -42,7 +42,7 @@ zai-sdk>=0.2.2
 pydantic>=2.0.0
 
 # Process and system monitoring
-psutil>=5.9.0
+psutil>=7.2.2
 
 # FastAPI - Web framework for building APIs with webhooks
 # Provides automatic OpenAPI documentation, async support, type validation
@@ -59,7 +59,7 @@ httpx>=0.28.1
 aiohttp>=3.13.5
 
 # tiktoken - Token counting for accurate context window estimation
-tiktoken>=0.12.0
+tiktoken>=0.13.0
 
 # Error tracking (optional - requires SENTRY_DSN environment variable)
 sentry-sdk>=2.59.0
