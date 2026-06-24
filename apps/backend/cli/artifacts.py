@@ -21,6 +21,11 @@ if str(_PARENT_DIR) not in sys.path:
 
 logger = logging.getLogger(__name__)
 
+# Trust Layer verification report (P1) — see docs/strategy/roadmap.md
+VERIFICATION_REPORT_FILENAME = "verification-report.json"
+VERIFICATION_REPORT_SCHEMA_VERSION = 1
+_ALLOWED_VERDICTS = ("approved", "rejected", "error")
+
 
 class ArtifactManager:
     """
@@ -210,6 +215,51 @@ class ArtifactManager:
 
         except (OSError, ValueError, TypeError) as e:
             logger.warning(f"Failed to save coverage report: {e}")
+            return None
+
+    def save_verification_report(
+        self,
+        verification_data: dict[str, Any],
+    ) -> Path | None:
+        """
+        Save the Trust Layer verification report as a JSON artifact.
+
+        Persists the structured QA verdict that the desktop UI and GitHub PR
+        comments surface as a "what was verified" report: verdict, confidence,
+        tests run, diff summary, the agent's uncertainty list, and any
+        out-of-scope edits. Use :func:`build_verification_report` to assemble
+        ``verification_data`` from the QA loop's existing signals.
+
+        Args:
+            verification_data: Verification report dict (see
+                build_verification_report). A ``timestamp`` is added if absent.
+
+        Returns:
+            Path to saved artifact file, or None if disabled.
+
+        Example:
+            >>> report = build_verification_report(verdict="approved")
+            >>> manager.save_verification_report(report)
+        """
+        if not self.enabled:
+            return None
+
+        artifact_path = self.artifact_dir / VERIFICATION_REPORT_FILENAME
+
+        try:
+            # Add timestamp if not present (copy to avoid mutating caller's dict)
+            if "timestamp" not in verification_data:
+                verification_data = dict(verification_data)
+                verification_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
+
+            with open(artifact_path, "w", encoding="utf-8") as f:
+                json.dump(verification_data, f, indent=2)
+
+            logger.debug(f"Verification report saved: {artifact_path}")
+            return artifact_path
+
+        except (OSError, ValueError, TypeError) as e:
+            logger.warning(f"Failed to save verification report: {e}")
             return None
 
     def save_custom_artifact(
@@ -473,6 +523,79 @@ class ArtifactManager:
         except OSError as e:
             logger.warning(f"Failed to copy artifact '{artifact_name}': {e}")
             return None
+
+
+def build_verification_report(
+    *,
+    verdict: str | None,
+    qa_session: int | None = None,
+    iteration: int | None = None,
+    confidence: float | None = None,
+    tests_run: dict[str, Any] | None = None,
+    diff_summary: dict[str, Any] | None = None,
+    issues: list[dict[str, Any]] | None = None,
+    uncertainty: list[dict[str, Any]] | None = None,
+    out_of_scope_edits: list[dict[str, Any]] | None = None,
+    duration_seconds: float | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    """
+    Assemble a normalized Trust Layer verification report (no I/O).
+
+    Pure helper so the schema can be unit-tested and reused by the QA reviewer
+    and fixer. ``verdict`` is normalized to one of ``approved``/``rejected``/
+    ``error`` and ``confidence`` is clamped to ``[0, 1]``. The ``uncertainty``
+    and ``out_of_scope_edits`` lists are part of the contract today and stay
+    empty until P1·T2 (out-of-scope detection) and P1·T3 (confidence /
+    uncertainty extraction) populate them — see docs/strategy/roadmap.md.
+
+    Args:
+        verdict: QA outcome; ``None`` or unknown values map to ``"error"``.
+        qa_session: QA session/pass index, if known.
+        iteration: QA loop iteration number, if known.
+        confidence: Optional 0..1 confidence signal (clamped).
+        tests_run: Test/coverage summary (e.g. passed/failed/total/coverage).
+        diff_summary: Change summary (e.g. files_changed, files).
+        issues: Issues found (reuses the ``qa_signoff`` issue shape).
+        uncertainty: Areas the agent is unsure about.
+        out_of_scope_edits: Edits made outside the planned files.
+        duration_seconds: Optional duration of the QA pass.
+        notes: Free-form notes.
+
+    Returns:
+        A JSON-serializable verification report dict (no timestamp — the
+        timestamp is stamped by :meth:`ArtifactManager.save_verification_report`).
+    """
+    normalized_verdict = (verdict or "error").strip().lower()
+    if normalized_verdict not in _ALLOWED_VERDICTS:
+        normalized_verdict = "error"
+
+    clamped_confidence: float | None = None
+    if confidence is not None:
+        try:
+            clamped_confidence = max(0.0, min(1.0, float(confidence)))
+        except (TypeError, ValueError):
+            clamped_confidence = None
+
+    report: dict[str, Any] = {
+        "schema_version": VERIFICATION_REPORT_SCHEMA_VERSION,
+        "verdict": normalized_verdict,
+        "qa_session": qa_session,
+        "iteration": iteration,
+        "confidence": clamped_confidence,
+        "tests_run": dict(tests_run) if tests_run else {},
+        "diff_summary": dict(diff_summary) if diff_summary else {},
+        "issues": list(issues) if issues else [],
+        "uncertainty": list(uncertainty) if uncertainty else [],
+        "out_of_scope_edits": list(out_of_scope_edits) if out_of_scope_edits else [],
+        "notes": notes,
+    }
+    if duration_seconds is not None:
+        try:
+            report["duration_seconds"] = round(float(duration_seconds), 2)
+        except (TypeError, ValueError):
+            pass
+    return report
 
 
 def create_artifact_manager(
