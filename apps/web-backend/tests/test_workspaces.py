@@ -3,6 +3,8 @@
 Relies on the shared `test_db` fixture (in-memory SQLite with all tables created).
 """
 
+import secrets
+
 import pytest
 from api.models.user import User
 from api.models.workspace import Workspace, WorkspaceUser
@@ -16,9 +18,9 @@ from sqlalchemy.exc import IntegrityError
 
 
 def _make_user(db, email: str) -> User:
-    # Set a placeholder hash directly: these tests exercise workspace logic, not
-    # auth, so we avoid the bcrypt backend entirely.
-    user = User(email=email, hashed_password="placeholder-hash")
+    # Use a random throwaway hash (not a literal) directly: these tests exercise
+    # workspace logic, not auth, so we avoid the bcrypt backend entirely.
+    user = User(email=email, hashed_password=secrets.token_hex(16))
     db.add(user)
     db.commit()
     db.refresh(user)
