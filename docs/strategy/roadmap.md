@@ -132,17 +132,20 @@
 
 ---
 
-## Статус старта
+## Прогресс ([PR #361](https://github.com/OBenner/Auto-Coding/pull/361))
 
-Проверка реального кода уточнила картину:
+**Волна 1 — серверная часть закрыта** (28 юнит-тестов, все зелёные):
 
-- ✅ **P3·T1** — оказался **уже реализован** (см. таблицу P3). Переделывать не нужно.
-- ✅ **P1·T1** — **сделано** (`build_verification_report()` + `ArtifactManager.save_verification_report()` в `cli/artifacts.py`, тесты в `tests/test_verification_report.py`). Контракт `verification-report.json` заложен.
+- ✅ **P3·T1** — coder уважает `AUTO_CODE_AUTONOMY` (оказался уже реализован).
+- ✅ **P1·T1 / T1-wire** — контракт `verification-report.json` + запись на каждой сборке (`cli/artifacts.py`, `cli/build_commands.py`).
+- ✅ **P1·T2** — детект правок вне scope (`qa/scope_check.py`) → `out_of_scope_edits`.
+- ✅ **P1·T3** — `confidence` + `uncertainty` через SDK- и runtime-путь (`qa/reviewer.py`, промпт, merge-санитайзинг).
+- ✅ **P5·T1** — модель/провайдер по фазам в `token_stats.json` (`core/token_stats.py`, `agents/session.py`).
+- ✅ **P3·T5** — доки ведут с `AUTO_CODE_AUTONOMY` (`guides/CLI-USAGE.md`, ADR-006 → Accepted).
 
-**Следующие самые маленькие коммиты:**
+Отчёт доверия теперь несёт: **вердикт · тесты · дифф · out-of-scope · confidence · uncertainty**.
 
-1. **P1·T1-wire** — вызвать `build_verification_report()` + `save_verification_report()` из QA-сессий (`qa/reviewer.py`, `qa/fixer.py`), наполнив отчёт уже доступными данными (вердикт, тесты, дифф, итерация).
-2. **P5·T1** — дописать `model`/`provider` в `core/token_stats.py` и проверить захват usage в `agents/session.py`.
-3. **P1·T2** — детект правок вне scope (`qa/scope_check.py`), заполняющий `out_of_scope_edits` в отчёте.
+**В работе (фронтенд):** P1·T4 (QA-экран отчёта доверия) · P3·T4 (тумблер автономности).
+**Дальше отдельными PR:** P2 (GitHub App), P4 (облако/команды).
 
 Каждая задача shippable отдельно и тянет тесты (`apps/backend/.venv/bin/pytest tests/<файл>` — точечно).

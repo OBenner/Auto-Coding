@@ -139,6 +139,7 @@ Now that you've completed your first task, explore:
 - **[Spec Creation Pipeline](./SPEC-CREATION-PIPELINE.md)** -- Deep dive on how specs are created
 - **[Troubleshooting](./TROUBLESHOOTING.md)** -- Common issues and fixes
 - **[Intelligent Pattern Recognition](./INTELLIGENT-PATTERN-RECOGNITION.md)** -- How agents learn from previous builds
+- **[CLI Usage — Autonomy](./CLI-USAGE.md#autonomy-one-knob)** -- Control how independent agents are with one setting (`AUTO_CODE_AUTONOMY`)
 
 ---
 

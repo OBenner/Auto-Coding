@@ -212,6 +212,40 @@ echo "Focus on fixing the login bug first" > specs/001-name/HUMAN_INPUT.md
 python validate_spec.py --spec-dir specs/001-feature --checkpoint all
 ```
 
+## Autonomy: one knob
+
+How independent the agents are is controlled by a single setting — `AUTO_CODE_AUTONOMY`. Set it and you're done; you do not need to touch the low-level runtime/provider/policy variables.
+
+```bash
+# In apps/backend/.env (or the environment)
+AUTO_CODE_AUTONOMY=claude   # default
+```
+
+| Level | What it allows |
+|-------|----------------|
+| `off` | Analysis and patch suggestions only — agents never write your workspace. |
+| `claude` *(default)* | Full autonomy on the Claude SDK / Codex CLI runtimes. Direct-API providers (OpenAI, Google, …) are refused with a clear capability error. |
+| `safe` | Adds direct-API providers: they run through `generic_edit` and are promoted to full autonomy once they pass the evidence gate. Mutating parallel subagents enabled (write-scope confined). Still fail-fast on missing capability. |
+| `bold` | Power-user mode: direct providers run promoted without waiting for the gate. Use for benchmarking or seeding evidence. |
+
+Optional second knob — how strict the promotion gate is:
+
+```bash
+AUTO_CODE_AUTONOMY_PRESET=standard   # strict | standard | lax
+```
+
+- `strict` — 10 stable runs / 3-day freshness / all required cases
+- `standard` *(default)* — 3 stable runs / 7-day freshness / all required cases
+- `lax` — 1 stable run / 30-day freshness / critical cases only
+
+**Privacy / local-model recipe:** `AUTO_CODE_AUTONOMY=safe` together with `AI_ENGINE_PROVIDER=ollama` keeps the whole loop on a local model — your code never leaves the machine.
+
+### Advanced overrides
+
+Every low-level variable still works and **takes precedence** over the level — they are normally not needed. The matrix (`AUTO_CODE_RUNTIME_MODE`, `AGENT_RUNTIME_MODE_<TYPE>`, the per-provider `AUTO_CODE_AUTONOMY_<PROVIDER>_<KNOB>` policy knobs, …) is documented in [ADR-006: Autonomy levels](../docs/architecture/adr/ADR-006-autonomy-levels.md) and [Provider runtime modes](../docs/architecture/provider-runtime-modes.md). The legacy `AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS` is deprecated — use `AUTO_CODE_AUTONOMY=safe` instead.
+
+---
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure as needed:

@@ -1,7 +1,7 @@
 # ADR-006: User-facing autonomy levels
 
 **Date:** 2026-05-23
-**Status:** Proposed
+**Status:** Accepted — core implemented (`core/autonomy_level.py` with `AutonomyLevel` + `resolve_autonomy_settings`; wired into `agents/coder.py` and QA phase routing; deprecated `AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS` warns). Docs now lead with `AUTO_CODE_AUTONOMY` (see [CLI Usage → Autonomy](../../../guides/CLI-USAGE.md#autonomy-one-knob)). Remaining follow-ups: planner-phase gate, `--runtime-modes --json` `autonomy_level` field, and the Electron settings toggle.
 **Deciders:** Auto Code Core Team
 **Tags:** autonomy, runtimes, providers, configuration, ux
 
