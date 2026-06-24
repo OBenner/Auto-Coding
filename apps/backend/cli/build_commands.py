@@ -161,6 +161,7 @@ def _generate_verification_report_data(
     """
     import json
 
+    impl_plan: dict[str, Any] = {}
     qa_signoff: dict[str, Any] = {}
     qa_stats: dict[str, Any] = {}
     iteration_history: list[dict[str, Any]] = []
@@ -195,6 +196,18 @@ def _generate_verification_report_data(
             "files": list(changed_files)[:50],
         }
 
+    # Flag edits the agent made outside the plan's declared files (P1.T2).
+    # Best-effort: import lazily and never fail the report over it.
+    out_of_scope: list[dict[str, str]] = []
+    try:
+        from qa.scope_check import detect_out_of_scope_edits, get_planned_files
+
+        out_of_scope = detect_out_of_scope_edits(
+            get_planned_files(impl_plan), changed_files or []
+        )
+    except Exception as e:  # noqa: BLE001 - best-effort enrichment
+        logger.debug("Could not compute out-of-scope edits: %s", e)
+
     return build_verification_report(
         verdict=verdict,
         qa_session=qa_signoff.get("qa_session") or qa_stats.get("last_iteration"),
@@ -202,6 +215,7 @@ def _generate_verification_report_data(
         tests_run=qa_signoff.get("test_results") or {},
         diff_summary=diff_summary,
         issues=qa_signoff.get("issues_found") or [],
+        out_of_scope_edits=out_of_scope,
         duration_seconds=total_duration,
     )
 
@@ -211,15 +225,29 @@ def _save_verification_report(
     qa_approved: bool,
     changed_files: list[str] | None,
     artifact_manager,
+    worktree_manager=None,
 ) -> None:
     """
     Persist the verification report on every build (not only CI/json mode).
 
     Reuses the build's artifact manager when present, otherwise creates one,
     so the desktop UI and GitHub PR comments can always surface the report.
-    Best-effort: failures are logged and never interrupt the build.
+    When the changed-file list isn't supplied, it is derived from the spec's
+    worktree so out-of-scope detection has data. Best-effort: failures are
+    logged and never interrupt the build.
     """
     try:
+        # Derive changed files from the worktree when the caller didn't pass them.
+        if not changed_files and worktree_manager is not None:
+            try:
+                changed_files = [
+                    path
+                    for _status, path in worktree_manager.get_changed_files(
+                        spec_dir.name
+                    )
+                ]
+            except Exception as e:  # noqa: BLE001 - best-effort enrichment
+                logger.debug("Could not list changed files for report: %s", e)
         manager = artifact_manager or create_artifact_manager(
             spec_dir=spec_dir, enabled=True
         )
@@ -582,7 +610,11 @@ def handle_build_command(
                 # (not only CI/json) so the desktop UI and PR comments can
                 # surface what was verified. Best-effort — never breaks the build.
                 _save_verification_report(
-                    spec_dir, qa_approved, changed_files, artifact_manager
+                    spec_dir,
+                    qa_approved,
+                    changed_files,
+                    artifact_manager,
+                    worktree_manager,
                 )
 
                 # Sync implementation plan to main project after QA

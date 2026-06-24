@@ -82,3 +82,18 @@ def test_save_writes_artifact_without_manager(tmp_path):
     data = json.loads(artifact.read_text(encoding="utf-8"))
     assert data["verdict"] == "approved"
     assert "timestamp" in data
+
+
+def test_out_of_scope_edits_flagged_via_plan(tmp_path):
+    # Plan declares only a.py; the build also touched rogue.py.
+    plan = {
+        "phases": [{"subtasks": [{"files_to_modify": ["a.py"]}]}],
+        "qa_signoff": {"status": "approved"},
+    }
+    (tmp_path / "implementation_plan.json").write_text(
+        json.dumps(plan), encoding="utf-8"
+    )
+    report = _generate_verification_report_data(
+        tmp_path, qa_approved=True, changed_files=["a.py", "rogue.py"]
+    )
+    assert [e["file"] for e in report["out_of_scope_edits"]] == ["rogue.py"]
