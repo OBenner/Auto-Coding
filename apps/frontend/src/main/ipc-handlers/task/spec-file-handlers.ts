@@ -4,14 +4,16 @@ import type {
   IPCResult,
   ImplementationPlan,
   QAEscalation,
-  GenericEditArtifactManifest
+  GenericEditArtifactManifest,
+  VerificationReport
 } from '../../../shared/types';
 import { findTaskAndProject } from './shared';
 import {
   readImplementationPlan,
   readQAReport,
   readQAEscalation,
-  readGenericEditArtifactManifest
+  readGenericEditArtifactManifest,
+  readVerificationReport
 } from './spec-file-readers';
 
 /**
@@ -158,6 +160,39 @@ export function registerSpecFileHandlers(): void {
         return {
           success: false,
           error: err instanceof Error ? err.message : 'Failed to read QA escalation'
+        };
+      }
+    }
+  );
+
+  /**
+   * Get the Trust Layer verification report for a task
+   * @param taskId - The task ID
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_SPEC_VERIFICATION_REPORT_GET,
+    async (_, taskId: string): Promise<IPCResult<VerificationReport>> => {
+      if (!isValidTaskId(taskId)) {
+        return { success: false, error: 'Invalid taskId' };
+      }
+
+      try {
+        const { task, project } = await findTaskAndProject(taskId);
+        if (!task || !project) {
+          return { success: false, error: 'Task or project not found' };
+        }
+
+        const report = await readVerificationReport(project, task);
+        if (!report) {
+          return { success: false, error: 'Verification report not found' };
+        }
+
+        return { success: true, data: report };
+      } catch (err) {
+        console.error('[IPC] TASK_SPEC_VERIFICATION_REPORT_GET error:', err);
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to read verification report'
         };
       }
     }

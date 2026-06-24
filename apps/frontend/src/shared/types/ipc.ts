@@ -978,6 +978,7 @@ export interface ElectronAPI {
   getGenericEditArtifactManifest: (taskId: string) => Promise<IPCResult<GenericEditArtifactManifest | null>>;
   getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
   getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
+  getVerificationReport: (taskId: string) => Promise<IPCResult<import('./task').VerificationReport | null>>;
 
   // Plugin management
   listPlugins: (options: { projectPath: string; filter?: { pluginType?: string; enabledOnly?: boolean } }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;

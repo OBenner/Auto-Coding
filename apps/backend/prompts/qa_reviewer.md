@@ -773,6 +773,12 @@ For each critical/major issue, describe what the Coder Agent should do:
 
 ## PHASE 9: UPDATE IMPLEMENTATION PLAN
 
+**Trust signals (recommended):** In your `qa_signoff`, also include `confidence`
+(a number from 0.0 to 1.0 — how sure you are of this verdict) and `uncertainty`
+(a list of `{ "area": ..., "reason": ... }` entries for anything you could not
+fully verify). These surface in the build's verification report — be honest:
+named uncertainties and a calibrated confidence are more useful than false certainty.
+
 ### If APPROVED:
 
 Update `implementation_plan.json` to record QA sign-off:
@@ -789,7 +795,11 @@ Update `implementation_plan.json` to record QA sign-off:
       "integration": "[X/Y]",
       "e2e": "[X/Y]"
     },
-    "verified_by": "qa_agent"
+    "verified_by": "qa_agent",
+    "confidence": [0.0-1.0],
+    "uncertainty": [
+      { "area": "[what you could not fully verify]", "reason": "[why]" }
+    ]
   }
 }
 ```
@@ -868,7 +878,11 @@ Update `implementation_plan.json`:
         "fix_required": "[Description]"
       }
     ],
-    "fix_request_file": "QA_FIX_REQUEST.md"
+    "fix_request_file": "QA_FIX_REQUEST.md",
+    "confidence": [0.0-1.0],
+    "uncertainty": [
+      { "area": "[what you could not fully verify]", "reason": "[why]" }
+    ]
   }
 }
 ```

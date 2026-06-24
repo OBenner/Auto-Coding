@@ -67,6 +67,24 @@ export interface QAReport {
   timestamp: Date;
 }
 
+// Trust Layer verification report (artifacts/verification-report.json).
+// Mirrors cli/artifacts.py::build_verification_report output.
+export interface VerificationReport {
+  schema_version: number;
+  verdict: 'approved' | 'rejected' | 'error';
+  qa_session: number | null;
+  iteration: number | null;
+  confidence: number | null;  // 0..1, model self-assessed (calibrate against tests)
+  tests_run: Record<string, unknown>;
+  diff_summary: { files_changed?: number; files?: string[]; [key: string]: unknown };
+  issues: Array<Record<string, unknown>>;
+  uncertainty: Array<{ area?: string; reason?: string; [key: string]: unknown }>;
+  out_of_scope_edits: Array<{ file?: string; reason?: string; [key: string]: unknown }>;
+  notes: string | null;
+  duration_seconds?: number;
+  timestamp?: string;
+}
+
 export interface QAIssue {
   id: string;
   severity: 'critical' | 'major' | 'minor';

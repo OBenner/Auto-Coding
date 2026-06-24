@@ -434,6 +434,14 @@
   "provider": {
     "title": "Fournisseur IA",
     "description": "Sélectionnez votre fournisseur IA et les modèles disponibles",
+    "autonomy": "Autonomie",
+    "autonomyDescription": "Niveau d'indépendance des agents (AUTO_CODE_AUTONOMY). Les variables d'environnement explicites priment.",
+    "autonomyLevels": {
+      "off": "Désactivé — analyse et suggestions de correctifs uniquement",
+      "claude": "Claude / Codex (par défaut) — autonomie complète sur les runtimes SDK",
+      "safe": "Sûr — promeut aussi les fournisseurs API directs via la barrière de preuves",
+      "bold": "Audacieux — les fournisseurs directs sont promus sans barrière (expert)"
+    },
     "selectProvider": "Sélectionner le fournisseur",
     "selectProviderPlaceholder": "Choisir un fournisseur IA",
     "availableProviders": "Fournisseurs disponibles",

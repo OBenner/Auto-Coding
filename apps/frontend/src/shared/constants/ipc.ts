@@ -49,6 +49,7 @@ export const IPC_CHANNELS = {
   TASK_SPEC_QA_REPORT_GET: 'task:spec:qaReportGet',
   TASK_SPEC_QA_ESCALATION_GET: 'task:spec:qaEscalationGet',
   TASK_SPEC_GENERIC_EDIT_ARTIFACT_MANIFEST_GET: 'task:spec:genericEditArtifactManifestGet',
+  TASK_SPEC_VERIFICATION_REPORT_GET: 'task:spec:verificationReportGet',
 
   // Workspace management (for human review)
   // Per-spec architecture: Each spec has its own worktree at .worktrees/{spec-name}/
