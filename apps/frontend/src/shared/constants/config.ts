@@ -30,6 +30,7 @@ export const DEFAULT_APP_SETTINGS = {
   colorTheme: 'default' as const,
   defaultModel: 'opus',
   agentFramework: 'auto-claude',
+  autonomyLevel: 'claude' as 'off' | 'claude' | 'safe' | 'bold',
   pythonPath: undefined as string | undefined,
   gitPath: undefined as string | undefined,
   githubCLIPath: undefined as string | undefined,

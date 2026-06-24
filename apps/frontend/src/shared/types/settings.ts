@@ -267,6 +267,8 @@ export interface AppSettings {
   colorTheme?: ColorTheme;
   defaultModel: string;
   agentFramework: string;
+  // Autonomy level (AUTO_CODE_AUTONOMY) — how independent agents are. See ADR-006.
+  autonomyLevel?: 'off' | 'claude' | 'safe' | 'bold';
   pythonPath?: string;
   gitPath?: string;
   githubCLIPath?: string;

@@ -183,6 +183,25 @@ export class AgentProcessManager {
     return env;
   }
 
+  /**
+   * Resolve AUTO_CODE_AUTONOMY from the persisted app setting for the build env.
+   * Explicit env wins (ADR-006 precedence), so this returns {} when
+   * AUTO_CODE_AUTONOMY is already set. Best-effort: never throws.
+   */
+  private getAutonomyEnv(): Record<string, string> {
+    if (process.env.AUTO_CODE_AUTONOMY) return {};
+    try {
+      const settings = readSettingsFile();
+      const level = settings?.autonomyLevel;
+      if (typeof level === 'string' && ['off', 'claude', 'safe', 'bold'].includes(level)) {
+        return { AUTO_CODE_AUTONOMY: level };
+      }
+    } catch {
+      // Missing/unreadable settings just means default autonomy.
+    }
+    return {};
+  }
+
   private async setupProcessEnvironment(
     extraEnv: Record<string, string>
   ): Promise<NodeJS.ProcessEnv> {
@@ -218,6 +237,7 @@ export class AgentProcessManager {
 
     return {
       ...augmentedEnv,
+      ...this.getAutonomyEnv(),
       ...gitBashEnv,
       ...claudeCliEnv,
       ...ghCliEnv,

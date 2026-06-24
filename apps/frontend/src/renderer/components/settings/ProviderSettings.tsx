@@ -39,6 +39,7 @@ export function ProviderSettings() {
   const settings = useSettingsStore((state) => state.settings);
   const selectedProviderId = settings.selectedProviderId || 'anthropic';
   const selectedFallbackModelId = settings.fallbackModelId || '';
+  const selectedAutonomyLevel = settings.autonomyLevel || 'claude';
   const [showProviderDetails, setShowProviderDetails] = useState<Record<string, boolean>>({});
 
   // Find the selected provider
@@ -79,6 +80,18 @@ export function ProviderSettings() {
     });
     if (!success) {
       console.error('Failed to save fallback model selection');
+    }
+  };
+
+  /**
+   * Handle autonomy level selection (AUTO_CODE_AUTONOMY).
+   */
+  const handleSelectAutonomy = async (level: string) => {
+    const success = await saveSettings({
+      autonomyLevel: level as 'off' | 'claude' | 'safe' | 'bold'
+    });
+    if (!success) {
+      console.error('Failed to save autonomy level');
     }
   };
 
@@ -234,6 +247,27 @@ export function ProviderSettings() {
       description={t('provider.description')}
     >
       <div className="space-y-6">
+        {/* Autonomy level (AUTO_CODE_AUTONOMY) */}
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>{t('provider.autonomy')}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t('provider.autonomyDescription')}
+            </p>
+          </div>
+          <Select value={selectedAutonomyLevel} onValueChange={handleSelectAutonomy}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off">{t('provider.autonomyLevels.off')}</SelectItem>
+              <SelectItem value="claude">{t('provider.autonomyLevels.claude')}</SelectItem>
+              <SelectItem value="safe">{t('provider.autonomyLevels.safe')}</SelectItem>
+              <SelectItem value="bold">{t('provider.autonomyLevels.bold')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Provider selector */}
         <div className="space-y-3">
           <Label>{t('provider.selectProvider')}</Label>

@@ -434,6 +434,14 @@
   "provider": {
     "title": "AI Provider",
     "description": "Select your AI provider and available models",
+    "autonomy": "Autonomy",
+    "autonomyDescription": "How independent agents are (AUTO_CODE_AUTONOMY). Explicit environment variables override this.",
+    "autonomyLevels": {
+      "off": "Off — analysis & patch suggestions only",
+      "claude": "Claude / Codex (default) — full autonomy on the SDK runtimes",
+      "safe": "Safe — also promote direct-API providers via the evidence gate",
+      "bold": "Bold — direct providers run promoted without the gate (power user)"
+    },
     "selectProvider": "Select Provider",
     "selectProviderPlaceholder": "Choose an AI provider",
     "availableProviders": "Available Providers",
