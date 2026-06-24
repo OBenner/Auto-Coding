@@ -103,6 +103,7 @@ export interface TaskAPI {
   getGenericEditArtifactManifest: (taskId: string) => Promise<IPCResult<GenericEditArtifactManifest | null>>;
   getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
   getQAEscalation: (taskId: string) => Promise<IPCResult<import('../../shared/types').QAEscalation | null>>;
+  getVerificationReport: (taskId: string) => Promise<IPCResult<import('../../shared/types').VerificationReport | null>>;
 
   // Merge Analytics
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
@@ -363,6 +364,9 @@ export const createTaskAPI = (): TaskAPI => ({
 
   getQAEscalation: (taskId: string): Promise<IPCResult<import('../../shared/types').QAEscalation | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_ESCALATION_GET, taskId),
+
+  getVerificationReport: (taskId: string): Promise<IPCResult<import('../../shared/types').VerificationReport | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_VERIFICATION_REPORT_GET, taskId),
 
   // Merge Analytics
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeOperationRecord[]>> =>

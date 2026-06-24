@@ -472,6 +472,16 @@
     "verification": "Verification",
     "qaReport": "QA Report",
     "qaEscalation": "QA Escalation",
+    "verificationReport": "Verification Report",
+    "verdict": {
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "error": "Error"
+    },
+    "confidence": "Confidence",
+    "filesChanged": "Files changed",
+    "outOfScopeEdits": "Out-of-scope edits",
+    "uncertainty": "Uncertainty",
     "totalIterations": "Total Iterations",
     "totalIssues": "Total Issues",
     "uniqueIssues": "Unique Issues",

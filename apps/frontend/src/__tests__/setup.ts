@@ -112,6 +112,7 @@ if (typeof window !== 'undefined') {
     getGenericEditArtifactManifest: vi.fn().mockResolvedValue({ success: true, data: null }),
     getQAReport: vi.fn().mockResolvedValue({ success: true, data: null }),
     getQAEscalation: vi.fn().mockResolvedValue({ success: true, data: null }),
+    getVerificationReport: vi.fn().mockResolvedValue({ success: true, data: null }),
     getSettings: vi.fn(),
     saveSettings: vi.fn(),
     selectDirectory: vi.fn(),

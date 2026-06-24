@@ -16,6 +16,7 @@ import type {
   Project,
   Task,
   ImplementationPlan,
+  VerificationReport,
   QAEscalation,
   GenericEditArtifactManifest,
   GenericEditArtifactManifestEntry,
@@ -1162,6 +1163,32 @@ export async function readGenericEditArtifactManifest(
       return null;
     }
     console.error(`[spec-file-readers] Error reading generic edit artifact manifest:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Read the Trust Layer verification report from artifacts/verification-report.json
+ *
+ * @param project - The project containing the task
+ * @param task - The task to read the report for
+ * @returns The parsed verification report, or null if it doesn't exist
+ */
+export async function readVerificationReport(
+  project: Project,
+  task: Task
+): Promise<VerificationReport | null> {
+  try {
+    const specDir = getSpecDir(project, task);
+    const reportPath = path.join(specDir, AUTO_BUILD_PATHS.VERIFICATION_REPORT);
+
+    const reportContent = await fs.readFile(reportPath, 'utf-8');
+    return JSON.parse(reportContent) as VerificationReport;
+  } catch (err) {
+    if (isFileNotFoundError(err)) {
+      return null;
+    }
+    console.error(`[spec-file-readers] Error reading verification report:`, err);
     throw err;
   }
 }

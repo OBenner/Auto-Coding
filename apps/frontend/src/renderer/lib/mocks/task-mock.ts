@@ -185,6 +185,11 @@ export const taskMock = {
     data: null
   }),
 
+  getVerificationReport: async () => ({
+    success: true,
+    data: null
+  }),
+
   // Event Listeners (no-op in browser)
   onTaskProgress: () => () => {},
   onTaskError: () => () => {},

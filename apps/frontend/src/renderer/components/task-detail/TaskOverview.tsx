@@ -23,9 +23,11 @@ import type {
   Phase,
   SubtaskStatus,
   QAEscalation,
-  GenericEditArtifactManifest
+  GenericEditArtifactManifest,
+  VerificationReport
 } from '../../../shared/types';
 import { GenericEditArtifactsPanel } from './GenericEditArtifactsPanel';
+import { VerificationReportPanel } from './VerificationReportPanel';
 
 interface TaskOverviewProps {
   task: Task;
@@ -37,6 +39,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
   const [genericEditManifest, setGenericEditManifest] = useState<GenericEditArtifactManifest | null>(null);
   const [qaReport, setQAReport] = useState<string | null>(null);
   const [qaEscalation, setQAEscalation] = useState<QAEscalation | null>(null);
+  const [verificationReport, setVerificationReport] = useState<VerificationReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
@@ -52,6 +55,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
     setGenericEditManifest(null);
     setQAReport(null);
     setQAEscalation(null);
+    setVerificationReport(null);
     try {
       // Load implementation plan
       const planResult = await globalThis.electronAPI.getImplementationPlan(task.id);
@@ -74,6 +78,12 @@ export function TaskOverview({ task }: TaskOverviewProps) {
       const manifestResult = await globalThis.electronAPI.getGenericEditArtifactManifest(task.id);
       if (manifestResult.success && manifestResult.data) {
         setGenericEditManifest(manifestResult.data);
+      }
+
+      // Load the Trust Layer verification report if present.
+      const verificationResult = await globalThis.electronAPI.getVerificationReport(task.id);
+      if (verificationResult.success && verificationResult.data) {
+        setVerificationReport(verificationResult.data);
       }
 
       // Load QA report if available
@@ -260,6 +270,14 @@ export function TaskOverview({ task }: TaskOverviewProps) {
         </>
       )}
 
+      {/* Verification Report Section (Trust Layer) */}
+      {verificationReport && (
+        <>
+          <Separator />
+          <VerificationReportPanel report={verificationReport} />
+        </>
+      )}
+
       {/* QA Report Section */}
       {qaReport && (
         <>
@@ -366,7 +384,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
       )}
 
       {/* No Data Available */}
-      {!implementationPlan && !genericEditManifest && !qaReport && !qaEscalation && (
+      {!implementationPlan && !genericEditManifest && !verificationReport && !qaReport && !qaEscalation && (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
           <p className="text-sm">{t('tasks:overview.noDataAvailable')}</p>
