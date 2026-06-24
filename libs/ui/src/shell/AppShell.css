@@ -1,0 +1,39 @@
+.ac-shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  height: 100vh;
+  min-height: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
+}
+
+.ac-shell__sidebar {
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--rail);
+}
+
+.ac-shell__content {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ac-shell__topbar {
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.ac-shell__main {
+  min-height: 0;
+  overflow: auto;
+}
+
+.ac-shell__statusbar {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+}

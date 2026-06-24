@@ -1,0 +1,85 @@
+/* Auto Code design tokens — ported 1:1 from .lazyweb/mockups/_desktop-tokens.css.
+   Light is the default; ThemeProvider sets [data-theme="dark"] on <html>.
+   Variables only (no global reset / font application), so importing this file
+   is non-breaking — components opt in via var(--token). */
+
+:root {
+  /* surfaces */
+  --bg: #f5f5f2;
+  --panel: #ffffff;
+  --soft: #fafaf8;
+  --rail: #f0f0ec;
+  --sidebar-rail: #ececea;
+
+  /* text */
+  --ink: #151515;
+  --muted: #666762;
+  --quiet: #8c8d86;
+
+  /* lines */
+  --line: #deded8;
+  --line-strong: #c7c8bf;
+
+  /* status */
+  --green: #178a52;
+  --green-soft: #e7f4ee;
+  --blue: #2864d8;
+  --blue-soft: #e9efff;
+  --amber: #9d6408;
+  --amber-soft: #fff1d6;
+  --red: #ba2f2f;
+  --red-soft: #fce7e7;
+
+  /* terminal */
+  --term-bg: #0f0f0e;
+  --term-fg: #d8d8d2;
+
+  /* effects */
+  --shadow: 0 24px 80px rgba(20, 20, 20, 0.12);
+  --bg-gradient:
+    linear-gradient(135deg, rgba(40, 100, 216, 0.08), transparent 34%),
+    linear-gradient(315deg, rgba(23, 138, 82, 0.08), transparent 38%);
+
+  /* typography */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+[data-theme="dark"] {
+  /* surfaces — warm dark, not pure black */
+  --bg: #141413;
+  --panel: #1c1c1a;
+  --soft: #232321;
+  --rail: #1a1a18;
+  --sidebar-rail: #181816;
+
+  /* text */
+  --ink: #ebebe7;
+  --muted: #a0a09a;
+  --quiet: #6f706a;
+
+  /* lines */
+  --line: #2e2e2b;
+  --line-strong: #3d3d39;
+
+  /* status — lifted so they read on dark */
+  --green: #5cba85;
+  --green-soft: #1c2e23;
+  --blue: #7aa3ee;
+  --blue-soft: #1c2538;
+  --amber: #d9a655;
+  --amber-soft: #2f2618;
+  --red: #e57676;
+  --red-soft: #2f1d1d;
+
+  /* terminal stays nearly the same */
+  --term-bg: #0a0a09;
+  --term-fg: #e2e2dc;
+
+  /* deeper shadow */
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+
+  /* dim ambient gradient */
+  --bg-gradient:
+    linear-gradient(135deg, rgba(122, 163, 238, 0.06), transparent 34%),
+    linear-gradient(315deg, rgba(92, 186, 133, 0.06), transparent 38%);
+}
