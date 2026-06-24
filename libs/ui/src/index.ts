@@ -5,3 +5,18 @@ export type { AppShellProps } from './shell/AppShell';
 export { Sidebar } from './shell/Sidebar';
 export type { SidebarProps } from './shell/Sidebar';
 export type { SidebarSection, SidebarItem } from './shell/nav-config';
+
+// Data layer (ports & adapters) + Kanban pilot (U1)
+export {
+  AutoCodeClientProvider,
+  useAutoCodeClient,
+  useTasks,
+} from './client/AutoCodeClient';
+export type {
+  AutoCodeClient,
+  AutoCodeClientProviderProps,
+  UseTasksResult,
+} from './client/AutoCodeClient';
+export type { UiTask, UiTaskBadge, TaskStatus, BadgeTone } from './client/types';
+export { KanbanBoard, DEFAULT_KANBAN_COLUMNS } from './screens/KanbanBoard';
+export type { KanbanBoardProps, KanbanColumn } from './screens/KanbanBoard';
