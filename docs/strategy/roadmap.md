@@ -134,7 +134,7 @@
 
 ## Прогресс ([PR #361](https://github.com/OBenner/Auto-Coding/pull/361))
 
-**Волна 1 — серверная часть закрыта** (28 юнит-тестов, все зелёные):
+**Волна 1 — закрыта** (бэкенд: 28 юнит-тестов зелёные; фронтенд: `tsc --noEmit` зелёный):
 
 - ✅ **P3·T1** — coder уважает `AUTO_CODE_AUTONOMY` (оказался уже реализован).
 - ✅ **P1·T1 / T1-wire** — контракт `verification-report.json` + запись на каждой сборке (`cli/artifacts.py`, `cli/build_commands.py`).
@@ -142,10 +142,11 @@
 - ✅ **P1·T3** — `confidence` + `uncertainty` через SDK- и runtime-путь (`qa/reviewer.py`, промпт, merge-санитайзинг).
 - ✅ **P5·T1** — модель/провайдер по фазам в `token_stats.json` (`core/token_stats.py`, `agents/session.py`).
 - ✅ **P3·T5** — доки ведут с `AUTO_CODE_AUTONOMY` (`guides/CLI-USAGE.md`, ADR-006 → Accepted).
+- ✅ **P1·T4** — QA-экран отчёта доверия в task overview (reader + IPC + `VerificationReportPanel`, i18n en/fr).
+- ✅ **P3·T4** — тумблер автономности в настройках → инжектит `AUTO_CODE_AUTONOMY` в окружение сборки (явный env приоритетнее).
 
-Отчёт доверия теперь несёт: **вердикт · тесты · дифф · out-of-scope · confidence · uncertainty**.
+Отчёт доверия теперь несёт: **вердикт · тесты · дифф · out-of-scope · confidence · uncertainty** — и виден в UI.
 
-**В работе (фронтенд):** P1·T4 (QA-экран отчёта доверия) · P3·T4 (тумблер автономности).
 **Дальше отдельными PR:** P2 (GitHub App), P4 (облако/команды).
 
 Каждая задача shippable отдельно и тянет тесты (`apps/backend/.venv/bin/pytest tests/<файл>` — точечно).
