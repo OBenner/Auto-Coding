@@ -9,7 +9,7 @@ dependency for routes that carry a ``workspace_id``. In single-user mode the lon
 
 from enum import Enum
 
-from api.models.workspace import WorkspaceUser
+from api.models.workspace import Workspace, WorkspaceUser
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -42,7 +42,17 @@ def role_satisfies(actual: "WorkspaceRole | str", required: "WorkspaceRole | str
 def user_role_in_workspace(
     db: Session, user_id: int, workspace_id: int
 ) -> WorkspaceRole | None:
-    """Return the user's role in the workspace, or None if they are not a member."""
+    """Return the user's effective role in the workspace, or None if no access.
+
+    The workspace owner (``Workspace.owner_id``) always has owner-level access,
+    even without an explicit membership row — this is what makes the single-user
+    "Personal" workspace owner satisfy every check. Everyone else gets the role
+    from their ``WorkspaceUser`` membership.
+    """
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if workspace is not None and workspace.owner_id == user_id:
+        return WorkspaceRole.OWNER
+
     membership = (
         db.query(WorkspaceUser)
         .filter(
@@ -65,7 +75,7 @@ def check_workspace_access(
     workspace_id: int,
     required_role: WorkspaceRole = WorkspaceRole.VIEWER,
 ) -> bool:
-    """True when the user is a member of the workspace with at least ``required_role``."""
+    """True when the user has at least ``required_role`` (owner or membership)."""
     role = user_role_in_workspace(db, user_id, workspace_id)
     return role is not None and role_satisfies(role, required_role)
 

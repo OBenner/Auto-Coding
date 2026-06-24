@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from core.database import Base
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -28,8 +29,14 @@ class Workspace(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+    # RESTRICT, not CASCADE: deleting a user must not silently destroy a whole
+    # workspace (and its specs/runs). Ownership transfer/deletion is explicit
+    # application logic (Track C).
     owner_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
 
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
@@ -55,6 +62,10 @@ class WorkspaceUser(Base):
     __tablename__ = "workspace_users"
     __table_args__ = (
         UniqueConstraint("workspace_id", "user_id", name="uq_workspace_user"),
+        # Mirror the WorkspaceRole closed set (core/permissions.py) at the DB level.
+        CheckConstraint(
+            "role IN ('owner', 'editor', 'viewer')", name="ck_workspace_user_role"
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)

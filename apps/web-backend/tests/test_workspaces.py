@@ -104,3 +104,33 @@ def test_check_workspace_access(test_db):
     outsider = _make_user(test_db, "outsider@test.com")
     assert user_role_in_workspace(test_db, outsider.id, workspace.id) is None
     assert not check_workspace_access(test_db, outsider.id, workspace.id)
+
+
+def test_workspace_owner_has_owner_access_without_membership(test_db):
+    # The single-user "Personal" workspace has an owner but no membership row;
+    # access must still derive from Workspace.owner_id at owner level.
+    owner = _make_user(test_db, "soleowner@test.com")
+    workspace = Workspace(name="Personal", owner_id=owner.id)
+    test_db.add(workspace)
+    test_db.commit()
+    test_db.refresh(workspace)
+
+    assert user_role_in_workspace(test_db, owner.id, workspace.id) == WorkspaceRole.OWNER
+    assert check_workspace_access(test_db, owner.id, workspace.id, WorkspaceRole.OWNER)
+
+
+def test_invalid_role_is_rejected_by_db(test_db):
+    # The CHECK constraint mirrors the WorkspaceRole closed set, so roles outside
+    # {owner, editor, viewer} cannot be persisted.
+    owner = _make_user(test_db, "ck@test.com")
+    workspace = Workspace(name="WS-CK", owner_id=owner.id)
+    test_db.add(workspace)
+    test_db.commit()
+    test_db.refresh(workspace)
+
+    test_db.add(
+        WorkspaceUser(workspace_id=workspace.id, user_id=owner.id, role="superadmin")
+    )
+    with pytest.raises(IntegrityError):
+        test_db.commit()
+    test_db.rollback()

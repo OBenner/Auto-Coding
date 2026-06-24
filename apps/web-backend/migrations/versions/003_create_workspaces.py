@@ -48,7 +48,9 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["owner_id"], ["users.id"], ondelete="CASCADE"),
+        # RESTRICT: deleting a user must not cascade-delete their workspaces;
+        # ownership transfer/deletion is handled in application logic.
+        sa.ForeignKeyConstraint(["owner_id"], ["users.id"], ondelete="RESTRICT"),
     )
     op.create_index(
         op.f("ix_workspaces_owner_id"), "workspaces", ["owner_id"], unique=False
@@ -74,6 +76,10 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("workspace_id", "user_id", name="uq_workspace_user"),
+        # Mirror the WorkspaceRole closed set (core/permissions.py) at the DB level.
+        sa.CheckConstraint(
+            "role IN ('owner', 'editor', 'viewer')", name="ck_workspace_user_role"
+        ),
     )
     op.create_index(
         op.f("ix_workspace_users_workspace_id"),
