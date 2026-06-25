@@ -15,7 +15,7 @@ import logging
 
 from api.models.workspace import Workspace, WorkspaceUser
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,13 @@ def create_workspace(db: Session, owner_id: int, name: str) -> Workspace:
 
 
 def list_workspace_members(db: Session, workspace_id: int) -> list[WorkspaceUser]:
-    """Return the explicit membership rows for a workspace (excludes the owner)."""
+    """Return the explicit membership rows for a workspace (excludes the owner).
+
+    Eager-loads the related user so callers can read ``wu.user`` without an N+1.
+    """
     return (
         db.query(WorkspaceUser)
+        .options(joinedload(WorkspaceUser.user))
         .filter(WorkspaceUser.workspace_id == workspace_id)
         .order_by(WorkspaceUser.id.asc())
         .all()
