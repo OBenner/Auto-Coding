@@ -19,6 +19,7 @@ from api.models.repository import GitRepository  # noqa: F401
 # Import all models so Base.metadata knows about all tables
 # These imports register models with SQLAlchemy Base.metadata
 from api.models.user import User  # noqa: F401
+from api.models.workspace import Workspace, WorkspaceUser  # noqa: F401
 
 # Import application components
 from core.database import Base, get_db
@@ -29,7 +30,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-__all__ = ["User", "GitRepository"]
+__all__ = ["User", "GitRepository", "Workspace", "WorkspaceUser"]
 
 
 @pytest.fixture(scope="session", autouse=True)
