@@ -10,6 +10,7 @@ core/permissions.py.
 from datetime import UTC, datetime
 
 from core.database import Base
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -89,3 +90,32 @@ class WorkspaceUser(Base):
             f"<WorkspaceUser(workspace_id={self.workspace_id}, "
             f"user_id={self.user_id}, role={self.role!r})>"
         )
+
+
+# Pydantic models for API requests and responses
+
+
+class WorkspaceCreateRequest(BaseModel):
+    """Request model for creating a workspace (team mode)."""
+
+    name: str = Field(..., min_length=1, max_length=255, description="Workspace name")
+
+
+class WorkspaceResponse(BaseModel):
+    """Response model for a workspace, including the caller's role in it."""
+
+    id: int = Field(..., description="Workspace ID")
+    name: str = Field(..., description="Workspace name")
+    role: str = Field(..., description="Caller's role: owner/editor/viewer")
+    created_at: datetime = Field(..., description="Creation timestamp")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceListResponse(BaseModel):
+    """Response model for the list of workspaces the caller can access."""
+
+    workspaces: list[WorkspaceResponse] = Field(
+        default_factory=list, description="Accessible workspaces"
+    )
+    cloud_mode: str = Field(..., description="Deployment mode: single or team")

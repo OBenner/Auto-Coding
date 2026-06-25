@@ -9,6 +9,7 @@ import logging
 from core.database import get_db
 from core.security import create_access_token
 from fastapi import APIRouter, Depends, HTTPException, status
+from services.workspace_service import get_or_create_personal_workspace
 from sqlalchemy.orm import Session
 
 from api.models.user import (
@@ -105,6 +106,9 @@ async def register_user(
 
     logger.info("New user registered: id=%s", user.id)
 
+    # Bootstrap the user's Personal workspace (single-mode default).
+    get_or_create_personal_workspace(db, user.id)
+
     return _build_token_response(user)
 
 
@@ -156,5 +160,8 @@ async def login_user(
         )
 
     logger.info("User logged in: %s", user.email)
+
+    # Ensure a Personal workspace exists (idempotent; backfills pre-C2 accounts).
+    get_or_create_personal_workspace(db, user.id)
 
     return _build_token_response(user)

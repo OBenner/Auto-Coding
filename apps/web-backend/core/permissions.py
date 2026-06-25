@@ -11,8 +11,10 @@ from enum import Enum
 
 from api.models.workspace import Workspace, WorkspaceUser
 from fastapi import Depends, HTTPException, status
+from services.workspace_service import get_or_create_personal_workspace
 from sqlalchemy.orm import Session
 
+from core.config import settings
 from core.database import get_db
 from core.security import require_auth
 
@@ -80,6 +82,12 @@ def check_workspace_access(
     return role is not None and role_satisfies(role, required_role)
 
 
+def _current_user_id(auth: dict) -> int | None:
+    """Extract the integer user id from JWT claims (``sub`` is ``str(user.id)``)."""
+    sub = auth.get("sub")
+    return int(sub) if sub is not None and str(sub).isdigit() else None
+
+
 def require_workspace_access(required_role: WorkspaceRole = WorkspaceRole.VIEWER):
     """FastAPI dependency factory.
 
@@ -93,8 +101,7 @@ def require_workspace_access(required_role: WorkspaceRole = WorkspaceRole.VIEWER
         auth: dict = Depends(require_auth),
         db: Session = Depends(get_db),
     ) -> WorkspaceRole:
-        sub = auth.get("sub")
-        user_id = int(sub) if sub is not None and str(sub).isdigit() else None
+        user_id = _current_user_id(auth)
         role = (
             user_role_in_workspace(db, user_id, workspace_id)
             if user_id is not None
@@ -108,3 +115,43 @@ def require_workspace_access(required_role: WorkspaceRole = WorkspaceRole.VIEWER
         return role
 
     return dependency
+
+
+def get_current_workspace(
+    workspace_id: int | None = None,
+    auth: dict = Depends(require_auth),
+    db: Session = Depends(get_db),
+) -> Workspace:
+    """Resolve the workspace for the current request.
+
+    - **single mode** (``CLOUD_MODE=single``): the caller's auto-created
+      "Personal" workspace (``workspace_id`` is ignored). Created on first use.
+    - **team mode**: the workspace named by the ``workspace_id`` query parameter,
+      which the caller must be able to access (>= viewer) — else 400/403.
+
+    Returns the resolved ``Workspace`` ORM object.
+    """
+    user_id = _current_user_id(auth)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No authenticated user in token",
+        )
+
+    if settings.CLOUD_MODE == "single":
+        return get_or_create_personal_workspace(db, user_id)
+
+    if workspace_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="workspace_id is required in team mode",
+        )
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if workspace is None or not check_workspace_access(
+        db, user_id, workspace_id, WorkspaceRole.VIEWER
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient workspace permissions",
+        )
+    return workspace
