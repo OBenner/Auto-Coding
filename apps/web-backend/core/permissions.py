@@ -32,6 +32,9 @@ _ROLE_RANK: dict[WorkspaceRole, int] = {
     WorkspaceRole.OWNER: 2,
 }
 
+# Reused 403 detail for workspace permission failures (avoid a duplicated literal).
+_INSUFFICIENT_PERMISSIONS = "Insufficient workspace permissions"
+
 
 def role_satisfies(actual: "WorkspaceRole | str", required: "WorkspaceRole | str") -> bool:
     """True when ``actual`` grants at least the privilege of ``required``."""
@@ -110,7 +113,7 @@ def require_workspace_access(required_role: WorkspaceRole = WorkspaceRole.VIEWER
         if role is None or not role_satisfies(role, required_role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient workspace permissions",
+                detail=_INSUFFICIENT_PERMISSIONS,
             )
         return role
 
@@ -150,12 +153,12 @@ def get_current_workspace(
     if not check_workspace_access(db, user_id, workspace_id, WorkspaceRole.VIEWER):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient workspace permissions",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if workspace is None:  # pragma: no cover - access check already proved existence
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient workspace permissions",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
     return workspace
