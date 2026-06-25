@@ -17,9 +17,11 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -28,6 +30,18 @@ class Workspace(Base):
     """A tenant boundary owning specs/runs/repositories, with role-based members."""
 
     __tablename__ = "workspaces"
+    __table_args__ = (
+        # At most one "Personal" workspace per owner (partial unique index) — this
+        # makes get_or_create_personal_workspace race-safe under concurrent
+        # register/login. Other workspace names are unconstrained.
+        Index(
+            "uq_personal_workspace_per_owner",
+            "owner_id",
+            unique=True,
+            sqlite_where=text("name = 'Personal'"),
+            postgresql_where=text("name = 'Personal'"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)

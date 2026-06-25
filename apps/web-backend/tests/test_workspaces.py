@@ -179,6 +179,22 @@ def test_get_or_create_personal_workspace_is_idempotent(test_db):
     assert len(owned) == 1
 
 
+def test_personal_workspace_unique_per_owner(test_db):
+    owner = _make_user(test_db, "uniq@test.com")
+    get_or_create_personal_workspace(test_db, owner.id)
+
+    # A second "Personal" for the same owner violates the partial unique index.
+    test_db.add(Workspace(name="Personal", owner_id=owner.id))
+    with pytest.raises(IntegrityError):
+        test_db.commit()
+    test_db.rollback()
+
+    # The partial index only covers "Personal" rows; other names are unconstrained.
+    create_workspace(test_db, owner_id=owner.id, name="Team A")
+    create_workspace(test_db, owner_id=owner.id, name="Team B")
+    assert test_db.query(Workspace).filter(Workspace.owner_id == owner.id).count() == 3
+
+
 def test_list_accessible_workspaces_owned_and_member(test_db):
     user = _make_user(test_db, "lister@test.com")
     owned = create_workspace(test_db, owner_id=user.id, name="Mine")

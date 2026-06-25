@@ -15,6 +15,7 @@ import logging
 
 from api.models.workspace import Workspace, WorkspaceUser
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 logger = logging.getLogger(__name__)
@@ -23,14 +24,9 @@ logger = logging.getLogger(__name__)
 PERSONAL_WORKSPACE_NAME = "Personal"
 
 
-def get_or_create_personal_workspace(db: Session, user_id: int) -> Workspace:
-    """Return the user's Personal workspace, creating it if absent (idempotent).
-
-    This is the single-mode default workspace. If the user already owns one named
-    ``PERSONAL_WORKSPACE_NAME`` the oldest such workspace is reused, so repeated
-    calls (e.g. on every login) never create duplicates.
-    """
-    existing = (
+def _find_personal_workspace(db: Session, user_id: int) -> Workspace | None:
+    """Return the user's oldest workspace named PERSONAL_WORKSPACE_NAME, or None."""
+    return (
         db.query(Workspace)
         .filter(
             Workspace.owner_id == user_id,
@@ -39,12 +35,30 @@ def get_or_create_personal_workspace(db: Session, user_id: int) -> Workspace:
         .order_by(Workspace.id.asc())
         .first()
     )
+
+
+def get_or_create_personal_workspace(db: Session, user_id: int) -> Workspace:
+    """Return the user's Personal workspace, creating it if absent (idempotent).
+
+    This is the single-mode default workspace. A partial unique index
+    (``uq_personal_workspace_per_owner``) guarantees one per owner, so concurrent
+    register/login calls cannot create duplicates: the loser of the race catches
+    the IntegrityError and reuses the winner's workspace.
+    """
+    existing = _find_personal_workspace(db, user_id)
     if existing is not None:
         return existing
 
     workspace = Workspace(name=PERSONAL_WORKSPACE_NAME, owner_id=user_id)
     db.add(workspace)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        winner = _find_personal_workspace(db, user_id)
+        if winner is None:  # pragma: no cover - the unique index guarantees one
+            raise
+        return winner
     db.refresh(workspace)
     logger.info(
         "Bootstrapped Personal workspace id=%s for user_id=%s", workspace.id, user_id
