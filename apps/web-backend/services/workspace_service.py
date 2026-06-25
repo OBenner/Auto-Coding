@@ -119,12 +119,8 @@ def add_member(
     db.add(membership)
     db.commit()
     db.refresh(membership)
-    logger.info(
-        "Added member user_id=%s role=%s to workspace_id=%s",
-        user_id,
-        role,
-        workspace_id,
-    )
+    # No info log here: user_id/role/workspace_id are request-derived (CodeQL
+    # log-injection). Membership changes belong in the audit story (C3/C7).
     return membership
 
 

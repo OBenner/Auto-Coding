@@ -354,11 +354,10 @@ def test_workspace_members_api(test_db, monkeypatch):
         }
 
         # Duplicate add -> 409; adding the owner -> 400.
-        assert client.post(base, json={"user_id": member.id}).status_code == 409
-        assert (
-            client.post(base, json={"user_id": owner.id, "role": "editor"}).status_code
-            == 400
-        )
+        dup = client.post(base, json={"user_id": member.id})
+        assert dup.status_code == 409
+        add_owner = client.post(base, json={"user_id": owner.id, "role": "editor"})
+        assert add_owner.status_code == 400
 
         # Listing now shows owner + member.
         resp = client.get(base)
@@ -374,12 +373,15 @@ def test_workspace_members_api(test_db, monkeypatch):
 
         # A non-owner (the editor) cannot mutate members -> 403, but can list.
         auth_holder["sub"] = str(member.id)
-        assert client.post(base, json={"user_id": owner.id}).status_code == 403
-        assert client.get(base).status_code == 200
+        denied = client.post(base, json={"user_id": owner.id})
+        assert denied.status_code == 403
+        listed = client.get(base)
+        assert listed.status_code == 200
 
         # Owner removes the member.
         auth_holder["sub"] = str(owner.id)
-        assert client.delete(f"{base}/{member.id}").status_code == 204
+        removed = client.delete(f"{base}/{member.id}")
+        assert removed.status_code == 204
         resp = client.get(base)
         assert [m["role"] for m in resp.json()["members"]] == ["owner"]
     finally:
