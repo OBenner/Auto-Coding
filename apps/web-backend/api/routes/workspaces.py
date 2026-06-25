@@ -25,6 +25,7 @@ from api.models.workspace import (
     WorkspaceCreateRequest,
     WorkspaceListResponse,
     WorkspaceResponse,
+    WorkspaceUser,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,12 +58,23 @@ def _to_response(workspace: Workspace, role: WorkspaceRole) -> WorkspaceResponse
 async def list_workspaces(
     auth: dict = Depends(require_auth),
     db: Session = Depends(get_db),
-) -> WorkspaceListResponse:
+):
     """List every workspace the caller can access, with their role in each."""
     user_id = _require_user_id(auth)
+    workspaces = list_accessible_workspaces(db, user_id)
+    # Resolve roles with a single membership query (avoids an N+1 over
+    # user_role_in_workspace): owners are detected from owner_id directly.
+    member_roles = {
+        wu.workspace_id: wu.role
+        for wu in db.query(WorkspaceUser).filter(WorkspaceUser.user_id == user_id)
+    }
     items: list[WorkspaceResponse] = []
-    for ws in list_accessible_workspaces(db, user_id):
-        role = user_role_in_workspace(db, user_id, ws.id) or WorkspaceRole.VIEWER
+    for ws in workspaces:
+        role = (
+            WorkspaceRole.OWNER
+            if ws.owner_id == user_id
+            else WorkspaceRole(member_roles.get(ws.id, WorkspaceRole.VIEWER.value))
+        )
         items.append(_to_response(ws, role))
     return WorkspaceListResponse(workspaces=items, cloud_mode=settings.CLOUD_MODE)
 
@@ -72,7 +84,7 @@ async def current_workspace(
     workspace: Workspace = Depends(get_current_workspace),
     auth: dict = Depends(require_auth),
     db: Session = Depends(get_db),
-) -> WorkspaceResponse:
+):
     """Resolve the current workspace (Personal in single mode; ?workspace_id in team)."""
     user_id = _require_user_id(auth)
     role = user_role_in_workspace(db, user_id, workspace.id) or WorkspaceRole.VIEWER
@@ -84,7 +96,7 @@ async def create_workspace_endpoint(
     request: WorkspaceCreateRequest,
     auth: dict = Depends(require_auth),
     db: Session = Depends(get_db),
-) -> WorkspaceResponse:
+):
     """Create a workspace owned by the caller (used in team mode)."""
     user_id = _require_user_id(auth)
     workspace = create_workspace(db, owner_id=user_id, name=request.name)

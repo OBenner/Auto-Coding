@@ -146,10 +146,14 @@ def get_current_workspace(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="workspace_id is required in team mode",
         )
+    # Check access first; only fetch the workspace row once access is granted.
+    if not check_workspace_access(db, user_id, workspace_id, WorkspaceRole.VIEWER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient workspace permissions",
+        )
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if workspace is None or not check_workspace_access(
-        db, user_id, workspace_id, WorkspaceRole.VIEWER
-    ):
+    if workspace is None:  # pragma: no cover - access check already proved existence
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient workspace permissions",

@@ -76,7 +76,6 @@ def create_workspace(db: Session, owner_id: int, name: str) -> Workspace:
     db.add(workspace)
     db.commit()
     db.refresh(workspace)
-    logger.info(
-        "Created workspace id=%s name=%r owner_id=%s", workspace.id, name, owner_id
-    )
+    # Do not log the user-supplied name (log-injection); id + owner suffice.
+    logger.info("Created workspace id=%s owner_id=%s", workspace.id, owner_id)
     return workspace
