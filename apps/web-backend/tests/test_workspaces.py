@@ -115,6 +115,17 @@ def test_workspace_owner_has_owner_access_without_membership(test_db):
     test_db.commit()
     test_db.refresh(workspace)
 
+    # Precondition for this test's meaning: the owner has NO membership row, so
+    # access must come from Workspace.owner_id (not an auto-created membership).
+    assert (
+        test_db.query(WorkspaceUser)
+        .filter(
+            WorkspaceUser.workspace_id == workspace.id,
+            WorkspaceUser.user_id == owner.id,
+        )
+        .first()
+        is None
+    )
     assert user_role_in_workspace(test_db, owner.id, workspace.id) == WorkspaceRole.OWNER
     assert check_workspace_access(test_db, owner.id, workspace.id, WorkspaceRole.OWNER)
 
