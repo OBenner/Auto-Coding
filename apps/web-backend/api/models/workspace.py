@@ -8,6 +8,7 @@ core/permissions.py.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from core.database import Base
 from pydantic import BaseModel, ConfigDict, Field
@@ -119,3 +120,34 @@ class WorkspaceListResponse(BaseModel):
         default_factory=list, description="Accessible workspaces"
     )
     cloud_mode: str = Field(..., description="Deployment mode: single or team")
+
+
+class WorkspaceMemberAddRequest(BaseModel):
+    """Request model for adding a member to a workspace."""
+
+    user_id: int = Field(..., description="Id of the user to add")
+    role: Literal["owner", "editor", "viewer"] = Field(
+        "viewer", description="Role to grant"
+    )
+
+
+class WorkspaceMemberUpdateRequest(BaseModel):
+    """Request model for changing a member's role."""
+
+    role: Literal["owner", "editor", "viewer"] = Field(..., description="New role")
+
+
+class WorkspaceMemberResponse(BaseModel):
+    """Response model for a single workspace member."""
+
+    user_id: int = Field(..., description="Member user id")
+    email: str = Field(..., description="Member email")
+    role: str = Field(..., description="Member role: owner/editor/viewer")
+
+
+class WorkspaceMemberListResponse(BaseModel):
+    """Response model for the members of a workspace."""
+
+    members: list[WorkspaceMemberResponse] = Field(
+        default_factory=list, description="Workspace members (owner first)"
+    )

@@ -79,3 +79,62 @@ def create_workspace(db: Session, owner_id: int, name: str) -> Workspace:
     # Do not log the user-supplied name (log-injection); id + owner suffice.
     logger.info("Created workspace id=%s owner_id=%s", workspace.id, owner_id)
     return workspace
+
+
+def list_workspace_members(db: Session, workspace_id: int) -> list[WorkspaceUser]:
+    """Return the explicit membership rows for a workspace (excludes the owner)."""
+    return (
+        db.query(WorkspaceUser)
+        .filter(WorkspaceUser.workspace_id == workspace_id)
+        .order_by(WorkspaceUser.id.asc())
+        .all()
+    )
+
+
+def get_membership(
+    db: Session, workspace_id: int, user_id: int
+) -> WorkspaceUser | None:
+    """Return the user's membership row in the workspace, or None."""
+    return (
+        db.query(WorkspaceUser)
+        .filter(
+            WorkspaceUser.workspace_id == workspace_id,
+            WorkspaceUser.user_id == user_id,
+        )
+        .first()
+    )
+
+
+def add_member(
+    db: Session, workspace_id: int, user_id: int, role: str
+) -> WorkspaceUser:
+    """Insert a membership row (callers validate uniqueness/owner/user first)."""
+    membership = WorkspaceUser(
+        workspace_id=workspace_id, user_id=user_id, role=role
+    )
+    db.add(membership)
+    db.commit()
+    db.refresh(membership)
+    logger.info(
+        "Added member user_id=%s role=%s to workspace_id=%s",
+        user_id,
+        role,
+        workspace_id,
+    )
+    return membership
+
+
+def update_member_role(
+    db: Session, membership: WorkspaceUser, role: str
+) -> WorkspaceUser:
+    """Update a membership's role in place."""
+    membership.role = role
+    db.commit()
+    db.refresh(membership)
+    return membership
+
+
+def remove_member(db: Session, membership: WorkspaceUser) -> None:
+    """Delete a membership row."""
+    db.delete(membership)
+    db.commit()

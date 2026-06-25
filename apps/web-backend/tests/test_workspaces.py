@@ -18,9 +18,14 @@ from core.permissions import (
 )
 from fastapi import HTTPException
 from services.workspace_service import (
+    add_member,
     create_workspace,
+    get_membership,
     get_or_create_personal_workspace,
     list_accessible_workspaces,
+    list_workspace_members,
+    remove_member,
+    update_member_role,
 )
 from sqlalchemy.exc import IntegrityError
 
@@ -280,5 +285,102 @@ def test_workspaces_api_endpoints(test_db, monkeypatch):
         resp = client.get("/api/workspaces")
         names = {w["name"] for w in resp.json()["workspaces"]}
         assert names == {"Personal", "Team X"}
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# C2 (cont.) — workspace member management
+# ---------------------------------------------------------------------------
+
+
+def test_member_service_crud(test_db):
+    owner = _make_user(test_db, "ms-owner@test.com")
+    ws = create_workspace(test_db, owner_id=owner.id, name="WS")
+    member = _make_user(test_db, "ms-member@test.com")
+
+    m = add_member(test_db, ws.id, member.id, "viewer")
+    assert m.role == "viewer"
+    assert get_membership(test_db, ws.id, member.id) is not None
+    assert [x.user_id for x in list_workspace_members(test_db, ws.id)] == [member.id]
+
+    update_member_role(test_db, m, "editor")
+    assert get_membership(test_db, ws.id, member.id).role == "editor"
+
+    remove_member(test_db, m)
+    assert get_membership(test_db, ws.id, member.id) is None
+    assert list_workspace_members(test_db, ws.id) == []
+
+
+def test_workspace_members_api(test_db, monkeypatch):
+    """End-to-end HTTP test of member management + require_workspace_access."""
+    monkeypatch.setattr(settings, "CLOUD_MODE", "team")
+    from core.database import get_db
+    from core.security import require_auth
+    from fastapi.testclient import TestClient
+    from main import app
+
+    owner = _make_user(test_db, "mapi-owner@test.com")
+    member = _make_user(test_db, "mapi-member@test.com")
+    workspace = create_workspace(test_db, owner_id=owner.id, name="Team")
+    base = f"/api/workspaces/{workspace.id}/members"
+
+    # A mutable holder lets us switch the acting user mid-test.
+    auth_holder = {"sub": str(owner.id), "email": owner.email}
+
+    def _override_db():
+        yield test_db
+
+    def _override_auth():
+        return auth_holder
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[require_auth] = _override_auth
+    try:
+        client = TestClient(app)
+
+        # Initially only the owner is a member.
+        resp = client.get(base)
+        assert resp.status_code == 200
+        assert [m["role"] for m in resp.json()["members"]] == ["owner"]
+
+        # Owner adds a member.
+        resp = client.post(base, json={"user_id": member.id, "role": "viewer"})
+        assert resp.status_code == 201
+        assert resp.json() == {
+            "user_id": member.id,
+            "email": member.email,
+            "role": "viewer",
+        }
+
+        # Duplicate add -> 409; adding the owner -> 400.
+        assert client.post(base, json={"user_id": member.id}).status_code == 409
+        assert (
+            client.post(base, json={"user_id": owner.id, "role": "editor"}).status_code
+            == 400
+        )
+
+        # Listing now shows owner + member.
+        resp = client.get(base)
+        assert {m["email"] for m in resp.json()["members"]} == {
+            owner.email,
+            member.email,
+        }
+
+        # Owner promotes the member to editor.
+        resp = client.patch(f"{base}/{member.id}", json={"role": "editor"})
+        assert resp.status_code == 200
+        assert resp.json()["role"] == "editor"
+
+        # A non-owner (the editor) cannot mutate members -> 403, but can list.
+        auth_holder["sub"] = str(member.id)
+        assert client.post(base, json={"user_id": owner.id}).status_code == 403
+        assert client.get(base).status_code == 200
+
+        # Owner removes the member.
+        auth_holder["sub"] = str(owner.id)
+        assert client.delete(f"{base}/{member.id}").status_code == 204
+        resp = client.get(base)
+        assert [m["role"] for m in resp.json()["members"]] == ["owner"]
     finally:
         app.dependency_overrides.clear()
