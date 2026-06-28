@@ -32,6 +32,17 @@ _INDEX_NAME = "uq_personal_workspace_per_owner"
 
 def upgrade() -> None:
     """Add a partial unique index: at most one 'Personal' workspace per owner."""
+    # Pre-clean any pre-existing duplicate Personal workspaces (created before
+    # this constraint, e.g. by a racy bootstrap) so the unique index can build.
+    # Keep the oldest (lowest id) per owner — matching get_or_create's behaviour.
+    op.execute(
+        sa.text(
+            "DELETE FROM workspaces WHERE name = 'Personal' AND id NOT IN ("
+            "  SELECT MIN(id) FROM workspaces WHERE name = 'Personal' "
+            "  GROUP BY owner_id"
+            ")"
+        )
+    )
     op.create_index(
         _INDEX_NAME,
         "workspaces",

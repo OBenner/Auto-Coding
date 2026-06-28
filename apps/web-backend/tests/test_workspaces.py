@@ -291,16 +291,20 @@ def test_workspaces_api_endpoints(test_db, monkeypatch):
         assert resp.json()["name"] == "Personal"
         assert resp.json()["role"] == "owner"
 
-        # Creating a workspace returns it with owner role.
+        # Workspace creation is team-only -> 400 in single mode.
+        resp = client.post("/api/workspaces", json={"name": "Team X"})
+        assert resp.status_code == 400
+
+        # The list still contains only the Personal workspace.
+        resp = client.get("/api/workspaces")
+        assert {w["name"] for w in resp.json()["workspaces"]} == {"Personal"}
+
+        # In team mode, creation succeeds and returns the workspace with owner role.
+        monkeypatch.setattr(settings, "CLOUD_MODE", "team")
         resp = client.post("/api/workspaces", json={"name": "Team X"})
         assert resp.status_code == 201
         assert resp.json()["name"] == "Team X"
         assert resp.json()["role"] == "owner"
-
-        # The list now contains both workspaces.
-        resp = client.get("/api/workspaces")
-        names = {w["name"] for w in resp.json()["workspaces"]}
-        assert names == {"Personal", "Team X"}
     finally:
         app.dependency_overrides.clear()
 
@@ -400,5 +404,35 @@ def test_workspace_members_api(test_db, monkeypatch):
         assert removed.status_code == 204
         resp = client.get(base)
         assert [m["role"] for m in resp.json()["members"]] == ["owner"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_member_routes_require_team_mode(test_db, monkeypatch):
+    """Member endpoints are gated to team mode (400 in single mode)."""
+    monkeypatch.setattr(settings, "CLOUD_MODE", "single")
+    from core.database import get_db
+    from core.security import require_auth
+    from fastapi.testclient import TestClient
+    from main import app
+
+    owner = _make_user(test_db, "single-gate@test.com")
+    workspace = create_workspace(test_db, owner_id=owner.id, name="Solo")
+
+    def _override_db():
+        yield test_db
+
+    def _override_auth():
+        return {"sub": str(owner.id), "email": owner.email}
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[require_auth] = _override_auth
+    try:
+        client = TestClient(app)
+        base = f"/api/workspaces/{workspace.id}/members"
+        listed = client.get(base)
+        assert listed.status_code == 400
+        added = client.post(base, json={"user_id": owner.id, "role": "viewer"})
+        assert added.status_code == 400
     finally:
         app.dependency_overrides.clear()

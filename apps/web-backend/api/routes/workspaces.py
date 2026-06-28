@@ -27,6 +27,7 @@ from services.workspace_service import (
     remove_member,
     update_member_role,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from api.models.user import User
@@ -56,6 +57,19 @@ def _require_user_id(auth: dict) -> int:
             detail="No authenticated user in token",
         )
     return int(sub)
+
+
+def require_team_mode() -> None:
+    """Reject management requests in single mode (one auto-Personal workspace).
+
+    Creating extra workspaces and managing members are team-mode features; in
+    single mode the lone Personal workspace is auto-created and not shared.
+    """
+    if settings.CLOUD_MODE != "team":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace management is only available in team mode",
+        )
 
 
 def _to_response(workspace: Workspace, role: WorkspaceRole) -> WorkspaceResponse:
@@ -108,10 +122,11 @@ async def current_workspace(
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
 async def create_workspace_endpoint(
     request: WorkspaceCreateRequest,
+    _team: None = Depends(require_team_mode),
     auth: dict = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
-    """Create a workspace owned by the caller (used in team mode)."""
+    """Create a workspace owned by the caller (team mode only)."""
     user_id = _require_user_id(auth)
     workspace = create_workspace(db, owner_id=user_id, name=request.name)
     return _to_response(workspace, WorkspaceRole.OWNER)
@@ -130,10 +145,11 @@ def _member_response(user_id: int, email: str, role: str) -> WorkspaceMemberResp
 @router.get("/{workspace_id}/members", response_model=WorkspaceMemberListResponse)
 async def list_members(
     workspace_id: int,
+    _team: None = Depends(require_team_mode),
     _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.VIEWER)),
     db: Session = Depends(get_db),
 ):
-    """List a workspace's members (owner first). Requires >= viewer access."""
+    """List a workspace's members (owner first). Team mode; requires >= viewer."""
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if workspace is None:
         raise HTTPException(
@@ -155,10 +171,11 @@ async def list_members(
 async def add_workspace_member(
     workspace_id: int,
     request: WorkspaceMemberAddRequest,
+    _team: None = Depends(require_team_mode),
     _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.OWNER)),
     db: Session = Depends(get_db),
 ):
-    """Add a member to a workspace. Requires owner access."""
+    """Add a member to a workspace. Team mode; requires owner access."""
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if workspace is None:
         raise HTTPException(
@@ -178,7 +195,14 @@ async def add_workspace_member(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="User is already a member"
         )
-    membership = add_member(db, workspace_id, request.user_id, request.role)
+    try:
+        membership = add_member(db, workspace_id, request.user_id, request.role)
+    except IntegrityError:
+        # Lost a race against a concurrent add (uq_workspace_user); return 409.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User is already a member"
+        ) from None
     return _member_response(membership.user_id, user.email, membership.role)
 
 
@@ -189,10 +213,11 @@ async def update_workspace_member(
     workspace_id: int,
     user_id: int,
     request: WorkspaceMemberUpdateRequest,
+    _team: None = Depends(require_team_mode),
     _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.OWNER)),
     db: Session = Depends(get_db),
 ):
-    """Change a member's role. Requires owner access."""
+    """Change a member's role. Team mode; requires owner access."""
     membership = get_membership(db, workspace_id, user_id)
     if membership is None:
         raise HTTPException(
@@ -208,6 +233,7 @@ async def update_workspace_member(
 async def remove_workspace_member(
     workspace_id: int,
     user_id: int,
+    _team: None = Depends(require_team_mode),
     _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.OWNER)),
     db: Session = Depends(get_db),
 ):
