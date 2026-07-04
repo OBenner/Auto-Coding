@@ -16,6 +16,7 @@ import fakeredis
 import pytest
 from api.models.agent_execution import AgentExecution  # noqa: F401
 from api.models.repository import GitRepository  # noqa: F401
+from api.models.spec_record import SpecAuditEntry, SpecRecord  # noqa: F401
 
 # Import all models so Base.metadata knows about all tables
 # These imports register models with SQLAlchemy Base.metadata
@@ -31,7 +32,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-__all__ = ["User", "GitRepository", "Workspace", "WorkspaceUser", "AgentExecution"]
+__all__ = [
+    "User",
+    "GitRepository",
+    "Workspace",
+    "WorkspaceUser",
+    "AgentExecution",
+    "SpecRecord",
+    "SpecAuditEntry",
+]
 
 
 @pytest.fixture(scope="session", autouse=True)
