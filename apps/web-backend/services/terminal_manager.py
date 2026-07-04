@@ -53,6 +53,7 @@ class TerminalSession:
         env: dict[str, str] | None = None,
         rows: int = 24,
         cols: int = 80,
+        owner: str | None = None,
     ):
         """
         Initialize a terminal session.
@@ -64,9 +65,12 @@ class TerminalSession:
             env: Optional dictionary of environment variables
             rows: Initial terminal rows
             cols: Initial terminal columns
+            owner: Identity (token ``sub``) that created the session; attaching
+                from another identity is rejected (cloud isolation, C5)
         """
         self.session_id = session_id
         self.working_dir = working_dir
+        self.owner = owner
 
         # Determine default shell based on platform
         if shell is None:
@@ -368,6 +372,7 @@ class TerminalManager:
         env: dict[str, str] | None = None,
         rows: int = 24,
         cols: int = 80,
+        owner: str | None = None,
     ) -> TerminalSession | None:
         """
         Create a new terminal session.
@@ -379,6 +384,7 @@ class TerminalManager:
             env: Optional environment variables
             rows: Initial terminal rows
             cols: Initial terminal columns
+            owner: Identity (token ``sub``) the session belongs to
 
         Returns:
             TerminalSession object if created successfully, None otherwise
@@ -403,6 +409,7 @@ class TerminalManager:
             env=env,
             rows=rows,
             cols=cols,
+            owner=owner,
         )
 
         # Note: start() is async, but we call it synchronously here

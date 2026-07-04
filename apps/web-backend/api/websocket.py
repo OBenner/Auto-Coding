@@ -449,18 +449,38 @@ async def terminal_websocket(websocket: WebSocket):
     # Accept the WebSocket connection
     await websocket.accept()
 
+    # Terminal isolation (C5): sessions are namespaced per identity, so the
+    # same client-facing session_id never collides across users, and attaching
+    # to another identity's live PTY is impossible by construction.
+    owner = str(user_claims.get("sub", "unknown"))
+    scoped_session_id = f"{owner}:{session_id}"
+
     # Get or create terminal session
-    session = terminal_manager.get_session(session_id)
+    session = terminal_manager.get_session(scoped_session_id)
+    if session is not None and session.owner != owner:
+        # Defense-in-depth: reject sessions created under another identity
+        # (only reachable if some other code path seeds arbitrary session ids).
+        await websocket.send_json(
+            {"type": "error", "message": "Terminal session belongs to another user"}
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.warning(
+            "Terminal session ownership mismatch: session=%s user=%s",
+            _sanitize_log(scoped_session_id),
+            _sanitize_log(owner),
+        )
+        return
     if not session:
         # Use the current working directory as the project root; ignore any
         # working_dir claim from the JWT to prevent path traversal via crafted tokens.
         working_dir = os.getcwd()
         session = terminal_manager.create_session(
-            session_id=session_id,
+            session_id=scoped_session_id,
             working_dir=working_dir,
             shell=os.environ.get("SHELL", "/bin/bash"),  # nosec B604 - Intentional: terminal feature requires shell
             rows=24,
             cols=80,
+            owner=owner,
         )
 
         if not session:
@@ -562,8 +582,8 @@ async def terminal_websocket(websocket: WebSocket):
         except Exception:  # nosec B110 - Cleanup handler: ignore send errors on disconnect
             pass
 
-        # Clean up session
-        terminal_manager.close_session(session_id)
+        # Clean up session (namespaced key)
+        terminal_manager.close_session(scoped_session_id)
 
 
 async def _read_terminal_output(session, websocket: WebSocket):
