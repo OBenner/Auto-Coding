@@ -92,7 +92,17 @@ app.add_middleware(
 )
 
 # Import and register API routes
-from api.routes import agents, auth, files, git, specs, tasks, usage, users
+from api.routes import (
+    agents,
+    auth,
+    files,
+    git,
+    specs,
+    tasks,
+    usage,
+    users,
+    workspaces,
+)
 from api.websocket import router as websocket_router
 
 app.include_router(agents.router)
@@ -103,6 +113,7 @@ app.include_router(specs.router)
 app.include_router(tasks.router)
 app.include_router(usage.router)
 app.include_router(users.router)
+app.include_router(workspaces.router)
 app.include_router(websocket_router)
 
 # Only expose test routes in debug/development mode

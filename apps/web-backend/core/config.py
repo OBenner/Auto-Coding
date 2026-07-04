@@ -29,6 +29,10 @@ class Settings:
         self.PORT: int = int(os.getenv("PORT", "8000"))
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
+        # Cloud deployment mode: "single" (one auto-created "Personal" workspace
+        # per user) or "team" (many workspaces, explicit workspace_id per request).
+        self.CLOUD_MODE: str = os.getenv("CLOUD_MODE", "single").strip().lower()
+
         # CORS configuration
         cors_origins = os.getenv("CORS_ORIGINS", "")
         self.CORS_ORIGINS: list[str] = [
@@ -91,6 +95,10 @@ class Settings:
             raise ValueError(
                 "SECRET_KEY must be set to a secure value in production. "
                 "Set DEBUG=false only when SECRET_KEY is properly configured."
+            )
+        if self.CLOUD_MODE not in ("single", "team"):
+            raise ValueError(
+                f"CLOUD_MODE must be 'single' or 'team', got {self.CLOUD_MODE!r}."
             )
 
 

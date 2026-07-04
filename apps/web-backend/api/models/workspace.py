@@ -8,16 +8,20 @@ core/permissions.py.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from core.database import Base
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import (
     CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -26,6 +30,18 @@ class Workspace(Base):
     """A tenant boundary owning specs/runs/repositories, with role-based members."""
 
     __tablename__ = "workspaces"
+    __table_args__ = (
+        # At most one "Personal" workspace per owner (partial unique index) — this
+        # makes get_or_create_personal_workspace race-safe under concurrent
+        # register/login. Other workspace names are unconstrained.
+        Index(
+            "uq_personal_workspace_per_owner",
+            "owner_id",
+            unique=True,
+            sqlite_where=text("name = 'Personal'"),
+            postgresql_where=text("name = 'Personal'"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
@@ -89,3 +105,63 @@ class WorkspaceUser(Base):
             f"<WorkspaceUser(workspace_id={self.workspace_id}, "
             f"user_id={self.user_id}, role={self.role!r})>"
         )
+
+
+# Pydantic models for API requests and responses
+
+
+class WorkspaceCreateRequest(BaseModel):
+    """Request model for creating a workspace (team mode)."""
+
+    name: str = Field(..., min_length=1, max_length=255, description="Workspace name")
+
+
+class WorkspaceResponse(BaseModel):
+    """Response model for a workspace, including the caller's role in it."""
+
+    id: int = Field(..., description="Workspace ID")
+    name: str = Field(..., description="Workspace name")
+    role: str = Field(..., description="Caller's role: owner/editor/viewer")
+    created_at: datetime = Field(..., description="Creation timestamp")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceListResponse(BaseModel):
+    """Response model for the list of workspaces the caller can access."""
+
+    workspaces: list[WorkspaceResponse] = Field(
+        default_factory=list, description="Accessible workspaces"
+    )
+    cloud_mode: str = Field(..., description="Deployment mode: single or team")
+
+
+class WorkspaceMemberAddRequest(BaseModel):
+    """Request model for adding a member to a workspace."""
+
+    user_id: int = Field(..., description="Id of the user to add")
+    role: Literal["owner", "editor", "viewer"] = Field(
+        "viewer", description="Role to grant"
+    )
+
+
+class WorkspaceMemberUpdateRequest(BaseModel):
+    """Request model for changing a member's role."""
+
+    role: Literal["owner", "editor", "viewer"] = Field(..., description="New role")
+
+
+class WorkspaceMemberResponse(BaseModel):
+    """Response model for a single workspace member."""
+
+    user_id: int = Field(..., description="Member user id")
+    email: str = Field(..., description="Member email")
+    role: str = Field(..., description="Member role: owner/editor/viewer")
+
+
+class WorkspaceMemberListResponse(BaseModel):
+    """Response model for the members of a workspace."""
+
+    members: list[WorkspaceMemberResponse] = Field(
+        default_factory=list, description="Workspace members (owner first)"
+    )
