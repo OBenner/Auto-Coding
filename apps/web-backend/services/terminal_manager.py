@@ -459,6 +459,43 @@ class TerminalManager:
         """
         return list(self.sessions.keys())
 
+    def list_sessions_for_owner(self, owner: str) -> list[dict]:
+        """List metadata for the sessions owned by ``owner`` (C5).
+
+        Session keys are namespaced ``{owner}:{client_session_id}``; this returns
+        the client-facing id (prefix stripped) plus liveness/geometry so a user
+        can see only their own terminals.
+        """
+        prefix = f"{owner}:"
+        sessions = []
+        for key, session in self.sessions.items():
+            if session.owner != owner:
+                continue
+            client_id = key[len(prefix):] if key.startswith(prefix) else key
+            sessions.append(
+                {
+                    "session_id": client_id,
+                    "alive": session.is_alive(),
+                    "working_dir": session.working_dir,
+                    "rows": session.rows,
+                    "cols": session.cols,
+                }
+            )
+        return sessions
+
+    def close_session_for_owner(self, owner: str, session_id: str) -> bool:
+        """Close ``owner``'s session by client-facing id. True if one was closed.
+
+        The lookup key is rebuilt from ``owner``, so a caller can only ever close
+        a session they own; the explicit owner check is defense-in-depth.
+        """
+        key = f"{owner}:{session_id}"
+        session = self.sessions.get(key)
+        if session is None or session.owner != owner:
+            return False
+        self.close_session(key)
+        return True
+
 
 # Global terminal manager instance
 terminal_manager = TerminalManager()
