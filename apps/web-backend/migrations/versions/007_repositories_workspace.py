@@ -44,6 +44,20 @@ def upgrade() -> None:
         )
         batch_op.create_index(_IX_NAME, ["workspace_id"], unique=False)
 
+    # Defensive backfill: no code path ever wrote to this table before C6, but
+    # if rows exist (manual/out-of-band inserts), attach them to their owner's
+    # Personal workspace so they stay visible through the workspace-scoped API.
+    # Rows whose owner has no Personal workspace keep NULL (same visibility as
+    # before this migration: none — there was no listing endpoint).
+    op.execute(
+        sa.text(
+            "UPDATE repositories SET workspace_id = ("
+            "  SELECT w.id FROM workspaces w"
+            "  WHERE w.owner_id = repositories.user_id AND w.name = 'Personal'"
+            ") WHERE workspace_id IS NULL"
+        )
+    )
+
 
 def downgrade() -> None:
     """Drop the workspace scoping column."""
