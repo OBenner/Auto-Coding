@@ -19,14 +19,16 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
-# Closed set, mirrored as a DB CHECK constraint below.
+# Closed set; the DB CHECK constraint below is derived from it (no drift).
 AUDIT_ACTIONS = ("created", "updated", "deleted")
+_AUDIT_ACTIONS_SQL = ", ".join(f"'{action}'" for action in AUDIT_ACTIONS)
 
 
 class SpecRecord(Base):
@@ -85,9 +87,12 @@ class SpecAuditEntry(Base):
     __tablename__ = "spec_audit_entries"
     __table_args__ = (
         CheckConstraint(
-            "action IN ('created', 'updated', 'deleted')",
+            f"action IN ({_AUDIT_ACTIONS_SQL})",
             name="ck_spec_audit_action",
         ),
+        # Composite index: the audit API reads WHERE spec_record_id=? ORDER BY
+        # id DESC — this serves both the filter and the newest-first order.
+        Index("ix_spec_audit_record_newest", "spec_record_id", "id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -95,7 +100,6 @@ class SpecAuditEntry(Base):
         Integer,
         ForeignKey("spec_records.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     action = Column(String(20), nullable=False)
     # Human-readable change summary, e.g. "status: in_progress -> complete".
