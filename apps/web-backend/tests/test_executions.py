@@ -253,7 +253,7 @@ def test_run_agent_team_mode_requires_workspace(test_db, monkeypatch):
     """Team mode: workspace_id required (400) and access enforced (403)."""
     monkeypatch.setattr(settings, "CLOUD_MODE", "team")
     user = _make_user(test_db, "exec-team@test.com")
-    outsider, foreign_ws = _make_workspace(test_db, "exec-team-owner@test.com")
+    _, foreign_ws = _make_workspace(test_db, "exec-team-owner@test.com")
 
     app, client = _client_as(test_db, user)
     try:

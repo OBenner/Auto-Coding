@@ -59,6 +59,9 @@ from core import sanitize_log as _sanitize_log
 
 from services.execution_log import record_execution_result
 
+# Shared failure message (broadcast, run record, and API result must agree).
+_PLANNER_FAILED = "Planner execution failed"
+
 # Keep track of running agent tasks
 _running_tasks: dict[str, asyncio.Task] = {}
 
@@ -212,14 +215,14 @@ async def run_agent_async(
                         phase="failed",
                         phase_progress=0.0,
                         overall_progress=0.0,
-                        message="Planner execution failed",
+                        message=_PLANNER_FAILED,
                         current_subtask=None,
                     )
 
             record_execution_result(
                 execution_id,
                 "completed" if success else "failed",
-                None if success else "Planner execution failed",
+                None if success else _PLANNER_FAILED,
             )
             return {
                 "success": success,
@@ -227,7 +230,7 @@ async def run_agent_async(
                 "spec_id": canonical_spec_id,
                 "message": "Planner execution completed"
                 if success
-                else "Planner execution failed",
+                else _PLANNER_FAILED,
             }
 
         elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
