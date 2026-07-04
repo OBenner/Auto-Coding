@@ -12,6 +12,7 @@ import logging
 from datetime import UTC, datetime
 
 from api.models.spec_record import SpecAuditEntry, SpecRecord
+from core import sanitize_log
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,46 @@ def _audit(db: Session, record: SpecRecord, action: str, detail: str | None) -> 
     db.add(
         SpecAuditEntry(spec_record_id=record.id, action=action, detail=detail)
     )
+
+
+def _normalized(spec: dict, field: str):
+    """Normalize one FS-listing value to the SpecRecord column type."""
+    value = spec.get(field)
+    if field == "has_build":
+        return bool(value)
+    return str(value if value is not None else "")
+
+
+def _create_record(
+    db: Session, workspace_id: int, spec: dict, now: datetime
+) -> SpecRecord:
+    """Insert a new SpecRecord from an FS listing entry (audited as 'created')."""
+    record = SpecRecord(
+        workspace_id=workspace_id,
+        folder=spec["folder"],
+        number=_normalized(spec, "number"),
+        name=_normalized(spec, "name"),
+        status=_normalized(spec, "status"),
+        progress=_normalized(spec, "progress"),
+        has_build=_normalized(spec, "has_build"),
+        last_synced_at=now,
+    )
+    db.add(record)
+    db.flush()  # assign record.id for the audit row
+    _audit(db, record, "created", None)
+    return record
+
+
+def _apply_field_changes(record: SpecRecord, spec: dict) -> list[str]:
+    """Copy changed mirrored fields onto the record; return change summaries."""
+    changes: list[str] = []
+    for field in _MIRRORED_FIELDS:
+        new_value = _normalized(spec, field)
+        old_value = getattr(record, field)
+        if old_value != new_value:
+            changes.append(f"{field}: {old_value} -> {new_value}")
+            setattr(record, field, new_value)
+    return changes
 
 
 def sync_specs_index(
@@ -54,33 +95,11 @@ def sync_specs_index(
         record = existing.get(folder)
 
         if record is None:
-            record = SpecRecord(
-                workspace_id=workspace_id,
-                folder=folder,
-                number=str(spec.get("number", "")),
-                name=str(spec.get("name", "")),
-                status=str(spec.get("status", "")),
-                progress=str(spec.get("progress", "")),
-                has_build=bool(spec.get("has_build", False)),
-                last_synced_at=now,
-            )
-            db.add(record)
-            db.flush()  # assign record.id for the audit row
-            _audit(db, record, "created", None)
+            _create_record(db, workspace_id, spec, now)
             counters["created"] += 1
             continue
 
-        changes: list[str] = []
-        for field in _MIRRORED_FIELDS:
-            new_value = spec.get(field)
-            if field == "has_build":
-                new_value = bool(new_value)
-            else:
-                new_value = str(new_value if new_value is not None else "")
-            old_value = getattr(record, field)
-            if old_value != new_value:
-                changes.append(f"{field}: {old_value} -> {new_value}")
-                setattr(record, field, new_value)
+        changes = _apply_field_changes(record, spec)
 
         if record.deleted_at is not None:
             # The folder reappeared on the FS after being deleted.
@@ -114,8 +133,11 @@ def sync_specs_index_safely(
         sync_specs_index(db, workspace_id, specs)
     except Exception:
         db.rollback()
+        # workspace_id is request-derived; sanitize before logging (CodeQL).
         logger.warning(
-            "Spec index sync failed for workspace %s", workspace_id, exc_info=True
+            "Spec index sync failed for workspace %s",
+            sanitize_log(str(workspace_id)),
+            exc_info=True,
         )
 
 
