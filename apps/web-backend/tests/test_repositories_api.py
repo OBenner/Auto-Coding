@@ -31,13 +31,15 @@ def _make_workspace(db, email: str):
     return user, create_workspace(db, owner_id=user.id, name="WS")
 
 
-def _request(name="auto-code", token="oauth-secret-token"):
+def _request(name="auto-code", token=None):
+    # Random throwaway token (never a literal): Sonar S6418 reads hard-coded
+    # defaults as secrets, and these tests only need *a* value to track.
     return RepositoryCreateRequest(
         provider="github",
         repository_url=f"https://github.com/acme/{name}",
         repository_name=name,
         repository_owner="acme",
-        access_token=token,
+        access_token=token or f"tok-{secrets.token_hex(12)}",
     )
 
 
@@ -80,12 +82,13 @@ def test_repositories_api_lifecycle_single_mode(test_db, monkeypatch):
 
     app, client = _client_as(test_db, user)
     try:
+        secret = f"tok-{secrets.token_hex(12)}"
         body = {
             "provider": "github",
             "repository_url": "https://github.com/acme/auto-code",
             "repository_name": "auto-code",
             "repository_owner": "acme",
-            "access_token": "oauth-secret-token",
+            "access_token": secret,
         }
         created = client.post("/api/repositories", json=body)
         assert created.status_code == 201
@@ -95,12 +98,12 @@ def test_repositories_api_lifecycle_single_mode(test_db, monkeypatch):
         # No token material in any response.
         assert "access_token" not in payload
         assert "refresh_token" not in payload
-        assert "oauth-secret-token" not in created.text
+        assert secret not in created.text
 
         listed = client.get("/api/repositories")
         assert listed.status_code == 200
         assert [r["id"] for r in listed.json()["repositories"]] == [payload["id"]]
-        assert "oauth-secret-token" not in listed.text
+        assert secret not in listed.text
 
         deleted = client.delete(f"/api/repositories/{payload['id']}")
         assert deleted.status_code == 204
@@ -156,7 +159,7 @@ def test_repositories_api_viewer_cannot_mutate(test_db, monkeypatch):
             "repository_url": "https://github.com/acme/x",
             "repository_name": "x",
             "repository_owner": "acme",
-            "access_token": "t",
+            "access_token": f"tok-{secrets.token_hex(4)}",
         }
         assert (
             client.post(f"/api/repositories?workspace_id={ws.id}", json=body)
