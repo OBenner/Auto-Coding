@@ -94,10 +94,11 @@ def upgrade() -> None:
             name="ck_spec_audit_action",
         ),
     )
+    # Composite: serves both the spec filter and the newest-first (id DESC) order.
     op.create_index(
-        op.f("ix_spec_audit_entries_spec_record_id"),
+        "ix_spec_audit_record_newest",
         "spec_audit_entries",
-        ["spec_record_id"],
+        ["spec_record_id", "id"],
         unique=False,
     )
 
@@ -105,7 +106,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Drop spec_audit_entries and spec_records."""
     op.drop_index(
-        op.f("ix_spec_audit_entries_spec_record_id"),
+        "ix_spec_audit_record_newest",
         table_name="spec_audit_entries",
     )
     op.drop_table("spec_audit_entries")

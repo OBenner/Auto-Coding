@@ -100,6 +100,7 @@ from api.routes import (
     git,
     specs,
     tasks,
+    terminals,
     usage,
     users,
     workspaces,
@@ -113,6 +114,7 @@ app.include_router(files.router)
 app.include_router(git.router)
 app.include_router(specs.router)
 app.include_router(tasks.router)
+app.include_router(terminals.router)
 app.include_router(usage.router)
 app.include_router(users.router)
 app.include_router(workspaces.router)
