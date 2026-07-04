@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 
 from core.config import settings
 from core.database import get_db
-from core.permissions import WorkspaceRole, check_workspace_access
+from core.permissions import WorkspaceRole, check_workspace_access, current_user_id
 from core.security import require_auth
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -44,10 +44,9 @@ def _resolve_execution_context(
     run to the caller's Personal workspace; team mode requires ``workspace_id``
     in the request body and >= editor access.
     """
-    sub = auth.get("sub")
-    if sub is None or not str(sub).isdigit():
+    user_id = current_user_id(auth)
+    if user_id is None:
         return None, None
-    user_id = int(sub)
 
     if settings.CLOUD_MODE == "single":
         workspace = get_or_create_personal_workspace(db, user_id)

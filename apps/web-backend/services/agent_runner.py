@@ -219,7 +219,9 @@ async def run_agent_async(
                         current_subtask=None,
                     )
 
-            record_execution_result(
+            # Offload the blocking DB write so it doesn't stall the event loop.
+            await asyncio.to_thread(
+                record_execution_result,
                 execution_id,
                 "completed" if success else "failed",
                 None if success else _PLANNER_FAILED,
@@ -260,7 +262,7 @@ async def run_agent_async(
                     current_subtask=None,
                 )
 
-            record_execution_result(execution_id, "completed")
+            await asyncio.to_thread(record_execution_result, execution_id, "completed")
             return {
                 "success": True,
                 "agent_type": agent_type,
@@ -273,7 +275,9 @@ async def run_agent_async(
 
     except asyncio.CancelledError:
         # Task cancelled via cancel_task(): persist the terminal state, then
-        # re-raise so asyncio cancellation semantics are preserved.
+        # re-raise so asyncio cancellation semantics are preserved. Kept
+        # synchronous on purpose — awaiting here could be interrupted by a
+        # second cancellation and lose the write; the brief block is acceptable.
         record_execution_result(execution_id, "cancelled")
         raise
     except Exception as e:
@@ -291,7 +295,7 @@ async def run_agent_async(
                 traceback=None,
             )
 
-        record_execution_result(execution_id, "failed", str(e))
+        await asyncio.to_thread(record_execution_result, execution_id, "failed", str(e))
         return {
             "success": False,
             "agent_type": agent_type,

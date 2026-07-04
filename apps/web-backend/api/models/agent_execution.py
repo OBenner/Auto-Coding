@@ -64,8 +64,12 @@ class AgentExecution(Base):
     status = Column(String(20), nullable=False, default="running")
     error = Column(Text, nullable=True)
 
-    started_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    finished_at = Column(DateTime, nullable=True)
+    # timezone=True: values are written as aware-UTC; naive columns would drop
+    # the offset on round-trip (matters on Postgres).
+    started_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+    finished_at = Column(DateTime(timezone=True), nullable=True)
 
     workspace = relationship("Workspace")
     user = relationship("User")
