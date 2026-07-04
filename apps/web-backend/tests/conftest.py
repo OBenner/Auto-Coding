@@ -14,6 +14,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import fakeredis
 import pytest
+from api.models.agent_execution import AgentExecution  # noqa: F401
 from api.models.repository import GitRepository  # noqa: F401
 
 # Import all models so Base.metadata knows about all tables
@@ -30,7 +31,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-__all__ = ["User", "GitRepository", "Workspace", "WorkspaceUser"]
+__all__ = ["User", "GitRepository", "Workspace", "WorkspaceUser", "AgentExecution"]
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -57,6 +57,8 @@ async def _noop_broadcast(*args, **kwargs):
 
 from core import sanitize_log as _sanitize_log
 
+from services.execution_log import record_execution_result
+
 # Keep track of running agent tasks
 _running_tasks: dict[str, asyncio.Task] = {}
 
@@ -93,6 +95,7 @@ async def run_agent_async(
     project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
+    execution_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Run an agent asynchronously.
@@ -103,6 +106,8 @@ async def run_agent_async(
         project_dir: Project directory (defaults to parent of web-backend)
         model: Claude model to use
         verbose: Enable verbose output
+        execution_id: Optional AgentExecution record id; when set, the run's
+            terminal status is persisted to it (best-effort, own DB session)
 
     Returns:
         Dict with execution result
@@ -211,6 +216,11 @@ async def run_agent_async(
                         current_subtask=None,
                     )
 
+            record_execution_result(
+                execution_id,
+                "completed" if success else "failed",
+                None if success else "Planner execution failed",
+            )
             return {
                 "success": success,
                 "agent_type": agent_type,
@@ -247,6 +257,7 @@ async def run_agent_async(
                     current_subtask=None,
                 )
 
+            record_execution_result(execution_id, "completed")
             return {
                 "success": True,
                 "agent_type": agent_type,
@@ -257,6 +268,11 @@ async def run_agent_async(
         else:
             raise ValueError(f"Unsupported agent type: {agent_type}")
 
+    except asyncio.CancelledError:
+        # Task cancelled via cancel_task(): persist the terminal state, then
+        # re-raise so asyncio cancellation semantics are preserved.
+        record_execution_result(execution_id, "cancelled")
+        raise
     except Exception as e:
         logger.error(f"Agent execution failed: {e}", exc_info=True)
 
@@ -272,6 +288,7 @@ async def run_agent_async(
                 traceback=None,
             )
 
+        record_execution_result(execution_id, "failed", str(e))
         return {
             "success": False,
             "agent_type": agent_type,
@@ -287,6 +304,7 @@ def start_agent_task(
     project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
+    execution_id: int | None = None,
 ) -> str:
     """
     Start an agent task in the background.
@@ -297,6 +315,7 @@ def start_agent_task(
         project_dir: Project directory
         model: Claude model to use
         verbose: Enable verbose output
+        execution_id: Optional AgentExecution record id to finish when the run ends
 
     Returns:
         Task ID for tracking
@@ -320,6 +339,7 @@ def start_agent_task(
             project_dir=project_dir,
             model=model,
             verbose=verbose,
+            execution_id=execution_id,
         )
     )
 
