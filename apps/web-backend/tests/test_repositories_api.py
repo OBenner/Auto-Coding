@@ -161,11 +161,13 @@ def test_repositories_api_viewer_cannot_mutate(test_db, monkeypatch):
             "repository_owner": "acme",
             "access_token": f"tok-{secrets.token_hex(4)}",
         }
-        assert (
-            client.post(f"/api/repositories?workspace_id={ws.id}", json=body)
-        ).status_code == 403
-        assert (
-            client.delete(f"/api/repositories/{linked.id}?workspace_id={ws.id}")
-        ).status_code == 403
+        denied_link = client.post(
+            f"/api/repositories?workspace_id={ws.id}", json=body
+        )
+        assert denied_link.status_code == 403
+        denied_unlink = client.delete(
+            f"/api/repositories/{linked.id}?workspace_id={ws.id}"
+        )
+        assert denied_unlink.status_code == 403
     finally:
         app.dependency_overrides.clear()
