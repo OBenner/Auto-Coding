@@ -98,6 +98,7 @@ from api.routes import (
     executions,
     files,
     git,
+    repositories,
     specs,
     tasks,
     terminals,
@@ -112,6 +113,7 @@ app.include_router(auth.router)
 app.include_router(executions.router)
 app.include_router(files.router)
 app.include_router(git.router)
+app.include_router(repositories.router)
 app.include_router(specs.router)
 app.include_router(tasks.router)
 app.include_router(terminals.router)
