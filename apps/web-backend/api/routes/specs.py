@@ -72,8 +72,8 @@ def _resolve_index_workspace(
 
 @router.get("", response_model=SpecListResponse, status_code=status.HTTP_200_OK)
 def list_specs_endpoint(
-    auth: Annotated[dict, Depends(require_auth)],
-    db: Annotated[Session, Depends(get_db)],
+    auth: dict = Depends(require_auth),
+    db: Session = Depends(get_db),
     workspace_id: int | None = Query(
         None, description="Workspace for the spec index sync (team mode)"
     ),
