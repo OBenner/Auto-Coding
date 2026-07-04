@@ -10,7 +10,9 @@ from services.terminal_manager import TerminalManager
 
 
 class _FakeSession:
-    def __init__(self, owner, working_dir="/tmp", rows=24, cols=80, alive=True):
+    # working_dir is a plain placeholder string (no FS access in these tests);
+    # avoid "/tmp" so Sonar S5443 doesn't read it as world-writable dir usage.
+    def __init__(self, owner, working_dir="/project", rows=24, cols=80, alive=True):
         self.owner = owner
         self.working_dir = working_dir
         self.rows = rows
