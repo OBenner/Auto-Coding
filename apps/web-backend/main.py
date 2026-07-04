@@ -95,6 +95,7 @@ app.add_middleware(
 from api.routes import (
     agents,
     auth,
+    executions,
     files,
     git,
     specs,
@@ -107,6 +108,7 @@ from api.websocket import router as websocket_router
 
 app.include_router(agents.router)
 app.include_router(auth.router)
+app.include_router(executions.router)
 app.include_router(files.router)
 app.include_router(git.router)
 app.include_router(specs.router)

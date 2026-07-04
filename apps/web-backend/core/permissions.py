@@ -85,8 +85,12 @@ def check_workspace_access(
     return role is not None and role_satisfies(role, required_role)
 
 
-def _current_user_id(auth: dict) -> int | None:
-    """Extract the integer user id from JWT claims (``sub`` is ``str(user.id)``)."""
+def current_user_id(auth: dict) -> int | None:
+    """Extract the integer user id from JWT claims (``sub`` is ``str(user.id)``).
+
+    Returns None for legacy/service tokens whose ``sub`` is not numeric — the
+    single place that encodes this rule; routes must reuse it, not re-parse.
+    """
     sub = auth.get("sub")
     return int(sub) if sub is not None and str(sub).isdigit() else None
 
@@ -104,7 +108,7 @@ def require_workspace_access(required_role: WorkspaceRole = WorkspaceRole.VIEWER
         auth: dict = Depends(require_auth),
         db: Session = Depends(get_db),
     ) -> WorkspaceRole:
-        user_id = _current_user_id(auth)
+        user_id = current_user_id(auth)
         role = (
             user_role_in_workspace(db, user_id, workspace_id)
             if user_id is not None
@@ -134,7 +138,7 @@ def get_current_workspace(
 
     Returns the resolved ``Workspace`` ORM object.
     """
-    user_id = _current_user_id(auth)
+    user_id = current_user_id(auth)
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

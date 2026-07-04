@@ -60,7 +60,9 @@ async def test_run_agent_success(
         return tmp_path
 
     # Mock start_agent_task to return task_id without actually starting
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         return f"{spec_id}:{agent_type}"
 
     # Mock cleanup
@@ -104,7 +106,9 @@ async def test_run_agent_spec_not_found(
         return tmp_path / "nonexistent"
 
     # Mock start_agent_task to raise FileNotFoundError
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         raise FileNotFoundError(f"Spec not found: {spec_id}")
 
     import api.routes.agents as agents_module
@@ -134,7 +138,9 @@ async def test_run_agent_already_running(
         return tmp_path
 
     # Mock start_agent_task to raise RuntimeError
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         raise RuntimeError(f"Agent task already running for spec {spec_id}")
 
     import api.routes.agents as agents_module
@@ -164,7 +170,9 @@ async def test_run_agent_invalid_agent_type(
         return tmp_path
 
     # Mock start_agent_task to raise ValueError
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         raise ValueError(f"Invalid agent_type: {agent_type}")
 
     import api.routes.agents as agents_module
@@ -197,7 +205,9 @@ async def test_run_agent_all_agent_types(
     def mock_get_project_dir():
         return tmp_path
 
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         return f"{spec_id}:{agent_type}"
 
     def mock_cleanup():
@@ -240,7 +250,9 @@ async def test_run_agent_with_custom_model(
 
     captured: dict[str, object] = {"model": None}
 
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         captured["model"] = model
         return f"{spec_id}:{agent_type}"
 
@@ -578,7 +590,9 @@ async def test_run_agent_server_error(
         return tmp_path
 
     # Mock start_agent_task to raise unexpected error (use OSError to trigger 500 handler)
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         raise OSError("Unexpected server error")
 
     import api.routes.agents as agents_module
@@ -613,7 +627,9 @@ async def test_run_agent_with_spec_folder_name(
     def mock_get_project_dir():
         return tmp_path
 
-    def mock_start_agent_task(spec_id, agent_type, project_dir, model, verbose):
+    def mock_start_agent_task(
+        spec_id, agent_type, project_dir, model, verbose, execution_id=None
+    ):
         return f"{spec_id}:{agent_type}"
 
     def mock_cleanup():
