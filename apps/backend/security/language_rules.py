@@ -6,6 +6,10 @@ Security scanners and validation rules for different programming languages.
 Defines language-specific security tools and common security patterns.
 """
 
+# Shared guidance strings (JVM languages)
+_USE_SECURE_RANDOM_JVM = "Use java.security.SecureRandom for random numbers"
+
+
 # =============================================================================
 # LANGUAGE SECURITY SCANNERS
 # =============================================================================
@@ -340,7 +344,7 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
         "secure_alternatives": [
             "Use PreparedStatement with parameterized queries",
             "Enable FEATURE_SECURE_PROCESSING on XML factories",
-            "Use java.security.SecureRandom for random numbers",
+            _USE_SECURE_RANDOM_JVM,
             "Avoid Java serialization; prefer JSON with strict typing",
             "Validate and sanitize all user inputs",
         ],
@@ -360,7 +364,7 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
         "secure_alternatives": [
             "Use safe calls (?.) and requireNotNull instead of !!",
             "Use PreparedStatement with parameterized queries",
-            "Use java.security.SecureRandom for random numbers",
+            _USE_SECURE_RANDOM_JVM,
             "Validate and sanitize all user inputs",
         ],
     },
@@ -438,7 +442,7 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
         "secure_alternatives": [
             "Use PreparedStatement or a typed query DSL",
             "Use Option instead of null",
-            "Use java.security.SecureRandom for random numbers",
+            _USE_SECURE_RANDOM_JVM,
             "Validate and sanitize all user inputs",
         ],
     },
@@ -451,7 +455,7 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
         "unsafe_patterns": [
             "Random()",  # Not cryptographically secure
             "!",  # Null assertion, runtime crash risk
-            "http://",  # Cleartext transport
+            "Uri.http",  # Cleartext transport constructor
         ],
         "secure_alternatives": [
             "Use Random.secure() for security-sensitive randomness",

@@ -697,24 +697,7 @@ class SecurityScanner:
             if proc.stdout:
                 try:
                     osv_output = json.loads(proc.stdout)
-                    for scan_result in osv_output.get("results", []):
-                        source = scan_result.get("source", {}).get("path", "")
-                        for package in scan_result.get("packages", []):
-                            pkg_info = package.get("package", {})
-                            for vuln in package.get("vulnerabilities", []):
-                                result.vulnerabilities.append(
-                                    SecurityVulnerability(
-                                        severity="high",
-                                        source="osv_scanner",
-                                        title=(
-                                            f"Vulnerable dependency: "
-                                            f"{pkg_info.get('name', '?')} "
-                                            f"({vuln.get('id', '?')})"
-                                        ),
-                                        description=vuln.get("summary", ""),
-                                        file=Path(source).name if source else None,
-                                    )
-                                )
+                    self._parse_osv_output(osv_output, result)
                 except json.JSONDecodeError:
                     result.scan_errors.append("Failed to parse osv-scanner output")
 
@@ -724,6 +707,29 @@ class SecurityScanner:
             result.scan_errors.append("osv-scanner timed out")
         except Exception as e:
             result.scan_errors.append(f"osv-scanner error: {str(e)}")
+
+    def _parse_osv_output(
+        self, osv_output: dict, result: SecurityScanResult
+    ) -> None:
+        """Convert osv-scanner JSON results into vulnerabilities."""
+        for scan_result in osv_output.get("results", []):
+            source = scan_result.get("source", {}).get("path", "")
+            file = Path(source).name if source else None
+            for package in scan_result.get("packages", []):
+                pkg_name = package.get("package", {}).get("name", "?")
+                for vuln in package.get("vulnerabilities", []):
+                    result.vulnerabilities.append(
+                        SecurityVulnerability(
+                            severity="high",
+                            source="osv_scanner",
+                            title=(
+                                f"Vulnerable dependency: {pkg_name} "
+                                f"({vuln.get('id', '?')})"
+                            ),
+                            description=vuln.get("summary", ""),
+                            file=file,
+                        )
+                    )
 
     def _run_predictive_scan(
         self, project_dir: Path, result: SecurityScanResult
