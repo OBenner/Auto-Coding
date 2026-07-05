@@ -82,7 +82,7 @@
 | # | Задача | Файлы | Критерий приёмки |
 |---|---|---|---|
 | T1 | ✅ **Уже реализовано.** Coder уважает уровень автономности | `agents/coder.py:1282–1296` + `agents/runtime/direct_api_autonomy.py:124` | `AUTO_CODE_AUTONOMY=claude` блокирует автономный direct-API coder; `safe` — через gate; `bold` — мимо gate (хардкод `=True` остался только в смоук-тесте `cli/provider_smoke_commands.py`) |
-| T2 | Гейт для planner на не-Claude провайдерах | `agents/planner.py` | При `off` не-Claude planner блокируется |
+| T2 | ✅ Гейт для planner на не-Claude провайдерах | `agents/planner.py` (`_assert_planner_autonomy_allows` в `create_planner_session`) | При `off` не-Claude planner блокируется `ProviderError` до создания сессии; Claude работает на любом уровне |
 | T3 | Фабрика принимает `autonomy_settings` и логирует уровень | `agents/runtime/adapters/__init__.py` (`create_runtime_session`) | Уровень автономности виден в логе сессии |
 | T4 | Один тумблер в UI + вывод уровня в JSON | `cli/runtime_commands.py`, настройки фронта | UI показывает и задаёт один селектор автономности |
 | T5 | Доки: вести с `AUTO_CODE_AUTONOMY`, 30+ переменных — в приложение | `guides/QUICK-START.md`, `docs/` | Quickstart: «поставь `safe` — готово» |
@@ -145,6 +145,7 @@
 - ✅ **P1·T4** — QA-экран отчёта доверия в task overview (reader + IPC + `VerificationReportPanel`, i18n en/fr).
 - ✅ **P3·T4** — тумблер автономности в настройках → инжектит `AUTO_CODE_AUTONOMY` в окружение сборки (явный env приоритетнее).
 - ✅ **P5·T2** — агрегация стоимости подключена: `save_token_stats()` пишет запись в `cost_report.json` спеки (роль+фаза+$) и обновляет проектный `.auto-claude/model_usage_summary.json` (`cost_by_phase` добавлен; попутно починены сериализация summary и `+00:00Z`-таймстампы записей).
+- ✅ **P3·T2** — гейт планнера: `AUTO_CODE_AUTONOMY=off` блокирует не-Claude planner (`ProviderError` до создания сессии, после runner-роутинга); Claude-путь не затронут.
 
 Отчёт доверия теперь несёт: **вердикт · тесты · дифф · out-of-scope · confidence · uncertainty** — и виден в UI.
 

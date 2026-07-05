@@ -9,9 +9,11 @@ import logging
 from pathlib import Path
 
 from analysis.prevention_scanner import PreventionScanner
+from core.autonomy_level import AutonomyLevel, resolve_autonomy_settings
 from core.providers import create_engine_provider
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig, get_provider_config
+from core.providers.exceptions import ProviderError
 from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
@@ -58,6 +60,28 @@ except ImportError:
     PLUGINS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+def _assert_planner_autonomy_allows(provider_name: str) -> None:
+    """Block non-Claude planner sessions when autonomy is fully off (P3·T2).
+
+    ``AUTO_CODE_AUTONOMY=off`` promises "no autonomous non-Claude execution";
+    the planner writes implementation_plan.json, so the session must be
+    refused before it exists rather than degraded afterwards.
+
+    Raises:
+        ProviderError: When the resolved level is ``off`` and the effective
+            provider is not Claude.
+    """
+    if provider_name == "claude":
+        return
+    autonomy = resolve_autonomy_settings()
+    if autonomy.level is AutonomyLevel.OFF:
+        raise ProviderError(
+            f"AUTO_CODE_AUTONOMY=off blocks the non-Claude planner "
+            f"(provider {provider_name!r}). Set AUTO_CODE_AUTONOMY to claude, "
+            f"safe, or bold — or switch the planner provider to claude."
+        )
 
 
 def create_planner_session(
@@ -108,6 +132,9 @@ def create_planner_session(
         )
 
     provider = create_engine_provider(config)
+    # Gate on the effective provider (after runner routing), not the raw
+    # config value, so a route to a different engine is still enforced.
+    _assert_planner_autonomy_allows(provider.name)
 
     # For Claude provider, pass provider-specific kwargs
     if provider.name == "claude":
