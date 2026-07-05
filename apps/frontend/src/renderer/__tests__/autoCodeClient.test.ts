@@ -37,8 +37,11 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: '',
     status: 'backlog',
     subtasks: [],
+    logs: [],
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    updatedAt: new Date('2026-01-01T00:00:00Z'),
     ...overrides,
-  } as Task;
+  };
 }
 
 describe('mapStatus', () => {
@@ -130,5 +133,37 @@ describe('createTaskStoreAutoCodeClient', () => {
     unsubscribe?.();
     store.push([makeTask({ id: 't3' })]);
     expect(seen).toEqual([['t1', 't2']]);
+  });
+
+  it('skips store updates that did not replace the tasks array', () => {
+    const tasks = [makeTask()];
+    const store = makeFakeStore(tasks);
+    const client = createTaskStoreAutoCodeClient(store, LABELS);
+
+    const seen: number[] = [];
+    client.subscribeTasks?.((next) => seen.push(next.length));
+
+    // Unrelated state change: same tasks reference -> no re-map, no onChange.
+    store.push(tasks);
+    expect(seen).toEqual([]);
+
+    store.push([makeTask(), makeTask({ id: 't2' })]);
+    expect(seen).toEqual([2]);
+  });
+
+  it('resolves labels lazily through a getter so the client can stay stable', () => {
+    const store = makeFakeStore([makeTask({ status: 'error' })]);
+    let labels = { error: 'Error', prCreated: 'PR' };
+    const client = createTaskStoreAutoCodeClient(store, () => labels);
+
+    const seen: string[] = [];
+    client.subscribeTasks?.((tasks) => {
+      seen.push(tasks[0].badges?.[0]?.label ?? '');
+    });
+
+    store.push([makeTask({ id: 'a', status: 'error' })]);
+    labels = { error: 'Erreur', prCreated: 'PR' }; // locale switch
+    store.push([makeTask({ id: 'b', status: 'error' })]);
+    expect(seen).toEqual(['Error', 'Erreur']);
   });
 });

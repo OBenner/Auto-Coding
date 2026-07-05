@@ -74,15 +74,30 @@ export interface TaskStoreLike {
  * AutoCodeClient over the renderer task store. The store is already kept
  * fresh over IPC, so subscribeTasks piggybacks on its subscription — shared
  * screens stay live without duplicating transport logic.
+ *
+ * ``labels`` may be a getter so the client instance can stay stable while
+ * localized badge text follows the active locale.
  */
 export function createTaskStoreAutoCodeClient(
   store: TaskStoreLike,
-  labels: UiTaskBadgeLabels,
+  labels: UiTaskBadgeLabels | (() => UiTaskBadgeLabels),
 ): AutoCodeClient {
-  const snapshot = () =>
-    store.getState().tasks.map((task) => mapTaskToUiTask(task, labels));
+  const resolveLabels = typeof labels === 'function' ? labels : () => labels;
+  const snapshot = (tasks: Task[]) => {
+    const current = resolveLabels();
+    return tasks.map((task) => mapTaskToUiTask(task, current));
+  };
   return {
-    listTasks: async () => snapshot(),
-    subscribeTasks: (onChange) => store.subscribe(() => onChange(snapshot())),
+    listTasks: async () => snapshot(store.getState().tasks),
+    subscribeTasks: (onChange) => {
+      // The store fires on every state change; only re-map when the tasks
+      // array itself was replaced (zustand updates it immutably).
+      let lastTasks = store.getState().tasks;
+      return store.subscribe((state) => {
+        if (state.tasks === lastTasks) return;
+        lastTasks = state.tasks;
+        onChange(snapshot(state.tasks));
+      });
+    },
   };
 }

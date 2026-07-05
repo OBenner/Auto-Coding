@@ -16,13 +16,22 @@ export interface TasksSource {
 
 /** Map the backend's free-form spec status onto the shared closed set. */
 export function mapStatus(status: string): TaskStatus {
-	switch (status) {
+	// list_specs suffixes built specs with " (has build)" — strip decorations
+	// before matching, or "in_progress (has build)" would land in Draft.
+	const normalized = (status ?? "").replace(/\s*\(has build\)$/i, "").trim();
+	switch (normalized) {
 		case "complete":
 			return "done";
 		case "in_progress":
 			return "running";
+		// The web backend doesn't emit review states yet; map the family
+		// defensively so future statuses land in the Review column.
+		case "review":
+		case "ai_review":
+		case "human_review":
+			return "review";
 		default:
-			// initialized / planned / anything unknown starts in Draft.
+			// initialized / pending / anything unknown starts in Draft.
 			return "draft";
 	}
 }

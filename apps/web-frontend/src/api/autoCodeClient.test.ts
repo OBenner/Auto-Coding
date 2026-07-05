@@ -22,7 +22,19 @@ describe("mapStatus", () => {
 		expect(mapStatus("complete")).toBe("done");
 		expect(mapStatus("in_progress")).toBe("running");
 		expect(mapStatus("initialized")).toBe("draft");
+		expect(mapStatus("pending")).toBe("draft");
 		expect(mapStatus("anything-else")).toBe("draft");
+	});
+
+	it("strips the '(has build)' decoration before matching", () => {
+		expect(mapStatus("complete (has build)")).toBe("done");
+		expect(mapStatus("in_progress (has build)")).toBe("running");
+	});
+
+	it("maps the review family onto the review column", () => {
+		expect(mapStatus("review")).toBe("review");
+		expect(mapStatus("ai_review")).toBe("review");
+		expect(mapStatus("human_review (has build)")).toBe("review");
 	});
 });
 

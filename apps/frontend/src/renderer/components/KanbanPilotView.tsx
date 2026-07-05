@@ -6,7 +6,7 @@
  * Reachable via the "Kanban (new UI)" sidebar view next to the legacy board.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AutoCodeClientProvider,
@@ -22,7 +22,7 @@ export interface KanbanPilotViewProps {
   onTaskSelect?: (task: Task) => void;
 }
 
-function PilotBoard({ onTaskSelect }: KanbanPilotViewProps) {
+function PilotBoard({ onTaskSelect }: Readonly<KanbanPilotViewProps>) {
   const { t } = useTranslation(['kanban']);
   const { tasks, loading, error, reload } = useTasks();
 
@@ -66,15 +66,19 @@ function PilotBoard({ onTaskSelect }: KanbanPilotViewProps) {
   );
 }
 
-export function KanbanPilotView({ onTaskSelect }: KanbanPilotViewProps) {
+export function KanbanPilotView({ onTaskSelect }: Readonly<KanbanPilotViewProps>) {
   const { t } = useTranslation(['kanban']);
+  // Keep the client identity stable across locale switches (recreating it
+  // would tear down and re-establish the store subscription): the labels are
+  // read through a ref that always holds the current translations.
+  const labelsRef = useRef({ error: '', prCreated: '' });
+  labelsRef.current = {
+    error: t('kanban:pilot.badges.error'),
+    prCreated: t('kanban:pilot.badges.prCreated'),
+  };
   const client = useMemo(
-    () =>
-      createTaskStoreAutoCodeClient(useTaskStore, {
-        error: t('kanban:pilot.badges.error'),
-        prCreated: t('kanban:pilot.badges.prCreated'),
-      }),
-    [t],
+    () => createTaskStoreAutoCodeClient(useTaskStore, () => labelsRef.current),
+    [],
   );
   return (
     <AutoCodeClientProvider client={client}>
