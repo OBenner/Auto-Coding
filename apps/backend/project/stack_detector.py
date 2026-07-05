@@ -84,8 +84,16 @@ class StackDetector:
         if self.parser.file_exists("composer.json", "*.php", "**/*.php"):
             self.stack.languages.append("php")
 
-        # Java
-        if self.parser.file_exists("pom.xml", "build.gradle", "*.java", "**/*.java"):
+        # Java (Gradle Kotlin-DSL build files also indicate a JVM/Gradle project)
+        if self.parser.file_exists(
+            "pom.xml",
+            "build.gradle",
+            "build.gradle.kts",
+            "settings.gradle",
+            "settings.gradle.kts",
+            "*.java",
+            "**/*.java",
+        ):
             self.stack.languages.append("java")
 
         # Kotlin
@@ -119,6 +127,24 @@ class StackDetector:
         # Dart/Flutter
         if self.parser.file_exists("pubspec.yaml", "*.dart", "**/*.dart"):
             self.stack.languages.append("dart")
+
+        # Haskell
+        if self.parser.file_exists(
+            "stack.yaml", "*.cabal", "*.hs", "**/*.hs", "cabal.project"
+        ):
+            self.stack.languages.append("haskell")
+
+        # Lua
+        if self.parser.file_exists("*.lua", "**/*.lua", "*.rockspec"):
+            self.stack.languages.append("lua")
+
+        # Perl
+        if self.parser.file_exists("cpanfile", "Makefile.PL", "*.pl", "**/*.pm"):
+            self.stack.languages.append("perl")
+
+        # Zig
+        if self.parser.file_exists("build.zig", "*.zig", "**/*.zig"):
+            self.stack.languages.append("zig")
 
     def detect_package_managers(self) -> None:
         """Detect package managers used."""

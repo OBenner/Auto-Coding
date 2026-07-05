@@ -102,6 +102,9 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
     "kotlin": {
         "kotlin",
         "kotlinc",
+        # Kotlin projects build with Gradle even when no Java sources exist
+        "gradle",
+        "gradlew",
     },
     "scala": {
         "scala",
