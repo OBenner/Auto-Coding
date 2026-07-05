@@ -9,7 +9,10 @@ import logging
 from core.database import get_db
 from core.security import create_access_token
 from fastapi import APIRouter, Depends, HTTPException, status
-from services.workspace_service import get_or_create_personal_workspace
+from services.workspace_service import (
+    accept_pending_invitations,
+    get_or_create_personal_workspace,
+)
 from sqlalchemy.orm import Session
 
 from api.models.user import (
@@ -108,6 +111,17 @@ async def register_user(
 
     # Bootstrap the user's Personal workspace (single-mode default).
     get_or_create_personal_workspace(db, user.id)
+
+    # Convert any pending workspace invitations for this email into memberships
+    # (C7). Best-effort: registration must not fail because of an invite issue.
+    try:
+        accept_pending_invitations(db, user)
+    except Exception:
+        logger.warning(
+            "Failed to accept pending invitations for user_id=%s",
+            user.id,
+            exc_info=True,
+        )
 
     return _build_token_response(user)
 

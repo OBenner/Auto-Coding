@@ -12,6 +12,7 @@ from core.config import settings
 from core.database import get_db
 from core.permissions import (
     WorkspaceRole,
+    current_user_id,
     get_current_workspace,
     require_workspace_access,
     user_role_in_workspace,
@@ -19,12 +20,17 @@ from core.permissions import (
 from core.security import require_auth
 from fastapi import APIRouter, Depends, HTTPException, status
 from services.workspace_service import (
+    InvitationConflict,
+    InvitationInvalid,
     add_member,
     create_workspace,
     get_membership,
+    invite_member,
     list_accessible_workspaces,
+    list_invitations,
     list_workspace_members,
     remove_member,
+    revoke_invitation,
     update_member_role,
 )
 from sqlalchemy.exc import IntegrityError
@@ -32,6 +38,9 @@ from sqlalchemy.orm import Session
 
 from api.models.user import User
 from api.models.workspace import (
+    InvitationCreateRequest,
+    InvitationListResponse,
+    InvitationResponse,
     Workspace,
     WorkspaceCreateRequest,
     WorkspaceListResponse,
@@ -244,3 +253,95 @@ async def remove_workspace_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found"
         )
     remove_member(db, membership)
+
+
+# ---------------------------------------------------------------------------
+# Invitations (C7) — email onboarding: existing users become members at once;
+# unknown emails stay pending and convert on registration.
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{workspace_id}/invitations",
+    response_model=InvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_workspace_invitation(
+    workspace_id: int,
+    request: InvitationCreateRequest,
+    _team: None = Depends(require_team_mode),
+    _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.OWNER)),
+    auth: dict = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """Invite an email into the workspace. Team mode; requires owner access.
+
+    Returns the invitation with status ``accepted`` (user existed — membership
+    added immediately) or ``pending`` (converts when that email registers).
+    Plain ``def``: blocking DB work runs in the threadpool.
+    """
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+        )
+    try:
+        invitation = invite_member(
+            db,
+            workspace,
+            email=str(request.email),
+            role=request.role,
+            invited_by=current_user_id(auth),
+        )
+    except InvitationInvalid as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from None
+    except InvitationConflict as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e)
+        ) from None
+    return InvitationResponse.model_validate(invitation)
+
+
+@router.get("/{workspace_id}/invitations", response_model=InvitationListResponse)
+def list_workspace_invitations(
+    workspace_id: int,
+    _team: None = Depends(require_team_mode),
+    _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.OWNER)),
+    db: Session = Depends(get_db),
+):
+    """List a workspace's invitations, newest first. Team mode; owner access."""
+    invitations = [
+        InvitationResponse.model_validate(i)
+        for i in list_invitations(db, workspace_id)
+    ]
+    return InvitationListResponse(invitations=invitations)
+
+
+@router.delete(
+    "/{workspace_id}/invitations/{invitation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def revoke_workspace_invitation(
+    workspace_id: int,
+    invitation_id: int,
+    _team: None = Depends(require_team_mode),
+    _role: WorkspaceRole = Depends(require_workspace_access(WorkspaceRole.OWNER)),
+    db: Session = Depends(get_db),
+):
+    """Revoke a pending invitation. Team mode; requires owner access.
+
+    404 when the invitation doesn't exist in this workspace; 409 when it was
+    already accepted or revoked.
+    """
+    try:
+        invitation = revoke_invitation(db, workspace_id, invitation_id)
+    except InvitationConflict as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e)
+        ) from None
+    if invitation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found"
+        )
