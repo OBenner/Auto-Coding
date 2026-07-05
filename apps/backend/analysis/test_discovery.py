@@ -752,8 +752,12 @@ class TestDiscovery:
         )
 
         has_phpunit_dep = False
-        composer_json = project_dir / "composer.json"
-        if composer_json.exists():
+        composer_json = (project_dir / "composer.json").resolve()
+        # Only read composer.json if it did not resolve (e.g. via symlink)
+        # outside the project directory
+        if composer_json.exists() and composer_json.is_relative_to(
+            project_dir.resolve()
+        ):
             try:
                 with open(composer_json, encoding="utf-8") as f:
                     composer = json.load(f)
