@@ -28,7 +28,8 @@
     "sessions": "Session Replay",
     "agentInspector": "Agent Inspector",
     "feedback": "Feedback",
-    "modelUsage": "Model Usage"
+    "modelUsage": "Model Usage",
+    "kanbanNext": "Kanban (New UI)"
   },
   "actions": {
     "settings": "Settings",

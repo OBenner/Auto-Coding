@@ -1,0 +1,69 @@
+/**
+ * REST adapter for the shared UI's AutoCodeClient port (U1).
+ *
+ * `libs/ui` is transport-agnostic: its screens consume tasks through the
+ * injected AutoCodeClient. This adapter maps the web backend's task/spec
+ * listing (`GET /api/tasks`) into the shared `UiTask` shape.
+ */
+
+import type { AutoCodeClient, TaskStatus, UiTask } from "@auto-code/ui";
+import type { TaskListResponse, TaskSummary } from "./types";
+
+/** The slice of ApiClient this adapter needs (keeps it unit-testable). */
+export interface TasksSource {
+	listTasks(): Promise<TaskListResponse>;
+}
+
+/** Map the backend's free-form spec status onto the shared closed set. */
+export function mapStatus(status: string): TaskStatus {
+	// list_specs suffixes built specs with " (has build)" — strip decorations
+	// before matching, or "in_progress (has build)" would land in Draft.
+	const normalized = (status ?? "").replace(/\s*\(has build\)$/i, "").trim();
+	switch (normalized) {
+		case "complete":
+			return "done";
+		case "in_progress":
+			return "running";
+		// The web backend doesn't emit review states yet; map the family
+		// defensively so future statuses land in the Review column.
+		case "review":
+		case "ai_review":
+		case "human_review":
+			return "review";
+		default:
+			// initialized / pending / anything unknown starts in Draft.
+			return "draft";
+	}
+}
+
+/** Parse the "3/7" progress string into 0-100, or undefined when unknown. */
+export function parseProgress(progress: string): number | undefined {
+	const match = /^(\d+)\s*\/\s*(\d+)$/.exec(progress ?? "");
+	if (!match) return undefined;
+	const done = Number(match[1]);
+	const total = Number(match[2]);
+	if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) {
+		return undefined;
+	}
+	return Math.round((done / total) * 100);
+}
+
+export function mapTaskSummaryToUiTask(task: TaskSummary): UiTask {
+	return {
+		// The folder name is the canonical spec id (works with /tasks/:id too).
+		id: task.folder,
+		title: task.name,
+		status: mapStatus(task.status),
+		progress: parseProgress(task.progress),
+	};
+}
+
+/** REST-backed AutoCodeClient over the existing ApiClient. */
+export function createRestAutoCodeClient(source: TasksSource): AutoCodeClient {
+	return {
+		async listTasks(): Promise<UiTask[]> {
+			const response = await source.listTasks();
+			return (response.tasks ?? []).map(mapTaskSummaryToUiTask);
+		},
+	};
+}

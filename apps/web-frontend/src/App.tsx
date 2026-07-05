@@ -13,6 +13,7 @@ import { FilesPage } from "./pages/FilesPage"
 import { GitOperations } from "./pages/GitOperations"
 import { Insights } from "./pages/Insights"
 import { Kanban } from "./pages/Kanban"
+import { KanbanPilot } from "./pages/KanbanPilot"
 import { Roadmap } from "./pages/Roadmap"
 import { TaskCreate } from "./pages/TaskCreate"
 import { IDEPage } from "./pages/IDEPage"
@@ -136,6 +137,8 @@ function App() {
 
               {/* Kanban and project views */}
               <Route path="/kanban" element={<KanbanWrapper />} />
+              {/* U1 pilot: shared-UI Kanban (libs/ui) next to the legacy one */}
+              <Route path="/kanban-next" element={<KanbanPilot />} />
               <Route path="/roadmap" element={<Roadmap />} />
               <Route path="/changelog" element={<Changelog />} />
               <Route path="/insights" element={<Insights />} />
