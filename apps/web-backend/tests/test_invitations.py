@@ -7,7 +7,7 @@ import secrets
 
 import pytest
 from api.models.user import User
-from api.models.workspace import WorkspaceInvitation, WorkspaceUser
+from api.models.workspace import WorkspaceInvitation
 from core.config import settings
 from services.workspace_service import (
     InvitationConflict,
@@ -16,7 +16,6 @@ from services.workspace_service import (
     create_workspace,
     get_membership,
     invite_member,
-    list_invitations,
     revoke_invitation,
 )
 from sqlalchemy.exc import IntegrityError

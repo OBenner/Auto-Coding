@@ -117,6 +117,9 @@ async def register_user(
     try:
         accept_pending_invitations(db, user)
     except Exception:
+        # Reset the session: a mid-commit failure would otherwise leave it in a
+        # failed-transaction state and break the token response's ORM reads.
+        db.rollback()
         logger.warning(
             "Failed to accept pending invitations for user_id=%s",
             user.id,
