@@ -134,3 +134,25 @@ describe("createRestAutoCodeClient.getTask", () => {
 		expect(ui?.status).toBe("running");
 	});
 });
+
+describe("status chips (opt-in)", () => {
+	it("renders no chip without the option", () => {
+		expect(mapTaskSummaryToUiTask(summary()).statusChip).toBeUndefined();
+	});
+
+	it("labels the chip via the callback with the normalized status", () => {
+		const ui = mapTaskSummaryToUiTask(summary({ status: "complete (has build)" }), {
+			statusChipLabel: (normalized) =>
+				normalized === "complete" ? "Complete" : undefined,
+		});
+		expect(ui.statusChip).toEqual({ label: "Complete", tone: "good" });
+	});
+
+	it("falls back to the raw normalized status when unmapped", () => {
+		const ui = mapTaskSummaryToUiTask(summary({ status: "initialized" }), {
+			statusChipLabel: () => undefined,
+		});
+		expect(ui.statusChip).toEqual({ label: "initialized", tone: "neutral" });
+	});
+});
+

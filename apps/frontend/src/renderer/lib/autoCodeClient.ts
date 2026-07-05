@@ -20,7 +20,20 @@ import type { Task } from '../../shared/types/task';
 export interface UiTaskBadgeLabels {
   error: string;
   prCreated: string;
+  /** Chip label per raw desktop status (rendered next to the card id). */
+  statusChips: Record<Task['status'], string>;
 }
+
+const CHIP_TONES: Record<Task['status'], UiTaskBadge['tone']> = {
+  backlog: 'neutral',
+  queue: 'neutral',
+  in_progress: 'info',
+  ai_review: 'warn',
+  human_review: 'warn',
+  done: 'good',
+  pr_created: 'good',
+  error: 'bad',
+};
 
 /** Map the desktop TaskStatus onto the shared closed set. */
 export function mapStatus(status: Task['status']): UiTaskStatus {
@@ -65,6 +78,10 @@ export function mapTaskToUiTask(task: Task, labels: UiTaskBadgeLabels): UiTask {
     title: task.title,
     status: mapStatus(task.status),
     description: task.description || undefined,
+    statusChip: {
+      label: labels.statusChips?.[task.status] ?? task.status,
+      tone: CHIP_TONES[task.status],
+    },
     badges: badges.length > 0 ? badges : undefined,
     progress: computeProgress(task),
   };

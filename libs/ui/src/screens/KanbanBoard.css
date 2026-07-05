@@ -67,6 +67,12 @@
   cursor: pointer;
 }
 
+.ac-kanban__card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ac-kanban__card-id {
   color: var(--quiet);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

@@ -17,6 +17,11 @@ export interface UiTask {
   title: string;
   status: TaskStatus;
   description?: string;
+  /**
+   * Small chip rendered next to the id (e.g. the source system's raw status:
+   * "Coder", "Merged"). Distinct from `badges`, which annotate outcomes.
+   */
+  statusChip?: UiTaskBadge;
   badges?: UiTaskBadge[];
   /** 0–100 progress, typically for running tasks. */
   progress?: number;

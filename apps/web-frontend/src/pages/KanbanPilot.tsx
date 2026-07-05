@@ -60,8 +60,25 @@ function PilotBoard() {
 	);
 }
 
+const CHIP_LABEL_KEYS: Record<string, string> = {
+	complete: "tasks:status.complete",
+	in_progress: "tasks:status.in_progress",
+	pending: "tasks:status.pending",
+	initialized: "tasks:status.initialized",
+};
+
 export function KanbanPilot() {
-	const client = useMemo(() => createRestAutoCodeClient(apiClient), []);
+	const { t } = useTranslation(["tasks"]);
+	const client = useMemo(
+		() =>
+			createRestAutoCodeClient(apiClient, {
+				statusChipLabel: (normalized) => {
+					const key = CHIP_LABEL_KEYS[normalized];
+					return key == null ? undefined : t(key);
+				},
+			}),
+		[t],
+	);
 	return (
 		<AutoCodeClientProvider client={client}>
 			<PilotBoard />

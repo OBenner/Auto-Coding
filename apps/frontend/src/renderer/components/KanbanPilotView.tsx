@@ -19,6 +19,7 @@ import {
 import type { KanbanColumn, TaskStatus } from '@auto-code/ui';
 import { useTaskStore } from '../stores/task-store';
 import { createTaskStoreAutoCodeClient } from '../lib/autoCodeClient';
+import type { UiTaskBadgeLabels } from '../lib/autoCodeClient';
 
 function usePilotColumns(): KanbanColumn[] {
   const { t } = useTranslation(['kanban']);
@@ -93,10 +94,24 @@ export function KanbanPilotView() {
   // Keep the client identity stable across locale switches (recreating it
   // would tear down and re-establish the store subscription): the labels are
   // read through a ref that always holds the current translations.
-  const labelsRef = useRef({ error: '', prCreated: '' });
+  const labelsRef = useRef<UiTaskBadgeLabels>({
+    error: '',
+    prCreated: '',
+    statusChips: {} as UiTaskBadgeLabels['statusChips'],
+  });
   labelsRef.current = {
     error: t('kanban:pilot.badges.error'),
     prCreated: t('kanban:pilot.badges.prCreated'),
+    statusChips: {
+      backlog: t('kanban:pilot.statusChips.backlog'),
+      queue: t('kanban:pilot.statusChips.queue'),
+      in_progress: t('kanban:pilot.statusChips.in_progress'),
+      ai_review: t('kanban:pilot.statusChips.ai_review'),
+      human_review: t('kanban:pilot.statusChips.human_review'),
+      done: t('kanban:pilot.statusChips.done'),
+      pr_created: t('kanban:pilot.statusChips.pr_created'),
+      error: t('kanban:pilot.statusChips.error'),
+    },
   };
   const client = useMemo(
     () => createTaskStoreAutoCodeClient(useTaskStore, () => labelsRef.current),
