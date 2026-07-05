@@ -118,6 +118,22 @@
 .ac-kanban__badge--bad { color: var(--red); background: var(--red-soft); }
 .ac-kanban__badge--neutral { color: var(--muted); background: var(--rail); }
 
+.ac-kanban__card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--quiet);
+  font-size: 11px;
+}
+
+.ac-kanban__card-meta-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--quiet);
+  opacity: 0.6;
+}
+
 .ac-kanban__progress {
   height: 5px;
   overflow: hidden;

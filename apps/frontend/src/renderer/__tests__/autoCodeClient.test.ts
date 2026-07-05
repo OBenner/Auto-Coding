@@ -7,12 +7,13 @@ import { describe, expect, it } from 'vitest';
 import {
   computeProgress,
   createTaskStoreAutoCodeClient,
+  formatElapsed,
   mapStatus,
   mapTaskToUiTask,
   mapTaskToUiTaskDetail,
 } from '../lib/autoCodeClient';
 import type { TaskStoreLike, UiTaskBadgeLabels } from '../lib/autoCodeClient';
-import type { Subtask, Task } from '../../shared/types/task';
+import type { ExecutionProgress, Subtask, Task } from '../../shared/types/task';
 
 const CHIPS: UiTaskBadgeLabels['statusChips'] = {
   backlog: 'Backlog',
@@ -25,11 +26,34 @@ const CHIPS: UiTaskBadgeLabels['statusChips'] = {
   error: 'Error',
 };
 
+const PHASES: UiTaskBadgeLabels['phases'] = {
+  idle: 'Idle',
+  planning: 'Planning',
+  coding: 'Coding',
+  test_generation: 'Test generation',
+  qa_review: 'QA review',
+  qa_fixing: 'QA fixing',
+  complete: 'Complete',
+  failed: 'Failed',
+};
+
 const LABELS: UiTaskBadgeLabels = {
   error: 'Error',
   prCreated: 'PR',
   statusChips: CHIPS,
+  phases: PHASES,
 };
+
+function makeExecutionProgress(
+  overrides: Partial<ExecutionProgress> = {},
+): ExecutionProgress {
+  return {
+    phase: 'coding',
+    phaseProgress: 50,
+    overallProgress: 40,
+    ...overrides,
+  };
+}
 
 let subtaskSeq = 0;
 
@@ -110,7 +134,48 @@ describe('mapTaskToUiTask', () => {
       statusChip: { label: 'Backlog', tone: 'neutral' },
       badges: undefined,
       progress: undefined,
+      meta: undefined,
     });
+  });
+});
+
+describe('formatElapsed', () => {
+  it('renders minutes, sub-minute, and hour+minute forms', () => {
+    expect(formatElapsed(30)).toBe('<1m');
+    expect(formatElapsed(22 * 60)).toBe('22m');
+    expect(formatElapsed(3900)).toBe('1h 05m');
+  });
+
+  it('returns an empty string for negative or non-finite input', () => {
+    expect(formatElapsed(-5)).toBe('');
+    expect(formatElapsed(Number.NaN)).toBe('');
+    expect(formatElapsed(Number.POSITIVE_INFINITY)).toBe('');
+  });
+});
+
+describe('card meta row', () => {
+  it('combines the phase label and elapsed time for active tasks', () => {
+    const task = makeTask({
+      status: 'in_progress',
+      executionProgress: makeExecutionProgress({ elapsed_seconds: 22 * 60 }),
+    });
+    expect(mapTaskToUiTask(task, LABELS).meta).toEqual(['Coding', '22m']);
+  });
+
+  it('renders phase-only meta when elapsed time is unknown', () => {
+    const task = makeTask({
+      status: 'ai_review',
+      executionProgress: makeExecutionProgress({ phase: 'qa_review' }),
+    });
+    expect(mapTaskToUiTask(task, LABELS).meta).toEqual(['QA review']);
+  });
+
+  it('omits meta without execution progress or for the idle phase', () => {
+    expect(mapTaskToUiTask(makeTask(), LABELS).meta).toBeUndefined();
+    const idle = makeTask({
+      executionProgress: makeExecutionProgress({ phase: 'idle', elapsed_seconds: 60 }),
+    });
+    expect(mapTaskToUiTask(idle, LABELS).meta).toBeUndefined();
   });
 });
 
@@ -170,7 +235,12 @@ describe('createTaskStoreAutoCodeClient', () => {
 
   it('resolves labels lazily through a getter so the client can stay stable', () => {
     const store = makeFakeStore([makeTask({ status: 'error' })]);
-    let labels: UiTaskBadgeLabels = { error: 'Error', prCreated: 'PR', statusChips: CHIPS };
+    let labels: UiTaskBadgeLabels = {
+      error: 'Error',
+      prCreated: 'PR',
+      statusChips: CHIPS,
+      phases: PHASES,
+    };
     const client = createTaskStoreAutoCodeClient(store, () => labels);
 
     const seen: string[] = [];
@@ -179,7 +249,8 @@ describe('createTaskStoreAutoCodeClient', () => {
     });
 
     store.push([makeTask({ id: 'a', status: 'error' })]);
-    labels = { error: 'Erreur', prCreated: 'PR', statusChips: CHIPS }; // locale switch
+    // locale switch
+    labels = { error: 'Erreur', prCreated: 'PR', statusChips: CHIPS, phases: PHASES };
     store.push([makeTask({ id: 'b', status: 'error' })]);
     expect(seen).toEqual(['Error', 'Erreur']);
   });
