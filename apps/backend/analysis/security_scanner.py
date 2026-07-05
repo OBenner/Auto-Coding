@@ -370,6 +370,11 @@ class SecurityScanner:
         if (project_dir / "composer.lock").exists():
             self._run_composer_audit(project_dir, result)
 
+        # osv-scanner for ecosystems without a dedicated audit tool
+        # (JVM, .NET, Elixir, Swift, Dart, Go modules)
+        if self._has_osv_manifests(project_dir):
+            self._run_osv_scanner(project_dir, result)
+
     def _run_npm_audit(self, project_dir: Path, result: SecurityScanResult) -> None:
         """Run npm audit for JavaScript projects."""
         try:
@@ -655,6 +660,70 @@ class SecurityScanner:
             result.scan_errors.append("composer audit timed out")
         except Exception as e:
             result.scan_errors.append(f"composer audit error: {str(e)}")
+
+    # Manifests handled by osv-scanner for ecosystems that have no dedicated
+    # audit runner above (npm/pip/cargo/composer manifests are excluded to
+    # avoid double-reporting)
+    OSV_MANIFESTS = (
+        "pom.xml",
+        "gradle.lockfile",
+        "buildscript-gradle.lockfile",
+        "packages.lock.json",
+        "mix.lock",
+        "Package.resolved",
+        "pubspec.lock",
+        "go.mod",
+    )
+
+    def _has_osv_manifests(self, project_dir: Path) -> bool:
+        """Check for manifests osv-scanner should audit."""
+        return any((project_dir / m).exists() for m in self.OSV_MANIFESTS)
+
+    def _run_osv_scanner(self, project_dir: Path, result: SecurityScanResult) -> None:
+        """Run osv-scanner against known-vulnerability database."""
+        try:
+            # osv-scanner exits non-zero when vulns are found; parse stdout
+            cmd = ["osv-scanner", "--format", "json", "-r", "."]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=300,
+            )
+
+            if proc.stdout:
+                try:
+                    osv_output = json.loads(proc.stdout)
+                    for scan_result in osv_output.get("results", []):
+                        source = scan_result.get("source", {}).get("path", "")
+                        for package in scan_result.get("packages", []):
+                            pkg_info = package.get("package", {})
+                            for vuln in package.get("vulnerabilities", []):
+                                result.vulnerabilities.append(
+                                    SecurityVulnerability(
+                                        severity="high",
+                                        source="osv_scanner",
+                                        title=(
+                                            f"Vulnerable dependency: "
+                                            f"{pkg_info.get('name', '?')} "
+                                            f"({vuln.get('id', '?')})"
+                                        ),
+                                        description=vuln.get("summary", ""),
+                                        file=Path(source).name if source else None,
+                                    )
+                                )
+                except json.JSONDecodeError:
+                    result.scan_errors.append("Failed to parse osv-scanner output")
+
+        except FileNotFoundError:
+            logger.debug("osv-scanner not available")
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("osv-scanner timed out")
+        except Exception as e:
+            result.scan_errors.append(f"osv-scanner error: {str(e)}")
 
     def _run_predictive_scan(
         self, project_dir: Path, result: SecurityScanResult

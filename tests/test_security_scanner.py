@@ -657,3 +657,68 @@ class TestNativeAndDependencyScanners:
         assert vuln.severity == "high"
         assert "vendor/package" in vuln.title
         assert vuln.cwe == "CVE-2024-0001"
+
+    def test_has_osv_manifests_positive(self, scanner, temp_dir):
+        """JVM/.NET/Elixir manifests trigger osv-scanner."""
+        (temp_dir / "mix.lock").write_text("%{}")
+        assert scanner._has_osv_manifests(temp_dir) is True
+
+    def test_has_osv_manifests_negative(self, scanner, temp_dir):
+        """Manifests covered by dedicated audits do not trigger osv-scanner."""
+        (temp_dir / "package-lock.json").write_text("{}")
+        (temp_dir / "Cargo.lock").write_text("")
+        (temp_dir / "composer.lock").write_text("{}")
+        assert scanner._has_osv_manifests(temp_dir) is False
+
+    @patch("subprocess.run")
+    def test_osv_scanner_output_parsing(self, mock_run, scanner, temp_dir):
+        """Test parsing osv-scanner JSON output."""
+        mock_run.return_value = MagicMock(
+            stdout=json.dumps(
+                {
+                    "results": [
+                        {
+                            "source": {"path": "/project/pom.xml"},
+                            "packages": [
+                                {
+                                    "package": {
+                                        "name": "org.example:demo",
+                                        "ecosystem": "Maven",
+                                    },
+                                    "vulnerabilities": [
+                                        {
+                                            "id": "GHSA-xxxx-yyyy",
+                                            "summary": "RCE in demo library",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ),
+            stderr="",
+            returncode=1,
+        )
+
+        result = SecurityScanResult()
+        scanner._run_osv_scanner(temp_dir, result)
+
+        assert len(result.vulnerabilities) == 1
+        vuln = result.vulnerabilities[0]
+        assert vuln.source == "osv_scanner"
+        assert vuln.severity == "high"
+        assert "org.example:demo" in vuln.title
+        assert "GHSA-xxxx-yyyy" in vuln.title
+        assert vuln.file == "pom.xml"
+
+    @patch("subprocess.run")
+    def test_osv_scanner_missing_tool_is_silent(self, mock_run, scanner, temp_dir):
+        """Missing osv-scanner binary skips the scan without errors."""
+        mock_run.side_effect = FileNotFoundError()
+
+        result = SecurityScanResult()
+        scanner._run_osv_scanner(temp_dir, result)
+
+        assert result.vulnerabilities == []
+        assert result.scan_errors == []

@@ -1657,3 +1657,30 @@ class TestLanguageSecurityRules:
             assert "gets" in rules["dangerous_functions"]
             assert "system" in rules["dangerous_functions"]
             assert any("fsanitize" in alt for alt in rules["secure_alternatives"])
+
+    def test_jvm_dotnet_tail_languages_have_scanners(self):
+        """Every detectable compiled/scripting-tail language has scanners."""
+        from security.profile import get_security_scanners
+
+        for lang in ("java", "kotlin", "csharp", "elixir", "swift", "scala", "dart"):
+            scanners = get_security_scanners(lang)
+            assert scanners, f"{lang} has no security scanners"
+            assert "osv-scanner" in scanners
+
+    def test_jvm_dotnet_tail_languages_have_rules(self):
+        """New language rule entries carry dangerous functions and guidance."""
+        from security.profile import get_security_rules
+
+        expectations = {
+            "java": "Runtime.exec",
+            "kotlin": "Runtime.exec",
+            "csharp": "BinaryFormatter",
+            "elixir": "Code.eval_string",
+            "swift": "unsafeBitCast",
+            "scala": "sys.process",
+            "dart": "Process.run",
+        }
+        for lang, dangerous in expectations.items():
+            rules = get_security_rules(lang)
+            assert dangerous in rules["dangerous_functions"]
+            assert rules["secure_alternatives"]
