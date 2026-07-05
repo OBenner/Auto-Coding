@@ -11,12 +11,25 @@ export {
   AutoCodeClientProvider,
   useAutoCodeClient,
   useTasks,
+  useTask,
 } from './client/AutoCodeClient';
 export type {
   AutoCodeClient,
   AutoCodeClientProviderProps,
   UseTasksResult,
+  UseTaskResult,
 } from './client/AutoCodeClient';
-export type { UiTask, UiTaskBadge, TaskStatus, BadgeTone } from './client/types';
+export type {
+  UiTask,
+  UiTaskBadge,
+  UiTaskDetail,
+  UiTaskProgress,
+  CreateTaskInput,
+  TaskStatus,
+  BadgeTone,
+} from './client/types';
 export { KanbanBoard, DEFAULT_KANBAN_COLUMNS } from './screens/KanbanBoard';
 export type { KanbanBoardProps, KanbanColumn } from './screens/KanbanBoard';
+// Canonical screens (U2)
+export { TaskDetail } from './screens/TaskDetail';
+export type { TaskDetailProps } from './screens/TaskDetail';
