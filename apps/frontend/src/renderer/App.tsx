@@ -69,6 +69,7 @@ import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
 import { useTaskStore, loadTasks } from './stores/task-store';
+import { KanbanPilotView } from './components/KanbanPilotView';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
@@ -1011,6 +1012,10 @@ export function App() {
                     onRefresh={handleRefreshTasks}
                     isRefreshing={isRefreshingTasks}
                   />
+                )}
+                {/* U1 pilot: shared-UI Kanban (libs/ui) next to the legacy one */}
+                {activeView === 'kanban-next' && (
+                  <KanbanPilotView onTaskSelect={handleTaskClick} />
                 )}
                 {/* TerminalGrid is always mounted but hidden when not active to preserve terminal state */}
                 <div className={activeView === 'terminals' ? 'h-full' : 'hidden'}>

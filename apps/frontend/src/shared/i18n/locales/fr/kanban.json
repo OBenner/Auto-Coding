@@ -16,5 +16,21 @@
     },
     "clearFilters": "Effacer les filtres",
     "clearFiltersAriaLabel": "Effacer tous les filtres actifs"
+  },
+  "pilot": {
+    "title": "Kanban (nouvelle interface)",
+    "loading": "Chargement des tâches…",
+    "error": "Échec du chargement des tâches.",
+    "retry": "Réessayer",
+    "columns": {
+      "draft": "Brouillon",
+      "running": "En cours",
+      "review": "Revue",
+      "done": "Terminé"
+    },
+    "badges": {
+      "error": "Erreur",
+      "prCreated": "PR"
+    }
   }
 }

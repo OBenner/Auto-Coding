@@ -113,5 +113,17 @@
     "failedToDelete": "Failed to delete task",
     "notFound": "Task not found",
     "alreadyRunning": "Task is already running"
+  },
+  "kanbanPilot": {
+    "title": "Kanban (new UI)",
+    "loading": "Loading tasks…",
+    "error": "Failed to load tasks.",
+    "retry": "Retry",
+    "columns": {
+      "draft": "Draft",
+      "running": "Running",
+      "review": "Review",
+      "done": "Done"
+    }
   }
 }

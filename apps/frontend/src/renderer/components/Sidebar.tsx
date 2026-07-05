@@ -33,7 +33,8 @@ import {
   Database,
   MessageSquare,
   Code,
-  Brain
+  Brain,
+  LayoutDashboard
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -70,7 +71,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
+export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -89,6 +90,7 @@ interface NavItem {
 // Base nav items always shown
 const baseNavItems: NavItem[] = [
   { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K' },
+  { id: 'kanban-next', labelKey: 'navigation:items.kanbanNext', icon: LayoutDashboard },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A' },
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N' },
   { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D' },

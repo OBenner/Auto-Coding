@@ -113,5 +113,17 @@
     "failedToDelete": "Échec de la suppression de la tâche",
     "notFound": "Tâche introuvable",
     "alreadyRunning": "La tâche est déjà en cours d'exécution"
+  },
+  "kanbanPilot": {
+    "title": "Kanban (nouvelle interface)",
+    "loading": "Chargement des tâches…",
+    "error": "Échec du chargement des tâches.",
+    "retry": "Réessayer",
+    "columns": {
+      "draft": "Brouillon",
+      "running": "En cours",
+      "review": "Revue",
+      "done": "Terminé"
+    }
   }
 }

@@ -16,5 +16,21 @@
     },
     "clearFilters": "Clear Filters",
     "clearFiltersAriaLabel": "Clear all active filters"
+  },
+  "pilot": {
+    "title": "Kanban (new UI)",
+    "loading": "Loading tasks…",
+    "error": "Failed to load tasks.",
+    "retry": "Retry",
+    "columns": {
+      "draft": "Draft",
+      "running": "Running",
+      "review": "Review",
+      "done": "Done"
+    },
+    "badges": {
+      "error": "Error",
+      "prCreated": "PR"
+    }
   }
 }

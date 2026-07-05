@@ -28,7 +28,8 @@
     "sessions": "Relecture de session",
     "agentInspector": "Inspecteur d'Agent",
     "feedback": "Retour d'information",
-    "modelUsage": "Utilisation des Modèles"
+    "modelUsage": "Utilisation des Modèles",
+    "kanbanNext": "Kanban (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",
