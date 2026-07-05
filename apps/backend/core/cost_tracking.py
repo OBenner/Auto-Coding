@@ -326,6 +326,7 @@ class UsageRecord:
     cost: float
     timestamp: str
     provider: str = "unknown"  # Provider name (e.g., "anthropic", "openai", "unknown")
+    phase: str | None = None  # Execution phase (e.g., "planning", "coding")
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -337,6 +338,7 @@ class UsageRecord:
             "cost": self.cost,
             "timestamp": self.timestamp,
             "provider": self.provider,
+            "phase": self.phase,
         }
 
     @classmethod
@@ -347,6 +349,7 @@ class UsageRecord:
         crashing when loading historical cost_report.json files.
         """
         try:
+            phase = data.get("phase")
             return cls(
                 agent_type=str(data.get("agent_type", "unknown")),
                 model=str(data.get("model", "unknown")),
@@ -360,6 +363,7 @@ class UsageRecord:
                     )
                 ),
                 provider=str(data.get("provider", "unknown")),
+                phase=str(phase) if phase is not None else None,
             )
         except (TypeError, ValueError) as exc:
             logger.warning("Failed to deserialize UsageRecord from %r: %s", data, exc)
@@ -419,7 +423,7 @@ class CostTracker:
             "spec_dir": str(self.spec_dir),
             "total_cost": self.get_total_cost(),
             "records": [record.to_dict() for record in self.records],
-            "last_updated": datetime.now(UTC).isoformat() + "Z",
+            "last_updated": datetime.now(UTC).isoformat(),
         }
 
         with open(self._report_file, "w", encoding="utf-8") as f:
@@ -488,6 +492,7 @@ class CostTracker:
         input_tokens: int,
         output_tokens: int,
         provider: str = "unknown",
+        phase: str | None = None,
     ) -> float:
         """
         Log usage for an agent session.
@@ -498,6 +503,7 @@ class CostTracker:
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
             provider: Model provider (e.g., "anthropic", "openai", "unknown")
+            phase: Execution phase the usage belongs to (e.g., "planning")
 
         Returns:
             Cost of this operation in dollars
@@ -510,8 +516,11 @@ class CostTracker:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost=cost,
-            timestamp=datetime.now(UTC).isoformat() + "Z",
+            # Plain isoformat(): appending "Z" to "+00:00" would make the
+            # timestamp unparseable and analytics would drop the record.
+            timestamp=datetime.now(UTC).isoformat(),
             provider=provider,
+            phase=phase,
         )
 
         self.records.append(record)

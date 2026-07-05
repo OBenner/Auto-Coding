@@ -144,6 +144,7 @@
 - ✅ **P3·T5** — доки ведут с `AUTO_CODE_AUTONOMY` (`guides/CLI-USAGE.md`, ADR-006 → Accepted).
 - ✅ **P1·T4** — QA-экран отчёта доверия в task overview (reader + IPC + `VerificationReportPanel`, i18n en/fr).
 - ✅ **P3·T4** — тумблер автономности в настройках → инжектит `AUTO_CODE_AUTONOMY` в окружение сборки (явный env приоритетнее).
+- ✅ **P5·T2** — агрегация стоимости подключена: `save_token_stats()` пишет запись в `cost_report.json` спеки (роль+фаза+$) и обновляет проектный `.auto-claude/model_usage_summary.json` (`cost_by_phase` добавлен; попутно починены сериализация summary и `+00:00Z`-таймстампы записей).
 
 Отчёт доверия теперь несёт: **вердикт · тесты · дифф · out-of-scope · confidence · uncertainty** — и виден в UI.
 

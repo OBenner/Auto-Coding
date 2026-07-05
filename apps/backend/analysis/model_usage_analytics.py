@@ -16,6 +16,8 @@ Provides analytics on:
 from __future__ import annotations
 
 import json
+import logging
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -27,12 +29,17 @@ from analysis.analytics_utils import (
     parse_timestamp,
 )
 
+logger = logging.getLogger(__name__)
+
 # =============================================================================
 # DATA MODELS
 # =============================================================================
 
 
 COST_PRECISION = 4  # Decimal places for cost rounding
+
+# Project-level summary written next to the specs dir (.auto-claude/<filename>)
+MODEL_USAGE_SUMMARY_FILENAME = "model_usage_summary.json"
 
 # Shared token/cost field names for serialization
 _USAGE_FIELDS = (
@@ -184,6 +191,7 @@ class ModelUsageSummary:
     # Cost distribution
     cost_by_model: dict[str, float] = field(default_factory=dict)
     cost_by_agent: dict[str, float] = field(default_factory=dict)
+    cost_by_phase: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -193,7 +201,12 @@ class ModelUsageSummary:
             "period_end": self.period_end.isoformat(),
             "total_specs": self.total_specs,
             "total_usage_records": self.total_usage_records,
-            **{f: getattr(self, f) for f in _USAGE_FIELDS},
+            # The summary tracks records, not per-metric usage counts, so it
+            # can't reuse _USAGE_FIELDS (whose total_usage_count doesn't exist
+            # here) — serialize its token fields explicitly.
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_tokens,
             "total_cost": rnd(self.total_cost),
             "unique_models_used": self.unique_models_used,
             "unique_providers_used": self.unique_providers_used,
@@ -205,6 +218,7 @@ class ModelUsageSummary:
             },
             "cost_by_model": {k: rnd(v) for k, v in self.cost_by_model.items()},
             "cost_by_agent": {k: rnd(v) for k, v in self.cost_by_agent.items()},
+            "cost_by_phase": {k: rnd(v) for k, v in self.cost_by_phase.items()},
         }
 
     @classmethod
@@ -215,7 +229,10 @@ class ModelUsageSummary:
             period_end=datetime.fromisoformat(data["period_end"]),
             total_specs=data.get("total_specs", 0),
             total_usage_records=data.get("total_usage_records", 0),
-            **_usage_from_dict(data),
+            total_input_tokens=data.get("total_input_tokens", 0),
+            total_output_tokens=data.get("total_output_tokens", 0),
+            total_tokens=data.get("total_tokens", 0),
+            total_cost=data.get("total_cost", 0.0),
             unique_models_used=data.get("unique_models_used", 0),
             unique_providers_used=data.get("unique_providers_used", 0),
             metrics_by_model={
@@ -228,6 +245,7 @@ class ModelUsageSummary:
             },
             cost_by_model=data.get("cost_by_model", {}),
             cost_by_agent=data.get("cost_by_agent", {}),
+            cost_by_phase=data.get("cost_by_phase", {}),
         )
 
 
@@ -318,6 +336,7 @@ def aggregate_model_usage(
     # Aggregation containers
     model_metrics: dict[str, ModelMetrics] = {}
     agent_metrics: dict[str, AgentMetrics] = {}
+    phase_costs: dict[str, float] = {}
 
     def _safe_int(val: Any) -> int:
         """Coerce a value to int, falling back to 0."""
@@ -403,6 +422,11 @@ def aggregate_model_usage(
             _accumulate_tokens(agent_metric, input_tokens, output_tokens, cost)
             agent_metric.models_used[model] = agent_metric.models_used.get(model, 0) + 1
 
+            # Update phase cost breakdown (records predating the phase field
+            # land in "unknown")
+            phase = str(record_dict.get("phase") or "unknown")
+            phase_costs[phase] = phase_costs.get(phase, 0.0) + cost
+
         # Only count spec if it had records passing filters
         if spec_had_records:
             total_specs += 1
@@ -451,7 +475,38 @@ def aggregate_model_usage(
         metrics_by_agent=agent_metrics,
         cost_by_model=cost_by_model,
         cost_by_agent=cost_by_agent,
+        cost_by_phase=phase_costs,
     )
+
+
+def write_model_usage_summary(project_dir: Path) -> Path | None:
+    """
+    Aggregate all-time model usage and persist the project-level summary.
+
+    Writes `.auto-claude/model_usage_summary.json` atomically (temp file +
+    replace) so concurrent readers never observe a torn file. Best-effort by
+    design: cost accounting must never break a build, so failures are logged
+    and swallowed.
+
+    Args:
+        project_dir: Path to project root
+
+    Returns:
+        Path to the written summary, or None when aggregation or write failed.
+    """
+    try:
+        summary = aggregate_model_usage(project_dir)
+        out_dir = project_dir / ".auto-claude"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / MODEL_USAGE_SUMMARY_FILENAME
+        tmp_path = out_path.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(summary.to_dict(), f, indent=2)
+        os.replace(tmp_path, out_path)
+        return out_path
+    except Exception as exc:
+        logger.warning("Failed to write model usage summary: %s", exc)
+        return None
 
 
 def _round_to_period_start(timestamp: datetime, granularity: str) -> datetime:

@@ -339,6 +339,7 @@ async def run_followup_planner(
                     "planning",
                     usage_metadata["input_tokens"],
                     usage_metadata["output_tokens"],
+                    model=planning_model,
                 )
                 if saved:
                     logger.debug(
