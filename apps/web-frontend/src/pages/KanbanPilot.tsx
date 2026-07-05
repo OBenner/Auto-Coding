@@ -34,7 +34,7 @@ function PilotBoard() {
 	);
 
 	const handleSelect = (task: UiTask) => {
-		navigate(`/tasks/${task.id}`);
+		navigate(`/tasks-next/${task.id}`);
 	};
 
 	return (

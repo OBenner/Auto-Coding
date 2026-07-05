@@ -6,12 +6,18 @@
  * listing (`GET /api/tasks`) into the shared `UiTask` shape.
  */
 
-import type { AutoCodeClient, TaskStatus, UiTask } from "@auto-code/ui";
-import type { TaskListResponse, TaskSummary } from "./types";
+import type {
+	AutoCodeClient,
+	TaskStatus,
+	UiTask,
+	UiTaskDetail,
+} from "@auto-code/ui";
+import type { TaskDetail, TaskListResponse, TaskSummary } from "./types";
 
 /** The slice of ApiClient this adapter needs (keeps it unit-testable). */
 export interface TasksSource {
 	listTasks(): Promise<TaskListResponse>;
+	getTask(taskId: string): Promise<TaskDetail>;
 }
 
 /** Map the backend's free-form spec status onto the shared closed set. */
@@ -63,12 +69,36 @@ export function mapTaskSummaryToUiTask(task: TaskSummary): UiTask {
 	};
 }
 
+export function mapTaskDetailToUiTaskDetail(detail: TaskDetail): UiTaskDetail {
+	const breakdown = detail.progress;
+	return {
+		id: detail.folder,
+		title: detail.name,
+		status: mapStatus(detail.status),
+		specContent: detail.spec_content ?? undefined,
+		progressBreakdown:
+			breakdown != null
+				? {
+						completed: breakdown.completed,
+						inProgress: breakdown.in_progress,
+						pending: breakdown.pending,
+						failed: breakdown.failed,
+						total: breakdown.total,
+					}
+				: undefined,
+	};
+}
+
 /** REST-backed AutoCodeClient over the existing ApiClient. */
 export function createRestAutoCodeClient(source: TasksSource): AutoCodeClient {
 	return {
 		async listTasks(): Promise<UiTask[]> {
 			const response = await source.listTasks();
 			return (response.tasks ?? []).map(mapTaskSummaryToUiTask);
+		},
+		async getTask(id: string): Promise<UiTaskDetail> {
+			const detail = await source.getTask(id);
+			return mapTaskDetailToUiTaskDetail(detail);
 		},
 	};
 }
