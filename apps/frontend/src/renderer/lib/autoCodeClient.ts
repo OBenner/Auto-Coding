@@ -7,7 +7,13 @@
  * `UiTask` shape and exposes real-time updates via the store subscription.
  */
 
-import type { AutoCodeClient, TaskStatus as UiTaskStatus, UiTask, UiTaskBadge } from '@auto-code/ui';
+import type {
+  AutoCodeClient,
+  TaskStatus as UiTaskStatus,
+  UiTask,
+  UiTaskBadge,
+  UiTaskDetail,
+} from '@auto-code/ui';
 import type { Task } from '../../shared/types/task';
 
 /** User-facing badge labels, injected from the component so they go through i18n. */
@@ -64,6 +70,32 @@ export function mapTaskToUiTask(task: Task, labels: UiTaskBadgeLabels): UiTask {
   };
 }
 
+/** Detail view of a store task: base card fields + subtask breakdown.
+
+The renderer store carries no spec body, so ``specContent`` stays undefined
+until an IPC detail fetch is wired (follow-up). */
+export function mapTaskToUiTaskDetail(
+  task: Task,
+  labels: UiTaskBadgeLabels,
+): UiTaskDetail {
+  const subtasks = task.subtasks ?? [];
+  const count = (status: string) =>
+    subtasks.filter((subtask) => subtask.status === status).length;
+  return {
+    ...mapTaskToUiTask(task, labels),
+    progressBreakdown:
+      subtasks.length > 0
+        ? {
+            completed: count('completed'),
+            inProgress: count('in_progress'),
+            pending: count('pending'),
+            failed: count('failed'),
+            total: subtasks.length,
+          }
+        : undefined,
+  };
+}
+
 /** The slice of the zustand task store this adapter needs (unit-testable). */
 export interface TaskStoreLike {
   getState(): { tasks: Task[] };
@@ -89,6 +121,11 @@ export function createTaskStoreAutoCodeClient(
   };
   return {
     listTasks: async () => snapshot(store.getState().tasks),
+    getTask: async (id: string) => {
+      const task = store.getState().tasks.find((candidate) => candidate.id === id);
+      if (!task) throw new Error(`Task ${id} not found`);
+      return mapTaskToUiTaskDetail(task, resolveLabels());
+    },
     subscribeTasks: (onChange) => {
       // The store fires on every state change; only re-map when the tasks
       // array itself was replaced (zustand updates it immutably).

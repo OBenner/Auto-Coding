@@ -1,32 +1,28 @@
 /**
- * Kanban pilot on the shared design system (U1).
+ * Kanban pilot on the shared design system (U1/U2).
  *
  * Renders `libs/ui`'s KanbanBoard through the task-store AutoCodeClient
- * adapter — the first screen served by the shared UI in the desktop target.
+ * adapter; selecting a card opens the shared TaskDetail inline (U2), so the
+ * whole flow — board → detail → back — runs on the new UI end to end.
  * Reachable via the "Kanban (new UI)" sidebar view next to the legacy board.
  */
 
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AutoCodeClientProvider,
   KanbanBoard as UiKanbanBoard,
+  TaskDetail as UiTaskDetail,
+  useTask,
   useTasks,
 } from '@auto-code/ui';
-import type { KanbanColumn, UiTask } from '@auto-code/ui';
-import type { Task } from '../../shared/types/task';
+import type { KanbanColumn, TaskStatus } from '@auto-code/ui';
 import { useTaskStore } from '../stores/task-store';
 import { createTaskStoreAutoCodeClient } from '../lib/autoCodeClient';
 
-export interface KanbanPilotViewProps {
-  onTaskSelect?: (task: Task) => void;
-}
-
-function PilotBoard({ onTaskSelect }: Readonly<KanbanPilotViewProps>) {
+function usePilotColumns(): KanbanColumn[] {
   const { t } = useTranslation(['kanban']);
-  const { tasks, loading, error, reload } = useTasks();
-
-  const columns = useMemo<KanbanColumn[]>(
+  return useMemo<KanbanColumn[]>(
     () => [
       { status: 'draft', label: t('kanban:pilot.columns.draft') },
       { status: 'running', label: t('kanban:pilot.columns.running') },
@@ -35,13 +31,12 @@ function PilotBoard({ onTaskSelect }: Readonly<KanbanPilotViewProps>) {
     ],
     [t],
   );
+}
 
-  const handleSelect = (uiTask: UiTask) => {
-    const task = useTaskStore
-      .getState()
-      .tasks.find((candidate) => candidate.id === uiTask.id);
-    if (task) onTaskSelect?.(task);
-  };
+function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
+  const { t } = useTranslation(['kanban']);
+  const { tasks, loading, error, reload } = useTasks();
+  const columns = usePilotColumns();
 
   return (
     <div className="h-full overflow-auto p-4">
@@ -59,14 +54,41 @@ function PilotBoard({ onTaskSelect }: Readonly<KanbanPilotViewProps>) {
         <UiKanbanBoard
           tasks={tasks}
           columns={columns}
-          onSelectTask={handleSelect}
+          onSelectTask={(task) => onOpen(task.id)}
         />
       )}
     </div>
   );
 }
 
-export function KanbanPilotView({ onTaskSelect }: Readonly<KanbanPilotViewProps>) {
+function PilotDetail({
+  id,
+  onBack,
+}: Readonly<{ id: string; onBack: () => void }>) {
+  const columns = usePilotColumns();
+  const { task, loading, error, reload } = useTask(id);
+
+  const statusLabels = useMemo<Partial<Record<TaskStatus, string>>>(
+    () =>
+      Object.fromEntries(columns.map((column) => [column.status, column.label])),
+    [columns],
+  );
+
+  return (
+    <div className="h-full overflow-auto">
+      <UiTaskDetail
+        task={task}
+        loading={loading}
+        error={error}
+        onBack={onBack}
+        onRetry={reload}
+        statusLabels={statusLabels}
+      />
+    </div>
+  );
+}
+
+export function KanbanPilotView() {
   const { t } = useTranslation(['kanban']);
   // Keep the client identity stable across locale switches (recreating it
   // would tear down and re-establish the store subscription): the labels are
@@ -80,9 +102,15 @@ export function KanbanPilotView({ onTaskSelect }: Readonly<KanbanPilotViewProps>
     () => createTaskStoreAutoCodeClient(useTaskStore, () => labelsRef.current),
     [],
   );
+  const [openId, setOpenId] = useState<string | null>(null);
+
   return (
     <AutoCodeClientProvider client={client}>
-      <PilotBoard onTaskSelect={onTaskSelect} />
+      {openId == null ? (
+        <PilotBoard onOpen={setOpenId} />
+      ) : (
+        <PilotDetail id={openId} onBack={() => setOpenId(null)} />
+      )}
     </AutoCodeClientProvider>
   );
 }

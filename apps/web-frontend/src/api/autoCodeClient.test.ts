@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
 	createRestAutoCodeClient,
 	mapStatus,
+	mapTaskDetailToUiTaskDetail,
 	mapTaskSummaryToUiTask,
 	parseProgress,
 } from "./autoCodeClient";
-import type { TaskSummary } from "./types";
+import type { TaskDetail, TaskSummary } from "./types";
 
 const summary = (overrides: Partial<TaskSummary> = {}): TaskSummary => ({
 	number: "001",
@@ -69,10 +70,67 @@ describe("createRestAutoCodeClient", () => {
 				tasks: [summary(), summary({ folder: "002-x", status: "complete" })],
 				total: 2,
 			}),
+			getTask: async () => detail(),
 		});
 
 		const tasks = await client.listTasks();
 		expect(tasks.map((task) => task.id)).toEqual(["001-user-auth", "002-x"]);
 		expect(tasks[1].status).toBe("done");
+	});
+});
+
+const detail = (overrides: Partial<TaskDetail> = {}): TaskDetail => ({
+	number: "001",
+	name: "user-auth",
+	folder: "001-user-auth",
+	status: "in_progress (has build)",
+	progress: {
+		completed: 2,
+		in_progress: 1,
+		pending: 1,
+		failed: 1,
+		total: 5,
+		percentage: 40,
+	},
+	has_build: true,
+	spec_content: "# Spec body",
+	...overrides,
+});
+
+describe("mapTaskDetailToUiTaskDetail", () => {
+	it("maps detail fields incl. breakdown and decorated status", () => {
+		expect(mapTaskDetailToUiTaskDetail(detail())).toEqual({
+			id: "001-user-auth",
+			title: "user-auth",
+			status: "running",
+			specContent: "# Spec body",
+			progressBreakdown: {
+				completed: 2,
+				inProgress: 1,
+				pending: 1,
+				failed: 1,
+				total: 5,
+			},
+		});
+	});
+
+	it("omits optional fields when absent", () => {
+		const ui = mapTaskDetailToUiTaskDetail(
+			detail({ spec_content: undefined, progress: undefined as never }),
+		);
+		expect(ui.specContent).toBeUndefined();
+		expect(ui.progressBreakdown).toBeUndefined();
+	});
+});
+
+describe("createRestAutoCodeClient.getTask", () => {
+	it("fetches and maps detail through the injected source", async () => {
+		const client = createRestAutoCodeClient({
+			listTasks: async () => ({ tasks: [], total: 0 }),
+			getTask: async (id) => detail({ folder: id }),
+		});
+		const ui = await client.getTask?.("002-x");
+		expect(ui?.id).toBe("002-x");
+		expect(ui?.status).toBe("running");
 	});
 });

@@ -1015,7 +1015,7 @@ export function App() {
                 )}
                 {/* U1 pilot: shared-UI Kanban (libs/ui) next to the legacy one */}
                 {activeView === 'kanban-next' && (
-                  <KanbanPilotView onTaskSelect={handleTaskClick} />
+                  <KanbanPilotView />
                 )}
                 {/* TerminalGrid is always mounted but hidden when not active to preserve terminal state */}
                 <div className={activeView === 'terminals' ? 'h-full' : 'hidden'}>

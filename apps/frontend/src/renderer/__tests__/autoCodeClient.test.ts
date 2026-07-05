@@ -9,6 +9,7 @@ import {
   createTaskStoreAutoCodeClient,
   mapStatus,
   mapTaskToUiTask,
+  mapTaskToUiTaskDetail,
 } from '../lib/autoCodeClient';
 import type { TaskStoreLike, UiTaskBadgeLabels } from '../lib/autoCodeClient';
 import type { Subtask, Task } from '../../shared/types/task';
@@ -167,3 +168,43 @@ describe('createTaskStoreAutoCodeClient', () => {
     expect(seen).toEqual(['Error', 'Erreur']);
   });
 });
+
+describe('mapTaskToUiTaskDetail', () => {
+  it('adds a subtask breakdown on top of the card fields', () => {
+    const task = makeTask({
+      subtasks: [
+        makeSubtask('completed'),
+        makeSubtask('in_progress'),
+        makeSubtask('pending'),
+        makeSubtask('failed'),
+      ],
+    });
+    const detail = mapTaskToUiTaskDetail(task, LABELS);
+    expect(detail.id).toBe('t1');
+    expect(detail.progressBreakdown).toEqual({
+      completed: 1,
+      inProgress: 1,
+      pending: 1,
+      failed: 1,
+      total: 4,
+    });
+  });
+
+  it('omits the breakdown without subtasks', () => {
+    expect(mapTaskToUiTaskDetail(makeTask(), LABELS).progressBreakdown).toBeUndefined();
+  });
+});
+
+describe('createTaskStoreAutoCodeClient.getTask', () => {
+  it('resolves detail from the store and errors on unknown ids', async () => {
+    const store = {
+      getState: () => ({ tasks: [makeTask({ id: 'known' })] }),
+      subscribe: () => () => {},
+    };
+    const client = createTaskStoreAutoCodeClient(store, LABELS);
+    const detail = await client.getTask?.('known');
+    expect(detail?.id).toBe('known');
+    await expect(client.getTask?.('missing')).rejects.toThrow('not found');
+  });
+});
+
