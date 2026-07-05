@@ -18,7 +18,12 @@ export interface TasksSource {
 export function mapStatus(status: string): TaskStatus {
 	// list_specs suffixes built specs with " (has build)" — strip decorations
 	// before matching, or "in_progress (has build)" would land in Draft.
-	const normalized = (status ?? "").replace(/\s*\(has build\)$/i, "").trim();
+	// Plain string ops, no regex: Sonar S8786 flags `\s*(...)$` backtracking.
+	let normalized = (status ?? "").trim();
+	const suffix = "(has build)";
+	if (normalized.toLowerCase().endsWith(suffix)) {
+		normalized = normalized.slice(0, -suffix.length).trimEnd();
+	}
 	switch (normalized) {
 		case "complete":
 			return "done";
