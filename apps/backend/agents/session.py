@@ -407,6 +407,65 @@ def _resolve_active_provider() -> str | None:
     return None
 
 
+# Default cost-report role attribution for the phases emitted by the current
+# save_token_stats() callers; callers with a different role pass agent_type.
+_PHASE_AGENT_MAP = {
+    "planning": "planner",
+    "coding": "coder",
+    "validation": "qa_reviewer",
+    "performance_profiling": "performance_profiler",
+}
+
+
+def _project_dir_for_spec(spec_dir: Path) -> Path | None:
+    """Resolve the project root for a `<project>/.auto-claude/specs/<spec>` dir.
+
+    Returns None when the spec dir doesn't follow that layout (tests, ad-hoc
+    dirs) — the project-level summary is skipped in that case.
+    """
+    specs_dir = spec_dir.parent
+    auto_claude_dir = specs_dir.parent
+    if specs_dir.name == "specs" and auto_claude_dir.name == ".auto-claude":
+        return auto_claude_dir.parent
+    return None
+
+
+def _record_cost_usage(
+    spec_dir: Path,
+    phase: str,
+    input_tokens: int,
+    output_tokens: int,
+    model: str | None,
+    provider: str | None,
+    agent_type: str | None,
+) -> None:
+    """Attribute cost for a session and refresh the project usage summary.
+
+    Appends a usage record to the spec's cost_report.json and rewrites the
+    project-level .auto-claude/model_usage_summary.json. Best-effort: cost
+    accounting must never fail a build, so all errors are logged and swallowed.
+    """
+    try:
+        from core.cost_tracking import CostTracker
+
+        CostTracker(spec_dir).log_usage(
+            agent_type=agent_type or _PHASE_AGENT_MAP.get(phase, phase),
+            model=model or "unknown",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            provider=provider or "unknown",
+            phase=phase,
+        )
+
+        project_dir = _project_dir_for_spec(spec_dir)
+        if project_dir is not None:
+            from analysis.model_usage_analytics import write_model_usage_summary
+
+            write_model_usage_summary(project_dir)
+    except Exception as e:
+        logger.warning(f"Cost usage recording failed (non-fatal): {e}")
+
+
 def save_token_stats(
     spec_dir: Path,
     phase: PhaseType,
@@ -414,12 +473,15 @@ def save_token_stats(
     output_tokens: int,
     model: str | None = None,
     provider: str | None = None,
+    agent_type: str | None = None,
 ) -> bool:
     """
     Update token statistics for a phase and persist to token_stats.json.
 
     This function loads existing stats, updates the specified phase, recalculates
-    totals, and saves atomically.
+    totals, and saves atomically. It also appends a cost record to the spec's
+    cost_report.json and refreshes the project-level model usage summary
+    (best-effort — failures there never affect the returned status).
 
     Args:
         spec_dir: Path to spec directory
@@ -429,6 +491,8 @@ def save_token_stats(
         model: Model used in this session (recorded for cost attribution).
         provider: Provider used; when omitted, the active provider is resolved
             from provider config so every caller records it without changes.
+        agent_type: Role to attribute the cost to; when omitted, derived from
+            the phase (planning → planner, coding → coder, …).
 
     Returns:
         True if saved successfully, False otherwise
@@ -497,6 +561,16 @@ def save_token_stats(
 
         logger.debug(
             f"Saved token stats for {phase} phase: {input_tokens} in, {output_tokens} out"
+        )
+
+        _record_cost_usage(
+            spec_dir=spec_dir,
+            phase=phase,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model=model,
+            provider=provider,
+            agent_type=agent_type,
         )
         return True
 

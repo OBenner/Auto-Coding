@@ -137,6 +137,7 @@ async def run_performance_profiler(
                     "performance_profiling",
                     input_tokens,
                     output_tokens,
+                    model=profiler_model,
                 )
                 if saved:
                     logger.debug(

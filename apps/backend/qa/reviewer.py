@@ -1188,6 +1188,7 @@ async def run_qa_agent_session(
                     "validation",
                     usage_metadata["input_tokens"],
                     usage_metadata["output_tokens"],
+                    model=getattr(client, "model", None),
                 )
                 if saved:
                     print_status(

@@ -1655,6 +1655,7 @@ async def run_autonomous_agent(
                     "coding",
                     usage_metadata["input_tokens"],
                     usage_metadata["output_tokens"],
+                    model=getattr(client, "model", None),
                 )
                 if saved:
                     logger.debug(
