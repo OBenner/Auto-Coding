@@ -21,7 +21,11 @@ from api.models.spec_record import SpecAuditEntry, SpecRecord  # noqa: F401
 # Import all models so Base.metadata knows about all tables
 # These imports register models with SQLAlchemy Base.metadata
 from api.models.user import User  # noqa: F401
-from api.models.workspace import Workspace, WorkspaceUser  # noqa: F401
+from api.models.workspace import (  # noqa: F401
+    Workspace,
+    WorkspaceInvitation,
+    WorkspaceUser,
+)
 
 # Import application components
 from core.database import Base, get_db
@@ -37,6 +41,7 @@ __all__ = [
     "GitRepository",
     "Workspace",
     "WorkspaceUser",
+    "WorkspaceInvitation",
     "AgentExecution",
     "SpecRecord",
     "SpecAuditEntry",

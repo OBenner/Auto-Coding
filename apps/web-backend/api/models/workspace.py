@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from core.database import Base
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -24,6 +24,9 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import relationship
+
+# FK target shared by every user-referencing column in this module.
+_USERS_FK = "users.id"
 
 
 class Workspace(Base):
@@ -50,7 +53,7 @@ class Workspace(Base):
     # application logic (Track C).
     owner_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey(_USERS_FK, ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -92,7 +95,7 @@ class WorkspaceUser(Base):
         index=True,
     )
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey(_USERS_FK, ondelete="CASCADE"), nullable=False, index=True
     )
     role = Column(String(20), nullable=False, default="viewer")
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
@@ -104,6 +107,73 @@ class WorkspaceUser(Base):
         return (
             f"<WorkspaceUser(workspace_id={self.workspace_id}, "
             f"user_id={self.user_id}, role={self.role!r})>"
+        )
+
+
+# Closed sets for invitations; the DB CHECK constraints are derived from them.
+INVITATION_ROLES = ("owner", "editor", "viewer")
+INVITATION_STATUSES = ("pending", "accepted", "revoked")
+_INVITATION_ROLES_SQL = ", ".join(f"'{r}'" for r in INVITATION_ROLES)
+_INVITATION_STATUSES_SQL = ", ".join(f"'{s}'" for s in INVITATION_STATUSES)
+
+
+class WorkspaceInvitation(Base):
+    """An email invitation into a workspace (C7 — team onboarding).
+
+    Inviting an existing user adds the membership immediately and records the
+    invitation as ``accepted`` (audit of who invited whom); inviting an unknown
+    email stays ``pending`` until that email registers, at which point pending
+    invitations convert into memberships. Emails are stored lowercased.
+    """
+
+    __tablename__ = "workspace_invitations"
+    __table_args__ = (
+        CheckConstraint(
+            f"role IN ({_INVITATION_ROLES_SQL})",
+            name="ck_workspace_invitation_role",
+        ),
+        CheckConstraint(
+            f"status IN ({_INVITATION_STATUSES_SQL})",
+            name="ck_workspace_invitation_status",
+        ),
+        # At most one *pending* invitation per (workspace, email); accepted or
+        # revoked history rows are unconstrained.
+        Index(
+            "uq_pending_invitation_per_email",
+            "workspace_id",
+            "email",
+            unique=True,
+            sqlite_where=text("status = 'pending'"),
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default="viewer")
+    status = Column(String(20), nullable=False, default="pending")
+    # SET NULL: the invitation audit survives the inviter's deletion.
+    invited_by = Column(
+        Integer, ForeignKey(_USERS_FK, ondelete="SET NULL"), nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+    responded_at = Column(DateTime(timezone=True), nullable=True)
+
+    workspace = relationship("Workspace")
+
+    def __repr__(self) -> str:
+        return (
+            f"<WorkspaceInvitation(id={self.id}, workspace_id={self.workspace_id}, "
+            f"status={self.status!r})>"
         )
 
 
@@ -164,4 +234,38 @@ class WorkspaceMemberListResponse(BaseModel):
 
     members: list[WorkspaceMemberResponse] = Field(
         default_factory=list, description="Workspace members (owner first)"
+    )
+
+
+class InvitationCreateRequest(BaseModel):
+    """Request model for inviting someone into a workspace by email."""
+
+    email: EmailStr = Field(..., description="Email address to invite")
+    role: Literal["owner", "editor", "viewer"] = Field(
+        "viewer", description="Role to grant on acceptance"
+    )
+
+
+class InvitationResponse(BaseModel):
+    """Response model for one invitation (pending/accepted/revoked)."""
+
+    id: int = Field(..., description="Invitation ID")
+    workspace_id: int = Field(..., description="Workspace invited into")
+    email: str = Field(..., description="Invited email (lowercased)")
+    role: str = Field(..., description="Role granted on acceptance")
+    status: str = Field(..., description="pending/accepted/revoked")
+    invited_by: int | None = Field(None, description="User who sent the invitation")
+    created_at: datetime = Field(..., description="When the invitation was created")
+    responded_at: datetime | None = Field(
+        None, description="When it was accepted/revoked"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InvitationListResponse(BaseModel):
+    """Response model for a workspace's invitations (newest first)."""
+
+    invitations: list[InvitationResponse] = Field(
+        default_factory=list, description="Invitations, newest first"
     )
