@@ -6,7 +6,7 @@
  * /kanban-next alongside the legacy /kanban until the migration completes.
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -60,7 +60,10 @@ function PilotBoard() {
 	);
 }
 
-const CHIP_LABEL_KEYS: Record<string, string> = {
+/** Normalized backend statuses that get a localized chip label. */
+type ChippedStatus = "complete" | "in_progress" | "pending" | "initialized";
+
+const CHIP_LABEL_KEYS: Record<ChippedStatus, string> = {
 	complete: "tasks:status.complete",
 	in_progress: "tasks:status.in_progress",
 	pending: "tasks:status.pending",
@@ -69,15 +72,21 @@ const CHIP_LABEL_KEYS: Record<string, string> = {
 
 export function KanbanPilot() {
 	const { t } = useTranslation(["tasks"]);
+	// Keep the client identity stable across locale switches (useTasks
+	// refetches whenever the injected client changes): read translations
+	// through a ref, as in the Electron pilot. Chip labels are baked in at
+	// map time either way, so they pick up a new locale on the next fetch.
+	const tRef = useRef(t);
+	tRef.current = t;
 	const client = useMemo(
 		() =>
 			createRestAutoCodeClient(apiClient, {
-				statusChipLabel: (normalized) => {
-					const key = CHIP_LABEL_KEYS[normalized];
-					return key == null ? undefined : t(key);
-				},
+				statusChipLabel: (normalized) =>
+					Object.hasOwn(CHIP_LABEL_KEYS, normalized)
+						? tRef.current(CHIP_LABEL_KEYS[normalized as ChippedStatus])
+						: undefined,
 			}),
-		[t],
+		[],
 	);
 	return (
 		<AutoCodeClientProvider client={client}>
