@@ -29,6 +29,15 @@ class GitRepository(Base):
     # Foreign key to user
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
+    # Workspace the repo is linked into (C6). Nullable at the DB level for
+    # migration safety; every API write sets it, and all reads filter by it.
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
     # Git provider details
     provider = Column(String(50), nullable=False)  # "github", "gitlab", etc.
     repository_url = Column(String(500), nullable=False)
@@ -51,6 +60,7 @@ class GitRepository(Base):
 
     # Relationship to User
     user = relationship("User", back_populates="repositories")
+    workspace = relationship("Workspace")
 
     def __repr__(self) -> str:
         """String representation of GitRepository model"""
@@ -75,10 +85,13 @@ class RepositoryCreateRequest(BaseModel):
 
 
 class RepositoryResponse(BaseModel):
-    """Response model for repository data"""
+    """Response model for repository data (never includes OAuth tokens)."""
 
     id: int = Field(..., description="Repository ID")
     user_id: int = Field(..., description="User ID")
+    workspace_id: int | None = Field(
+        None, description="Workspace the repository is linked into"
+    )
     provider: str = Field(..., description="Git provider")
     repository_url: str = Field(..., description="Repository URL")
     repository_name: str = Field(..., description="Repository name")

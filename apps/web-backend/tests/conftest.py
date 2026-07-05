@@ -81,6 +81,10 @@ def test_db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # Match production behavior: enforce FKs (incl. ON DELETE CASCADE) on SQLite.
+    from core.database import enable_sqlite_foreign_keys
+
+    enable_sqlite_foreign_keys(engine)
 
     # Create all tables
     Base.metadata.create_all(bind=engine)
