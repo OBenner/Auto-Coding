@@ -267,6 +267,14 @@ class SecurityScanner:
         # JavaScript/Node.js - npm audit
         # (handled in dependency audits for Node projects)
 
+        # C/C++ SAST with cppcheck
+        if self._is_c_cpp_project(project_dir):
+            self._run_cppcheck(project_dir, result)
+
+        # Go SAST with gosec
+        if (project_dir / "go.mod").exists():
+            self._run_gosec(project_dir, result)
+
     def _run_bandit(self, project_dir: Path, result: SecurityScanResult) -> None:
         """Run Bandit security scanner for Python projects."""
         if not self._check_bandit_available():
@@ -353,6 +361,14 @@ class SecurityScanner:
         # pip-audit for Python projects (if available)
         if self._is_python_project(project_dir):
             self._run_pip_audit(project_dir, result)
+
+        # cargo audit for Rust projects (needs Cargo.lock)
+        if (project_dir / "Cargo.lock").exists():
+            self._run_cargo_audit(project_dir, result)
+
+        # composer audit for PHP projects (needs composer.lock)
+        if (project_dir / "composer.lock").exists():
+            self._run_composer_audit(project_dir, result)
 
     def _run_npm_audit(self, project_dir: Path, result: SecurityScanResult) -> None:
         """Run npm audit for JavaScript projects."""
@@ -450,6 +466,196 @@ class SecurityScanner:
         except (OSError, ValueError, KeyError):
             logger.debug("pip-audit output parsing failed")
 
+    def _run_cppcheck(self, project_dir: Path, result: SecurityScanResult) -> None:
+        """Run cppcheck static analysis for C/C++ projects."""
+        try:
+            # cppcheck writes findings to stderr, one per line via --template
+            cmd = [
+                "cppcheck",
+                "--enable=warning,portability",
+                "--template={file}|{line}|{severity}|{id}|{message}",
+                "--quiet",
+                "--error-exitcode=0",
+                ".",
+            ]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+            )
+
+            for raw_line in (proc.stderr or "").splitlines():
+                parts = raw_line.split("|", 4)
+                if len(parts) != 5:
+                    continue
+                file, line, cpp_severity, check_id, message = parts
+
+                if cpp_severity == "error":
+                    severity = "high"
+                elif cpp_severity in ("warning", "portability"):
+                    severity = "medium"
+                else:
+                    severity = "low"
+
+                result.vulnerabilities.append(
+                    SecurityVulnerability(
+                        severity=severity,
+                        source="cppcheck",
+                        title=f"cppcheck {check_id}",
+                        description=message,
+                        file=file or None,
+                        line=int(line) if line.isdigit() else None,
+                    )
+                )
+
+        except FileNotFoundError:
+            logger.debug("cppcheck not available")
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("cppcheck scan timed out")
+        except Exception as e:
+            result.scan_errors.append(f"cppcheck error: {str(e)}")
+
+    def _run_gosec(self, project_dir: Path, result: SecurityScanResult) -> None:
+        """Run gosec security scanner for Go projects."""
+        try:
+            # gosec exits non-zero when issues are found; parse stdout anyway
+            cmd = ["gosec", "-fmt=json", "-quiet", "./..."]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+            )
+
+            if proc.stdout:
+                try:
+                    gosec_output = json.loads(proc.stdout)
+                    for issue in gosec_output.get("Issues", []):
+                        severity = issue.get("severity", "MEDIUM").lower()
+                        if severity not in ("high", "medium", "low"):
+                            severity = "medium"
+
+                        line = issue.get("line", "")
+                        result.vulnerabilities.append(
+                            SecurityVulnerability(
+                                severity=severity,
+                                source="gosec",
+                                title=issue.get("details", "Unknown issue"),
+                                description=issue.get("details", ""),
+                                file=issue.get("file"),
+                                line=int(line) if str(line).isdigit() else None,
+                                cwe=issue.get("cwe", {}).get("id"),
+                            )
+                        )
+                except json.JSONDecodeError:
+                    result.scan_errors.append("Failed to parse gosec output")
+
+        except FileNotFoundError:
+            logger.debug("gosec not available")
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("gosec scan timed out")
+        except Exception as e:
+            result.scan_errors.append(f"gosec error: {str(e)}")
+
+    def _run_cargo_audit(self, project_dir: Path, result: SecurityScanResult) -> None:
+        """Run cargo audit for Rust projects."""
+        try:
+            # cargo audit exits non-zero when vulns are found; parse stdout anyway
+            cmd = ["cargo", "audit", "--json"]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+            )
+
+            if proc.stdout:
+                try:
+                    audit_output = json.loads(proc.stdout)
+                    vulns = audit_output.get("vulnerabilities", {})
+                    for vuln in vulns.get("list", []):
+                        advisory = vuln.get("advisory", {})
+                        package = vuln.get("package", {})
+
+                        result.vulnerabilities.append(
+                            SecurityVulnerability(
+                                severity="high",
+                                source="cargo_audit",
+                                title=(
+                                    f"Vulnerable crate: {package.get('name', '?')} "
+                                    f"({advisory.get('id', '?')})"
+                                ),
+                                description=advisory.get("title", ""),
+                                file="Cargo.lock",
+                            )
+                        )
+                except json.JSONDecodeError:
+                    result.scan_errors.append("Failed to parse cargo audit output")
+
+        except FileNotFoundError:
+            logger.debug("cargo audit not available")
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("cargo audit timed out")
+        except Exception as e:
+            result.scan_errors.append(f"cargo audit error: {str(e)}")
+
+    def _run_composer_audit(
+        self, project_dir: Path, result: SecurityScanResult
+    ) -> None:
+        """Run composer audit for PHP projects."""
+        try:
+            # composer audit exits non-zero when advisories exist; parse stdout
+            cmd = ["composer", "audit", "--format=json", "--no-interaction"]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+            )
+
+            if proc.stdout:
+                try:
+                    audit_output = json.loads(proc.stdout)
+                    advisories = audit_output.get("advisories", {})
+                    for pkg_name, pkg_advisories in advisories.items():
+                        for advisory in pkg_advisories:
+                            severity = advisory.get("severity", "medium").lower()
+                            if severity not in ("critical", "high", "medium", "low"):
+                                severity = "medium"
+
+                            result.vulnerabilities.append(
+                                SecurityVulnerability(
+                                    severity=severity,
+                                    source="composer_audit",
+                                    title=f"Vulnerable dependency: {pkg_name}",
+                                    description=advisory.get("title", ""),
+                                    file="composer.json",
+                                    cwe=advisory.get("cve"),
+                                )
+                            )
+                except json.JSONDecodeError:
+                    pass  # composer audit may return plain text on no findings
+
+        except FileNotFoundError:
+            logger.debug("composer not available")
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("composer audit timed out")
+        except Exception as e:
+            result.scan_errors.append(f"composer audit error: {str(e)}")
+
     def _run_predictive_scan(
         self, project_dir: Path, result: SecurityScanResult
     ) -> None:
@@ -516,6 +722,15 @@ class SecurityScanner:
             project_dir / "setup.cfg",
         ]
         return any(p.exists() for p in indicators)
+
+    def _is_c_cpp_project(self, project_dir: Path) -> bool:
+        """Check if this is a C/C++ project."""
+        if (project_dir / "CMakeLists.txt").exists():
+            return True
+        for pattern in ("*.c", "*.cpp", "*.cc", "src/*.c", "src/*.cpp", "src/*.cc"):
+            if any(project_dir.glob(pattern)):
+                return True
+        return False
 
     def _check_bandit_available(self) -> bool:
         """Check if Bandit is available."""

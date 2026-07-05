@@ -1634,3 +1634,26 @@ class TestInheritedSecurityProfile:
 
         # Non-ancestor inherited_from should trigger re-analysis
         assert analyzer.should_reanalyze(spoofed_profile) is True
+
+
+class TestLanguageSecurityRules:
+    """Tests for per-language security scanner and rule tables."""
+
+    def test_c_cpp_have_scanners(self):
+        """C and C++ have security scanner entries."""
+        from security.profile import get_security_scanners
+
+        for lang in ("c", "cpp"):
+            scanners = get_security_scanners(lang)
+            assert "cppcheck" in scanners
+            assert "clang-tidy" in scanners
+
+    def test_c_cpp_have_rules(self):
+        """C and C++ have dangerous-function rules with sanitizer guidance."""
+        from security.profile import get_security_rules
+
+        for lang in ("c", "cpp"):
+            rules = get_security_rules(lang)
+            assert "gets" in rules["dangerous_functions"]
+            assert "system" in rules["dangerous_functions"]
+            assert any("fsanitize" in alt for alt in rules["secure_alternatives"])
