@@ -338,6 +338,229 @@ class TestOtherLanguageFrameworks:
         assert "minitest" in framework_names
 
 
+class TestJvmFrameworks:
+    """Tests for Java/Kotlin/Scala test framework detection."""
+
+    def test_detect_maven(self, discovery, temp_dir):
+        """Test Maven detection via pom.xml."""
+        (temp_dir / "pom.xml").write_text("<project></project>")
+
+        result = discovery.discover(temp_dir)
+
+        maven = next(f for f in result.frameworks if f.name == "maven")
+        assert maven.command == "mvn test"
+        assert result.test_command == "mvn test"
+
+    def test_detect_gradle_without_wrapper(self, discovery, temp_dir):
+        """Gradle project without wrapper uses global gradle."""
+        (temp_dir / "build.gradle").write_text("plugins { id 'java' }")
+
+        result = discovery.discover(temp_dir)
+
+        gradle = next(f for f in result.frameworks if f.name == "gradle")
+        assert gradle.command == "gradle test"
+
+    def test_detect_gradle_kts_with_wrapper(self, discovery, temp_dir):
+        """Kotlin-DSL Gradle project with wrapper prefers ./gradlew."""
+        (temp_dir / "build.gradle.kts").write_text('plugins { kotlin("jvm") }')
+        (temp_dir / "gradlew").write_text("#!/bin/sh")
+
+        result = discovery.discover(temp_dir)
+
+        gradle = next(f for f in result.frameworks if f.name == "gradle")
+        assert gradle.command == "./gradlew test"
+        assert gradle.config_file == "build.gradle.kts"
+
+    def test_detect_sbt(self, discovery, temp_dir):
+        """Test sbt detection via build.sbt."""
+        (temp_dir / "build.sbt").write_text('name := "test"')
+
+        result = discovery.discover(temp_dir)
+
+        sbt = next(f for f in result.frameworks if f.name == "sbt")
+        assert sbt.command == "sbt test"
+
+
+class TestDotnetFrameworks:
+    """Tests for .NET test framework detection."""
+
+    def test_detect_dotnet_from_sln(self, discovery, temp_dir):
+        """Test dotnet test detection via solution file."""
+        (temp_dir / "App.sln").write_text("")
+
+        result = discovery.discover(temp_dir)
+
+        dotnet = next(f for f in result.frameworks if f.name == "dotnet_test")
+        assert dotnet.command == "dotnet test"
+        assert dotnet.coverage_command is not None
+
+    def test_detect_dotnet_from_nested_csproj(self, discovery, temp_dir):
+        """Test dotnet test detection via csproj in a subdirectory."""
+        (temp_dir / "src").mkdir()
+        (temp_dir / "src" / "App.csproj").write_text("<Project></Project>")
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "dotnet_test" in framework_names
+
+
+class TestNativeFrameworks:
+    """Tests for C/C++ test setup detection."""
+
+    def test_detect_ctest(self, discovery, temp_dir):
+        """CMake project with enable_testing gets a ctest command."""
+        (temp_dir / "CMakeLists.txt").write_text(
+            "project(demo)\nenable_testing()\nadd_test(NAME t COMMAND t)"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        ctest = next(f for f in result.frameworks if f.name == "ctest")
+        assert ctest.command == "ctest --test-dir build --output-on-failure"
+
+    def test_cmake_without_tests_not_detected(self, discovery, temp_dir):
+        """CMake project without test markers gets no framework."""
+        (temp_dir / "CMakeLists.txt").write_text("project(demo)")
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "ctest" not in framework_names
+
+    def test_detect_makefile_test_target(self, discovery, temp_dir):
+        """Makefile with a test target gets make test."""
+        (temp_dir / "Makefile").write_text("test:\n\t./run_tests\n")
+
+        result = discovery.discover(temp_dir)
+
+        make = next(f for f in result.frameworks if f.name == "make_test")
+        assert make.command == "make test"
+
+    def test_detect_makefile_check_target(self, discovery, temp_dir):
+        """Makefile with a check target gets make check."""
+        (temp_dir / "Makefile").write_text("check:\n\t./run_tests\n")
+
+        result = discovery.discover(temp_dir)
+
+        make = next(f for f in result.frameworks if f.name == "make_test")
+        assert make.command == "make check"
+
+    def test_makefile_without_test_target_not_detected(self, discovery, temp_dir):
+        """Makefile without test/check targets gets no framework."""
+        (temp_dir / "Makefile").write_text("build:\n\tgcc main.c\n")
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "make_test" not in framework_names
+
+
+class TestScriptingTailFrameworks:
+    """Tests for PHP, Elixir, Swift, Dart, Zig, and Haskell detection."""
+
+    def test_detect_phpunit_from_composer(self, discovery, temp_dir):
+        """PHPUnit detected from composer.json require-dev."""
+        (temp_dir / "composer.json").write_text(
+            json.dumps({"require-dev": {"phpunit/phpunit": "^11.0"}})
+        )
+
+        result = discovery.discover(temp_dir)
+
+        phpunit = next(f for f in result.frameworks if f.name == "phpunit")
+        assert phpunit.command == "vendor/bin/phpunit"
+
+    def test_detect_phpunit_from_config(self, discovery, temp_dir):
+        """PHPUnit detected from phpunit.xml.dist."""
+        (temp_dir / "phpunit.xml.dist").write_text("<phpunit/>")
+
+        result = discovery.discover(temp_dir)
+
+        phpunit = next(f for f in result.frameworks if f.name == "phpunit")
+        assert phpunit.config_file == "phpunit.xml.dist"
+
+    def test_detect_mix_test(self, discovery, temp_dir):
+        """Elixir project gets mix test."""
+        (temp_dir / "mix.exs").write_text("defmodule Demo.MixProject do end")
+
+        result = discovery.discover(temp_dir)
+
+        mix = next(f for f in result.frameworks if f.name == "mix_test")
+        assert mix.command == "mix test"
+        assert mix.coverage_command == "mix test --cover"
+
+    def test_detect_swift_test(self, discovery, temp_dir):
+        """Swift package gets swift test."""
+        (temp_dir / "Package.swift").write_text("// swift-tools-version:5.9")
+
+        result = discovery.discover(temp_dir)
+
+        swift = next(f for f in result.frameworks if f.name == "swift_test")
+        assert swift.command == "swift test"
+
+    def test_detect_flutter_test(self, discovery, temp_dir):
+        """Flutter project gets flutter test."""
+        (temp_dir / "pubspec.yaml").write_text(
+            "name: demo\ndependencies:\n  flutter:\n    sdk: flutter\n"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        flutter = next(f for f in result.frameworks if f.name == "flutter_test")
+        assert flutter.command == "flutter test"
+
+    def test_detect_dart_test(self, discovery, temp_dir):
+        """Pure Dart project gets dart test."""
+        (temp_dir / "pubspec.yaml").write_text("name: demo\n")
+
+        result = discovery.discover(temp_dir)
+
+        dart = next(f for f in result.frameworks if f.name == "dart_test")
+        assert dart.command == "dart test"
+
+    def test_detect_zig_test(self, discovery, temp_dir):
+        """Zig project gets zig build test."""
+        (temp_dir / "build.zig").write_text("pub fn build() void {}")
+
+        result = discovery.discover(temp_dir)
+
+        zig = next(f for f in result.frameworks if f.name == "zig_test")
+        assert zig.command == "zig build test"
+
+    def test_detect_stack_test(self, discovery, temp_dir):
+        """Haskell stack project gets stack test."""
+        (temp_dir / "stack.yaml").write_text("resolver: lts-22.0")
+
+        result = discovery.discover(temp_dir)
+
+        stack = next(f for f in result.frameworks if f.name == "stack_test")
+        assert stack.command == "stack test"
+
+    def test_detect_cabal_test(self, discovery, temp_dir):
+        """Haskell cabal project gets cabal test."""
+        (temp_dir / "demo.cabal").write_text("name: demo")
+
+        result = discovery.discover(temp_dir)
+
+        cabal = next(f for f in result.frameworks if f.name == "cabal_test")
+        assert cabal.command == "cabal test"
+
+
+class TestPrimaryCommandPrecedence:
+    """New ecosystems must not change the primary command of existing ones."""
+
+    def test_python_project_with_makefile_keeps_pytest(self, discovery, temp_dir):
+        """Python project with a Makefile test target keeps pytest primary."""
+        (temp_dir / "requirements.txt").write_text("pytest\n")
+        (temp_dir / "Makefile").write_text("test:\n\tpytest\n")
+
+        result = discovery.discover(temp_dir)
+
+        assert result.test_command == "pytest"
+        framework_names = [f.name for f in result.frameworks]
+        assert "make_test" in framework_names
+
+
 # =============================================================================
 # TEST DIRECTORY DETECTION
 # =============================================================================

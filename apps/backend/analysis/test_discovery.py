@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -179,6 +180,100 @@ FRAMEWORK_PATTERNS = {
         "command": "bundle exec rake test",
         "coverage_command": None,
     },
+    # Java/Kotlin (JVM)
+    "maven": {
+        "config_files": ["pom.xml"],
+        "type": "all",
+        "command": "mvn test",
+        "coverage_command": None,
+    },
+    "gradle": {
+        "config_files": ["build.gradle", "build.gradle.kts"],
+        "type": "all",
+        "command": "gradle test",
+        "coverage_command": None,
+    },
+    # Scala
+    "sbt": {
+        "config_files": ["build.sbt"],
+        "type": "all",
+        "command": "sbt test",
+        "coverage_command": None,
+    },
+    # C#/.NET
+    "dotnet_test": {
+        "config_files": [],
+        "type": "all",
+        "command": "dotnet test",
+        "coverage_command": 'dotnet test --collect:"XPlat Code Coverage"',
+    },
+    # C/C++
+    "ctest": {
+        "config_files": ["CMakeLists.txt"],
+        "type": "all",
+        "command": "ctest --test-dir build --output-on-failure",
+        "coverage_command": None,
+    },
+    "make_test": {
+        "config_files": ["Makefile"],
+        "type": "all",
+        "command": "make test",
+        "coverage_command": None,
+    },
+    # PHP
+    "phpunit": {
+        "config_files": ["phpunit.xml", "phpunit.xml.dist"],
+        "type": "all",
+        "command": "vendor/bin/phpunit",
+        "coverage_command": None,
+    },
+    # Elixir
+    "mix_test": {
+        "config_files": ["mix.exs"],
+        "type": "all",
+        "command": "mix test",
+        "coverage_command": "mix test --cover",
+    },
+    # Swift
+    "swift_test": {
+        "config_files": ["Package.swift"],
+        "type": "all",
+        "command": "swift test",
+        "coverage_command": "swift test --enable-code-coverage",
+    },
+    # Dart/Flutter
+    "dart_test": {
+        "config_files": ["pubspec.yaml"],
+        "type": "all",
+        "command": "dart test",
+        "coverage_command": None,
+    },
+    "flutter_test": {
+        "config_files": ["pubspec.yaml"],
+        "type": "all",
+        "command": "flutter test",
+        "coverage_command": "flutter test --coverage",
+    },
+    # Zig
+    "zig_test": {
+        "config_files": ["build.zig"],
+        "type": "all",
+        "command": "zig build test",
+        "coverage_command": None,
+    },
+    # Haskell
+    "stack_test": {
+        "config_files": ["stack.yaml"],
+        "type": "all",
+        "command": "stack test",
+        "coverage_command": None,
+    },
+    "cabal_test": {
+        "config_files": ["cabal.project"],
+        "type": "all",
+        "command": "cabal test",
+        "coverage_command": None,
+    },
 }
 
 
@@ -246,6 +341,18 @@ class TestDiscovery:
             self._discover_go_frameworks(project_dir, result)
         if (project_dir / "Gemfile").exists():
             self._discover_ruby_frameworks(project_dir, result)
+
+        # Additional language ecosystems (each method checks its own markers)
+        self._discover_jvm_frameworks(project_dir, result)
+        self._discover_sbt_frameworks(project_dir, result)
+        self._discover_dotnet_frameworks(project_dir, result)
+        self._discover_c_cpp_frameworks(project_dir, result)
+        self._discover_php_frameworks(project_dir, result)
+        self._discover_elixir_frameworks(project_dir, result)
+        self._discover_swift_frameworks(project_dir, result)
+        self._discover_dart_frameworks(project_dir, result)
+        self._discover_zig_frameworks(project_dir, result)
+        self._discover_haskell_frameworks(project_dir, result)
 
         # Find test directories
         result.test_directories = self._find_test_directories(project_dir)
@@ -517,6 +624,259 @@ class TestDiscovery:
                 )
             )
 
+    def _discover_jvm_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover JVM (Maven/Gradle) test setups."""
+        if (project_dir / "pom.xml").exists():
+            result.frameworks.append(
+                TestFramework(
+                    name="maven",
+                    type="all",
+                    command="mvn test",
+                    config_file="pom.xml",
+                )
+            )
+
+        gradle_config = next(
+            (
+                f
+                for f in ("build.gradle", "build.gradle.kts")
+                if (project_dir / f).exists()
+            ),
+            None,
+        )
+        if gradle_config:
+            # Prefer the wrapper when the project ships one
+            command = (
+                "./gradlew test"
+                if (project_dir / "gradlew").exists()
+                else "gradle test"
+            )
+            result.frameworks.append(
+                TestFramework(
+                    name="gradle",
+                    type="all",
+                    command=command,
+                    config_file=gradle_config,
+                )
+            )
+
+    def _discover_sbt_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Scala (sbt) test setups."""
+        if (project_dir / "build.sbt").exists():
+            result.frameworks.append(
+                TestFramework(
+                    name="sbt",
+                    type="all",
+                    command="sbt test",
+                    config_file="build.sbt",
+                )
+            )
+
+    def _discover_dotnet_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover .NET test setups from solution/project files."""
+        candidates = (
+            list(project_dir.glob("*.sln"))
+            + list(project_dir.glob("*.csproj"))
+            + list(project_dir.glob("*/*.csproj"))
+        )
+        if candidates:
+            result.frameworks.append(
+                TestFramework(
+                    name="dotnet_test",
+                    type="all",
+                    command="dotnet test",
+                    config_file=str(candidates[0].relative_to(project_dir)),
+                    coverage_command='dotnet test --collect:"XPlat Code Coverage"',
+                )
+            )
+
+    def _discover_c_cpp_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover C/C++ test setups (CTest, Makefile test targets)."""
+        cmake_file = project_dir / "CMakeLists.txt"
+        if cmake_file.exists():
+            try:
+                content = cmake_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                content = ""
+            if any(
+                marker in content
+                for marker in ("enable_testing", "add_test", "include(CTest")
+            ):
+                result.frameworks.append(
+                    TestFramework(
+                        name="ctest",
+                        type="all",
+                        command="ctest --test-dir build --output-on-failure",
+                        config_file="CMakeLists.txt",
+                    )
+                )
+                return
+
+        makefile = project_dir / "Makefile"
+        if makefile.exists():
+            try:
+                content = makefile.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                content = ""
+            for target in ("test", "check"):
+                if re.search(rf"^{target}\s*:", content, re.MULTILINE):
+                    result.frameworks.append(
+                        TestFramework(
+                            name="make_test",
+                            type="all",
+                            command=f"make {target}",
+                            config_file="Makefile",
+                        )
+                    )
+                    break
+
+    def _discover_php_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover PHP test frameworks (PHPUnit)."""
+        config_file = next(
+            (
+                f
+                for f in ("phpunit.xml", "phpunit.xml.dist")
+                if (project_dir / f).exists()
+            ),
+            None,
+        )
+
+        has_phpunit_dep = False
+        composer_json = project_dir / "composer.json"
+        if composer_json.exists():
+            try:
+                with open(composer_json, encoding="utf-8") as f:
+                    composer = json.load(f)
+                deps = {
+                    **composer.get("require", {}),
+                    **composer.get("require-dev", {}),
+                }
+                has_phpunit_dep = "phpunit/phpunit" in deps
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+
+        if config_file or has_phpunit_dep:
+            result.frameworks.append(
+                TestFramework(
+                    name="phpunit",
+                    type="all",
+                    command="vendor/bin/phpunit",
+                    config_file=config_file,
+                )
+            )
+
+    def _discover_elixir_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Elixir test setups (ExUnit via mix)."""
+        if (project_dir / "mix.exs").exists():
+            result.frameworks.append(
+                TestFramework(
+                    name="mix_test",
+                    type="all",
+                    command="mix test",
+                    config_file="mix.exs",
+                    coverage_command="mix test --cover",
+                )
+            )
+
+    def _discover_swift_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Swift Package Manager test setups."""
+        if (project_dir / "Package.swift").exists():
+            result.frameworks.append(
+                TestFramework(
+                    name="swift_test",
+                    type="all",
+                    command="swift test",
+                    config_file="Package.swift",
+                    coverage_command="swift test --enable-code-coverage",
+                )
+            )
+
+    def _discover_dart_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Dart/Flutter test setups."""
+        pubspec = project_dir / "pubspec.yaml"
+        if not pubspec.exists():
+            return
+
+        try:
+            content = pubspec.read_text(encoding="utf-8").lower()
+        except (OSError, UnicodeDecodeError):
+            content = ""
+
+        if "flutter" in content:
+            result.frameworks.append(
+                TestFramework(
+                    name="flutter_test",
+                    type="all",
+                    command="flutter test",
+                    config_file="pubspec.yaml",
+                    coverage_command="flutter test --coverage",
+                )
+            )
+        else:
+            result.frameworks.append(
+                TestFramework(
+                    name="dart_test",
+                    type="all",
+                    command="dart test",
+                    config_file="pubspec.yaml",
+                )
+            )
+
+    def _discover_zig_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Zig test setups."""
+        if (project_dir / "build.zig").exists():
+            result.frameworks.append(
+                TestFramework(
+                    name="zig_test",
+                    type="all",
+                    command="zig build test",
+                    config_file="build.zig",
+                )
+            )
+
+    def _discover_haskell_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Haskell test setups (stack or cabal)."""
+        if (project_dir / "stack.yaml").exists():
+            result.frameworks.append(
+                TestFramework(
+                    name="stack_test",
+                    type="all",
+                    command="stack test",
+                    config_file="stack.yaml",
+                )
+            )
+        elif (project_dir / "cabal.project").exists() or list(
+            project_dir.glob("*.cabal")
+        ):
+            result.frameworks.append(
+                TestFramework(
+                    name="cabal_test",
+                    type="all",
+                    command="cabal test",
+                    config_file=None,
+                )
+            )
+
     def _find_test_directories(self, project_dir: Path) -> list[str]:
         """Find test directories in the project."""
         test_dir_patterns = [
@@ -558,6 +918,15 @@ class TestDiscovery:
             "**/*_test.go",
             "**/*_test.rs",
             "**/spec/**/*_spec.rb",
+            "**/*Test.java",
+            "**/*Test.kt",
+            "**/*Tests.cs",
+            "**/*Test.php",
+            "**/*_test.exs",
+            "**/*_test.dart",
+            "**/*Tests.swift",
+            "**/*_test.cpp",
+            "**/*_test.cc",
         ]
 
         # Check in test directories
