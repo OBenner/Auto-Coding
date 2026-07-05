@@ -13,7 +13,8 @@
     "running": "En cours d'exécution",
     "completed": "Terminé",
     "failed": "Échoué",
-    "cancelled": "Annulé"
+    "cancelled": "Annulé",
+    "initialized": "Initialisé"
   },
   "actions": {
     "start": "Démarrer",

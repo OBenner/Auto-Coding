@@ -14,7 +14,22 @@ import {
 import type { TaskStoreLike, UiTaskBadgeLabels } from '../lib/autoCodeClient';
 import type { Subtask, Task } from '../../shared/types/task';
 
-const LABELS: UiTaskBadgeLabels = { error: 'Error', prCreated: 'PR' };
+const CHIPS: UiTaskBadgeLabels['statusChips'] = {
+  backlog: 'Backlog',
+  queue: 'Queue',
+  in_progress: 'Coding',
+  ai_review: 'AI review',
+  human_review: 'Human review',
+  done: 'Done',
+  pr_created: 'PR created',
+  error: 'Error',
+};
+
+const LABELS: UiTaskBadgeLabels = {
+  error: 'Error',
+  prCreated: 'PR',
+  statusChips: CHIPS,
+};
 
 let subtaskSeq = 0;
 
@@ -92,6 +107,7 @@ describe('mapTaskToUiTask', () => {
       title: 'Do the thing',
       status: 'draft',
       description: undefined,
+      statusChip: { label: 'Backlog', tone: 'neutral' },
       badges: undefined,
       progress: undefined,
     });
@@ -154,7 +170,7 @@ describe('createTaskStoreAutoCodeClient', () => {
 
   it('resolves labels lazily through a getter so the client can stay stable', () => {
     const store = makeFakeStore([makeTask({ status: 'error' })]);
-    let labels = { error: 'Error', prCreated: 'PR' };
+    let labels: UiTaskBadgeLabels = { error: 'Error', prCreated: 'PR', statusChips: CHIPS };
     const client = createTaskStoreAutoCodeClient(store, () => labels);
 
     const seen: string[] = [];
@@ -163,7 +179,7 @@ describe('createTaskStoreAutoCodeClient', () => {
     });
 
     store.push([makeTask({ id: 'a', status: 'error' })]);
-    labels = { error: 'Erreur', prCreated: 'PR' }; // locale switch
+    labels = { error: 'Erreur', prCreated: 'PR', statusChips: CHIPS }; // locale switch
     store.push([makeTask({ id: 'b', status: 'error' })]);
     expect(seen).toEqual(['Error', 'Erreur']);
   });
@@ -208,3 +224,11 @@ describe('createTaskStoreAutoCodeClient.getTask', () => {
   });
 });
 
+describe('statusChip', () => {
+  it('labels the chip from the injected map with a status-matched tone', () => {
+    const running = mapTaskToUiTask(makeTask({ status: 'in_progress' }), LABELS);
+    expect(running.statusChip).toEqual({ label: 'Coding', tone: 'info' });
+    const errored = mapTaskToUiTask(makeTask({ status: 'error' }), LABELS);
+    expect(errored.statusChip).toEqual({ label: 'Error', tone: 'bad' });
+  });
+});

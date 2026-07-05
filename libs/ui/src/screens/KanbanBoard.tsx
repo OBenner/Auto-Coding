@@ -79,6 +79,13 @@ function KanbanCard({ task, onSelect }: KanbanCardProps) {
     >
       <div className="ac-kanban__card-top">
         <span className="ac-kanban__card-id">{task.id}</span>
+        {task.statusChip != null && (
+          <span
+            className={`ac-kanban__badge ac-kanban__badge--${task.statusChip.tone ?? 'neutral'}`}
+          >
+            {task.statusChip.label}
+          </span>
+        )}
       </div>
       <h3 className="ac-kanban__card-title">{task.title}</h3>
       {task.description != null && (

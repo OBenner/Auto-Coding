@@ -31,6 +31,16 @@
     "badges": {
       "error": "Error",
       "prCreated": "PR"
+    },
+    "statusChips": {
+      "backlog": "Backlog",
+      "queue": "Queue",
+      "in_progress": "Coding",
+      "ai_review": "AI review",
+      "human_review": "Human review",
+      "done": "Done",
+      "pr_created": "PR created",
+      "error": "Error"
     }
   }
 }
