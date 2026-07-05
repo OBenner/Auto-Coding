@@ -49,6 +49,16 @@ LANGUAGE_SECURITY_SCANNERS: dict[str, set[str]] = {
         "npm-audit",  # npm dependency vulnerability scanner
         "semgrep",  # Multi-language security scanner
     },
+    "c": {
+        "cppcheck",  # C/C++ static analysis
+        "clang-tidy",  # Clang-based linter (includes security checks)
+        "flawfinder",  # C/C++ security weakness scanner
+    },
+    "cpp": {
+        "cppcheck",  # C/C++ static analysis
+        "clang-tidy",  # Clang-based linter (includes security checks)
+        "flawfinder",  # C/C++ security weakness scanner
+    },
 }
 
 
@@ -98,6 +108,56 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
             "Use safe abstractions instead of unsafe blocks",
             "Validate file paths before reading",
             "Use URL validation before making requests",
+        ],
+    },
+    "c": {
+        "dangerous_functions": [
+            "gets",  # No bounds checking, always an overflow
+            "strcpy",  # Unbounded copy
+            "strcat",  # Unbounded concatenation
+            "sprintf",  # Unbounded format write
+            "vsprintf",  # Unbounded format write
+            "scanf",  # %s without width specifier overflows
+            "system",  # Command injection
+            "popen",  # Command injection
+            "tmpnam",  # Race condition (TOCTOU)
+        ],
+        "unsafe_patterns": [
+            "malloc",  # Result must be NULL-checked
+            "alloca",  # Stack overflow risk with variable sizes
+            "memcpy",  # Size argument must be validated
+            "printf(",  # Format string vulnerability if user-controlled
+        ],
+        "secure_alternatives": [
+            "Use fgets/snprintf/strncat with explicit buffer sizes",
+            "Use execv family with argument arrays instead of system()",
+            "Check every allocation result before use",
+            "Build and run tests with -fsanitize=address,undefined",
+            "Run valgrind or AddressSanitizer to catch memory errors",
+        ],
+    },
+    "cpp": {
+        "dangerous_functions": [
+            "gets",  # No bounds checking, always an overflow
+            "strcpy",  # Unbounded copy
+            "sprintf",  # Unbounded format write
+            "system",  # Command injection
+            "popen",  # Command injection
+            "reinterpret_cast",  # Type safety bypass
+            "const_cast",  # Constness bypass, often UB
+        ],
+        "unsafe_patterns": [
+            "new ",  # Prefer smart pointers over raw new/delete
+            "delete ",  # Manual lifetime management risk
+            "c_str()",  # Dangling pointer if string is temporary
+            "[i]",  # Unchecked indexing, prefer at() for user input
+        ],
+        "secure_alternatives": [
+            "Use std::string/std::vector instead of raw buffers",
+            "Use std::unique_ptr/std::shared_ptr instead of new/delete",
+            "Use at() for bounds-checked access on untrusted indices",
+            "Build and run tests with -fsanitize=address,undefined",
+            "Run valgrind or AddressSanitizer to catch memory errors",
         ],
     },
     "php": {

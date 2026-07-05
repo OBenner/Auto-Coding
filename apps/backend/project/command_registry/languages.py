@@ -134,6 +134,9 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "strip",
         "ccache",
         "gcovr",
+        "cppcheck",
+        "clang-tidy",
+        "valgrind",
     },
     "cpp": {
         "gcc",
@@ -152,6 +155,9 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "strip",
         "ccache",
         "gcovr",
+        "cppcheck",
+        "clang-tidy",
+        "valgrind",
     },
     "elixir": {
         "elixir",

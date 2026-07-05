@@ -505,3 +505,155 @@ class TestSASTIntegration:
         # Check parsing worked
         if result.vulnerabilities:
             assert any(v.source == "npm_audit" for v in result.vulnerabilities)
+
+
+class TestNativeAndDependencyScanners:
+    """Tests for cppcheck, gosec, cargo audit, and composer audit."""
+
+    def test_is_c_cpp_project_cmake(self, scanner, temp_dir):
+        """CMake project is detected as C/C++."""
+        (temp_dir / "CMakeLists.txt").write_text("project(demo)")
+        assert scanner._is_c_cpp_project(temp_dir) is True
+
+    def test_is_c_cpp_project_sources(self, scanner, temp_dir):
+        """Bare C sources are detected as C/C++."""
+        (temp_dir / "main.c").write_text("int main(void) { return 0; }")
+        assert scanner._is_c_cpp_project(temp_dir) is True
+
+    def test_is_c_cpp_project_negative(self, scanner, temp_dir):
+        """Non-C project is not detected as C/C++."""
+        (temp_dir / "app.py").write_text("print('hello')")
+        assert scanner._is_c_cpp_project(temp_dir) is False
+
+    @patch("subprocess.run")
+    def test_cppcheck_output_parsing(self, mock_run, scanner, temp_dir):
+        """Test parsing cppcheck template output from stderr."""
+        mock_run.return_value = MagicMock(
+            stdout="",
+            stderr=(
+                "src/main.c|10|error|nullPointer|Null pointer dereference\n"
+                "src/util.c|22|warning|bufferAccessOutOfBounds|Buffer overrun\n"
+                "not a finding line\n"
+            ),
+            returncode=0,
+        )
+
+        result = SecurityScanResult()
+        scanner._run_cppcheck(temp_dir, result)
+
+        assert len(result.vulnerabilities) == 2
+        first = result.vulnerabilities[0]
+        assert first.source == "cppcheck"
+        assert first.severity == "high"
+        assert first.file == "src/main.c"
+        assert first.line == 10
+        assert result.vulnerabilities[1].severity == "medium"
+
+    @patch("subprocess.run")
+    def test_cppcheck_missing_tool_is_silent(self, mock_run, scanner, temp_dir):
+        """Missing cppcheck binary skips the scan without errors."""
+        mock_run.side_effect = FileNotFoundError()
+
+        result = SecurityScanResult()
+        scanner._run_cppcheck(temp_dir, result)
+
+        assert result.vulnerabilities == []
+        assert result.scan_errors == []
+
+    @patch("subprocess.run")
+    def test_gosec_output_parsing(self, mock_run, scanner, temp_dir):
+        """Test parsing gosec JSON output."""
+        mock_run.return_value = MagicMock(
+            stdout=json.dumps(
+                {
+                    "Issues": [
+                        {
+                            "severity": "HIGH",
+                            "details": "Subprocess launched with variable",
+                            "file": "main.go",
+                            "line": "42",
+                            "cwe": {"id": "78"},
+                        }
+                    ]
+                }
+            ),
+            stderr="",
+            returncode=1,
+        )
+
+        result = SecurityScanResult()
+        scanner._run_gosec(temp_dir, result)
+
+        assert len(result.vulnerabilities) == 1
+        vuln = result.vulnerabilities[0]
+        assert vuln.source == "gosec"
+        assert vuln.severity == "high"
+        assert vuln.line == 42
+        assert vuln.cwe == "78"
+
+    @patch("subprocess.run")
+    def test_cargo_audit_output_parsing(self, mock_run, scanner, temp_dir):
+        """Test parsing cargo audit JSON output."""
+        mock_run.return_value = MagicMock(
+            stdout=json.dumps(
+                {
+                    "vulnerabilities": {
+                        "found": True,
+                        "count": 1,
+                        "list": [
+                            {
+                                "advisory": {
+                                    "id": "RUSTSEC-2024-0001",
+                                    "title": "Use after free in demo crate",
+                                },
+                                "package": {"name": "demo", "version": "0.1.0"},
+                            }
+                        ],
+                    }
+                }
+            ),
+            stderr="",
+            returncode=1,
+        )
+
+        result = SecurityScanResult()
+        scanner._run_cargo_audit(temp_dir, result)
+
+        assert len(result.vulnerabilities) == 1
+        vuln = result.vulnerabilities[0]
+        assert vuln.source == "cargo_audit"
+        assert vuln.severity == "high"
+        assert "demo" in vuln.title
+        assert "RUSTSEC-2024-0001" in vuln.title
+
+    @patch("subprocess.run")
+    def test_composer_audit_output_parsing(self, mock_run, scanner, temp_dir):
+        """Test parsing composer audit JSON output."""
+        mock_run.return_value = MagicMock(
+            stdout=json.dumps(
+                {
+                    "advisories": {
+                        "vendor/package": [
+                            {
+                                "advisoryId": "PKSA-1234",
+                                "title": "SQL injection in query builder",
+                                "cve": "CVE-2024-0001",
+                                "severity": "high",
+                            }
+                        ]
+                    }
+                }
+            ),
+            stderr="",
+            returncode=1,
+        )
+
+        result = SecurityScanResult()
+        scanner._run_composer_audit(temp_dir, result)
+
+        assert len(result.vulnerabilities) == 1
+        vuln = result.vulnerabilities[0]
+        assert vuln.source == "composer_audit"
+        assert vuln.severity == "high"
+        assert "vendor/package" in vuln.title
+        assert vuln.cwe == "CVE-2024-0001"
