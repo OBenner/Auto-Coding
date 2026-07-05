@@ -56,6 +56,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
+# Reused 404 detail (avoid a duplicated literal).
+_WORKSPACE_NOT_FOUND = "Workspace not found"
+
 
 def _require_user_id(auth: dict) -> int:
     """Return the integer user id from the token claims, or raise 403."""
@@ -162,7 +165,7 @@ async def list_members(
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if workspace is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=_WORKSPACE_NOT_FOUND
         )
     members = [_member_response(workspace.owner_id, workspace.owner.email, "owner")]
     members.extend(
@@ -188,7 +191,7 @@ async def add_workspace_member(
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if workspace is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=_WORKSPACE_NOT_FOUND
         )
     if request.user_id == workspace.owner_id:
         raise HTTPException(
@@ -283,7 +286,7 @@ def create_workspace_invitation(
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if workspace is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=_WORKSPACE_NOT_FOUND
         )
     try:
         invitation = invite_member(

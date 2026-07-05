@@ -25,6 +25,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+# FK target shared by every user-referencing column in this module.
+_USERS_FK = "users.id"
+
 
 class Workspace(Base):
     """A tenant boundary owning specs/runs/repositories, with role-based members."""
@@ -50,7 +53,7 @@ class Workspace(Base):
     # application logic (Track C).
     owner_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey(_USERS_FK, ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -92,7 +95,7 @@ class WorkspaceUser(Base):
         index=True,
     )
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey(_USERS_FK, ondelete="CASCADE"), nullable=False, index=True
     )
     role = Column(String(20), nullable=False, default="viewer")
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
@@ -157,7 +160,7 @@ class WorkspaceInvitation(Base):
     status = Column(String(20), nullable=False, default="pending")
     # SET NULL: the invitation audit survives the inviter's deletion.
     invited_by = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey(_USERS_FK, ondelete="SET NULL"), nullable=True
     )
 
     created_at = Column(

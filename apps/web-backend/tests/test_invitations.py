@@ -111,7 +111,7 @@ def test_accept_pending_invitations_on_registration(test_db):
 
 
 def test_invalid_role_and_status_rejected_by_db(test_db):
-    owner, ws = _make_workspace(test_db, "inv-ck@test.com")
+    _, ws = _make_workspace(test_db, "inv-ck@test.com")
 
     test_db.add(
         WorkspaceInvitation(workspace_id=ws.id, email="x@test.com", role="admin")
