@@ -247,7 +247,8 @@ def test_register_endpoint_accepts_pending_invitations(test_db, monkeypatch):
                 "/api/users/register",
                 json={
                     "email": "Joiner@test.com",
-                    "password": f"pw-{secrets.token_hex(8)}",
+                    # Random throwaway value, no literal fragment (Sonar S2068).
+                    "password": secrets.token_hex(12),
                 },
             )
         assert resp.status_code == 201
