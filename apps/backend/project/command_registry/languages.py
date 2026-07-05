@@ -88,6 +88,7 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
     "php": {
         "php",
         "composer",
+        "phpunit",
     },
     "java": {
         "java",
@@ -123,6 +124,7 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "clang++",
         "make",
         "cmake",
+        "ctest",
         "ninja",
         "meson",
         "ld",
@@ -130,6 +132,8 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "nm",
         "objdump",
         "strip",
+        "ccache",
+        "gcovr",
     },
     "cpp": {
         "gcc",
@@ -138,6 +142,7 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "clang++",
         "make",
         "cmake",
+        "ctest",
         "ninja",
         "meson",
         "ld",
@@ -145,6 +150,8 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "nm",
         "objdump",
         "strip",
+        "ccache",
+        "gcovr",
     },
     "elixir": {
         "elixir",
