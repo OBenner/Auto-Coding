@@ -124,6 +124,69 @@ class TestLanguageDetection:
         assert "python" in analyzer.profile.detected_stack.languages
         assert "javascript" in analyzer.profile.detected_stack.languages
 
+    def test_detects_java_from_gradle_kts(self, temp_dir: Path):
+        """Detects JVM/Gradle projects using Kotlin-DSL build files."""
+        (temp_dir / "build.gradle.kts").write_text("plugins { kotlin(\"jvm\") }")
+        (temp_dir / "settings.gradle.kts").write_text('rootProject.name = "test"')
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_languages()
+
+        assert "java" in analyzer.profile.detected_stack.languages
+
+    def test_kotlin_gradle_project_allows_gradle(self, temp_dir: Path):
+        """Kotlin-only Gradle project gets gradle in stack commands."""
+        (temp_dir / "build.gradle.kts").write_text("plugins { kotlin(\"jvm\") }")
+        src = temp_dir / "src" / "main" / "kotlin"
+        src.mkdir(parents=True)
+        (src / "Main.kt").write_text("fun main() {}")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_languages()
+        analyzer._build_stack_commands()
+
+        assert "kotlin" in analyzer.profile.detected_stack.languages
+        assert "gradle" in analyzer.profile.stack_commands
+        assert "gradlew" in analyzer.profile.stack_commands
+
+    def test_detects_haskell(self, temp_dir: Path):
+        """Detects Haskell projects."""
+        (temp_dir / "stack.yaml").write_text("resolver: lts-22.0")
+        (temp_dir / "Main.hs").write_text("main = putStrLn \"hello\"")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_languages()
+
+        assert "haskell" in analyzer.profile.detected_stack.languages
+
+    def test_detects_lua(self, temp_dir: Path):
+        """Detects Lua projects."""
+        (temp_dir / "init.lua").write_text("print('hello')")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_languages()
+
+        assert "lua" in analyzer.profile.detected_stack.languages
+
+    def test_detects_perl(self, temp_dir: Path):
+        """Detects Perl projects."""
+        (temp_dir / "cpanfile").write_text("requires 'Mojolicious';")
+        (temp_dir / "app.pl").write_text("print \"hello\\n\";")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_languages()
+
+        assert "perl" in analyzer.profile.detected_stack.languages
+
+    def test_detects_zig(self, temp_dir: Path):
+        """Detects Zig projects."""
+        (temp_dir / "build.zig").write_text("pub fn build() void {}")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_languages()
+
+        assert "zig" in analyzer.profile.detected_stack.languages
+
 
 class TestPackageManagerDetection:
     """Tests for package manager detection."""
