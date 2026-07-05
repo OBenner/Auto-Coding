@@ -317,6 +317,99 @@ dependencies = ["flask>=2.0"]
 
         assert "pytest" in analyzer.profile.detected_stack.frameworks
 
+    def test_detects_spring_boot_from_pom(self, temp_dir: Path):
+        """Detects Spring Boot from pom.xml."""
+        (temp_dir / "pom.xml").write_text(
+            "<project><parent><groupId>org.springframework.boot</groupId>"
+            "<artifactId>spring-boot-starter-parent</artifactId></parent></project>"
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "spring-boot" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_android_from_gradle_kts(self, temp_dir: Path):
+        """Detects Android from Gradle Kotlin-DSL plugin."""
+        (temp_dir / "build.gradle.kts").write_text(
+            'plugins { id("com.android.application") }'
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "android" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_quarkus_from_gradle(self, temp_dir: Path):
+        """Detects Quarkus from build.gradle."""
+        (temp_dir / "build.gradle").write_text(
+            "plugins { id 'io.quarkus' version '3.0.0' }"
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "quarkus" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_aspnet_from_csproj(self, temp_dir: Path):
+        """Detects ASP.NET Core from csproj SDK."""
+        (temp_dir / "App.csproj").write_text(
+            '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>'
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "aspnet" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_unity_from_project_version(self, temp_dir: Path):
+        """Detects Unity from ProjectSettings/ProjectVersion.txt."""
+        settings = temp_dir / "ProjectSettings"
+        settings.mkdir()
+        (settings / "ProjectVersion.txt").write_text("m_EditorVersion: 2022.3.0f1")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "unity" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_qt_and_gtest_from_cmake(self, temp_dir: Path):
+        """Detects Qt and GTest from CMakeLists.txt."""
+        (temp_dir / "CMakeLists.txt").write_text(
+            "project(demo)\n"
+            "find_package(Qt6 REQUIRED COMPONENTS Widgets)\n"
+            "find_package(GTest REQUIRED)\n"
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "qt" in analyzer.profile.detected_stack.frameworks
+        assert "gtest" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_phoenix_from_mix(self, temp_dir: Path):
+        """Detects Phoenix from mix.exs deps."""
+        (temp_dir / "mix.exs").write_text(
+            'defp deps do [{:phoenix, "~> 1.7"}, {:ecto, "~> 3.10"}] end'
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "phoenix" in analyzer.profile.detected_stack.frameworks
+        assert "ecto" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_vapor_from_package_swift(self, temp_dir: Path):
+        """Detects Vapor from Package.swift."""
+        (temp_dir / "Package.swift").write_text(
+            '.package(url: "https://github.com/vapor/vapor.git", from: "4.0.0")'
+        )
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "vapor" in analyzer.profile.detected_stack.frameworks
+
 
 class TestDatabaseDetection:
     """Tests for database detection."""

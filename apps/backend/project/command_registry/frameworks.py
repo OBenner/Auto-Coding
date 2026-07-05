@@ -163,6 +163,22 @@ FRAMEWORK_COMMANDS: dict[str, set[str]] = {
         "dart",
         "pub",
     },  # Dart HTTP framework (deprecated but still used)
+    # JVM frameworks
+    "spring-boot": {"mvn", "gradle", "gradlew"},
+    "quarkus": {"quarkus", "mvn", "gradle"},
+    "micronaut": {"mn", "mvn", "gradle"},
+    "android": {"gradlew", "adb"},
+    "compose": {"gradle", "gradlew"},  # Jetpack/Multiplatform Compose
+    # .NET frameworks
+    "aspnet": {"dotnet"},
+    "maui": {"dotnet"},
+    "unity": {"dotnet", "msbuild"},
+    # C/C++ frameworks
+    "qt": {"qmake", "moc", "uic", "rcc"},
+    "gtest": {"ctest"},
+    "catch2": {"ctest"},
+    # Swift frameworks
+    "vapor": {"vapor", "swift"},
 }
 
 
