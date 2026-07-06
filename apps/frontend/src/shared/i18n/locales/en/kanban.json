@@ -41,6 +41,16 @@
       "done": "Done",
       "pr_created": "PR created",
       "error": "Error"
+    },
+    "phases": {
+      "idle": "Idle",
+      "planning": "Planning",
+      "coding": "Coding",
+      "test_generation": "Test generation",
+      "qa_review": "QA review",
+      "qa_fixing": "QA fixing",
+      "complete": "Complete",
+      "failed": "Failed"
     }
   }
 }

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { TaskStatus, UiTask } from '../client/types';
 import './KanbanBoard.css';
@@ -91,6 +92,11 @@ function KanbanCard({ task, onSelect }: KanbanCardProps) {
       {task.description != null && (
         <p className="ac-kanban__card-desc">{task.description}</p>
       )}
+      {task.progress != null && (
+        <div className="ac-kanban__progress">
+          <span style={{ width: `${Math.max(0, Math.min(100, task.progress))}%` }} />
+        </div>
+      )}
       {task.badges != null && task.badges.length > 0 && (
         <div className="ac-kanban__card-badges">
           {task.badges.map((badge) => (
@@ -103,9 +109,14 @@ function KanbanCard({ task, onSelect }: KanbanCardProps) {
           ))}
         </div>
       )}
-      {task.progress != null && (
-        <div className="ac-kanban__progress">
-          <span style={{ width: `${Math.max(0, Math.min(100, task.progress))}%` }} />
+      {task.meta != null && task.meta.length > 0 && (
+        <div className="ac-kanban__card-meta">
+          {task.meta.map((item, index) => (
+            <Fragment key={`${index}:${item}`}>
+              {index > 0 && <span className="ac-kanban__card-meta-sep" />}
+              <span>{item}</span>
+            </Fragment>
+          ))}
         </div>
       )}
     </article>

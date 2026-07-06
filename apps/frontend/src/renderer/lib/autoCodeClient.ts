@@ -14,7 +14,7 @@ import type {
   UiTaskBadge,
   UiTaskDetail,
 } from '@auto-code/ui';
-import type { Task } from '../../shared/types/task';
+import type { ExecutionProgress, Task } from '../../shared/types/task';
 
 /** User-facing badge labels, injected from the component so they go through i18n. */
 export interface UiTaskBadgeLabels {
@@ -22,6 +22,8 @@ export interface UiTaskBadgeLabels {
   prCreated: string;
   /** Chip label per raw desktop status (rendered next to the card id). */
   statusChips: Record<Task['status'], string>;
+  /** Card meta-row label per execution phase (shown on active cards). */
+  phases: Record<ExecutionProgress['phase'], string>;
 }
 
 const CHIP_TONES: Record<Task['status'], UiTaskBadge['tone']> = {
@@ -65,6 +67,31 @@ export function computeProgress(task: Task): number | undefined {
   return Math.round((completed / total) * 100);
 }
 
+/** "22m" / "1h 05m" from elapsed seconds; empty string when not renderable. */
+export function formatElapsed(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
+}
+
+/** Bottom meta row for active cards: current phase label + elapsed time. */
+function buildMeta(task: Task, labels: UiTaskBadgeLabels): string[] | undefined {
+  const progress = task.executionProgress;
+  // 'idle' is the frontend-only pre-start state — a meta row would be noise.
+  if (progress == null || progress.phase === 'idle') return undefined;
+  const parts: string[] = [];
+  const phaseLabel = labels.phases?.[progress.phase];
+  if (phaseLabel) parts.push(phaseLabel);
+  if (progress.elapsed_seconds != null) {
+    const elapsed = formatElapsed(progress.elapsed_seconds);
+    if (elapsed) parts.push(elapsed);
+  }
+  return parts.length > 0 ? parts : undefined;
+}
+
 export function mapTaskToUiTask(task: Task, labels: UiTaskBadgeLabels): UiTask {
   const badges: UiTaskBadge[] = [];
   if (task.status === 'error') {
@@ -84,6 +111,7 @@ export function mapTaskToUiTask(task: Task, labels: UiTaskBadgeLabels): UiTask {
     },
     badges: badges.length > 0 ? badges : undefined,
     progress: computeProgress(task),
+    meta: buildMeta(task, labels),
   };
 }
 

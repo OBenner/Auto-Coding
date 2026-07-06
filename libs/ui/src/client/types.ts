@@ -25,6 +25,11 @@ export interface UiTask {
   badges?: UiTaskBadge[];
   /** 0–100 progress, typically for running tasks. */
   progress?: number;
+  /**
+   * Short bottom-row facts (e.g. active agent/phase, elapsed time), rendered
+   * with dot separators. Plain strings so adapters own the formatting.
+   */
+  meta?: readonly string[];
 }
 
 /** Subtask counts backing the detail progress breakdown. */

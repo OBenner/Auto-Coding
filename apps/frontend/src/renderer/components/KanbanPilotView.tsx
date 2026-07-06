@@ -98,6 +98,7 @@ export function KanbanPilotView() {
     error: '',
     prCreated: '',
     statusChips: {} as UiTaskBadgeLabels['statusChips'],
+    phases: {} as UiTaskBadgeLabels['phases'],
   });
   labelsRef.current = {
     error: t('kanban:pilot.badges.error'),
@@ -111,6 +112,16 @@ export function KanbanPilotView() {
       done: t('kanban:pilot.statusChips.done'),
       pr_created: t('kanban:pilot.statusChips.pr_created'),
       error: t('kanban:pilot.statusChips.error'),
+    },
+    phases: {
+      idle: t('kanban:pilot.phases.idle'),
+      planning: t('kanban:pilot.phases.planning'),
+      coding: t('kanban:pilot.phases.coding'),
+      test_generation: t('kanban:pilot.phases.test_generation'),
+      qa_review: t('kanban:pilot.phases.qa_review'),
+      qa_fixing: t('kanban:pilot.phases.qa_fixing'),
+      complete: t('kanban:pilot.phases.complete'),
+      failed: t('kanban:pilot.phases.failed'),
     },
   };
   const client = useMemo(
