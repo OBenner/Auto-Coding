@@ -71,6 +71,10 @@ class TestDiscoveryResult:
         package_manager: Detected package manager
         has_tests: Whether any test files were found
         coverage_command: Command for coverage if available
+        targeted_command: Template to run a subset of tests; contains a
+            {target} placeholder (a path for path-based runners such as
+            pytest/jest/go, a test name/filter for filter-based runners
+            such as Maven/Gradle/dotnet/ctest)
     """
 
     __test__ = False  # Prevent pytest from collecting this as a test class
@@ -81,6 +85,7 @@ class TestDiscoveryResult:
     package_manager: str = ""
     has_tests: bool = False
     coverage_command: str | None = None
+    targeted_command: str | None = None
 
 
 # =============================================================================
@@ -277,6 +282,44 @@ FRAMEWORK_PATTERNS = {
 }
 
 
+# Templates to run a subset of tests per framework. {target} is a path for
+# path-based runners and a test name/filter for filter-based runners.
+# Frameworks without a reliable targeted form are omitted.
+FRAMEWORK_TARGETED_COMMANDS: dict[str, str] = {
+    "jest": "npx jest {target}",
+    "vitest": "npx vitest run {target}",
+    "mocha": "npx mocha {target}",
+    "playwright": "npx playwright test {target}",
+    "cypress": "npx cypress run --spec {target}",
+    "pytest": "pytest {target}",
+    "unittest": "python -m unittest {target}",
+    "cargo_test": "cargo test {target}",
+    "go_test": "go test {target}",
+    "rspec": "bundle exec rspec {target}",
+    "maven": "mvn test -Dtest={target}",
+    "gradle": "gradle test --tests {target}",
+    "sbt": 'sbt "testOnly {target}"',
+    "dotnet_test": 'dotnet test --filter "{target}"',
+    "ctest": "ctest --test-dir build -R {target} --output-on-failure",
+    "phpunit": "vendor/bin/phpunit --filter {target}",
+    "mix_test": "mix test {target}",
+    "swift_test": "swift test --filter {target}",
+    "flutter_test": "flutter test {target}",
+    "dart_test": "dart test {target}",
+}
+
+
+def _targeted_command_for(framework: TestFramework) -> str | None:
+    """Return the targeted-run template for a framework, if it has one."""
+    template = FRAMEWORK_TARGETED_COMMANDS.get(framework.name)
+    if template is None:
+        return None
+    # Keep the Gradle wrapper when the full command uses it
+    if framework.name == "gradle" and framework.command.startswith("./gradlew"):
+        return template.replace("gradle ", "./gradlew ", 1)
+    return template
+
+
 # =============================================================================
 # TEST DISCOVERY
 # =============================================================================
@@ -370,6 +413,13 @@ class TestDiscovery:
                 if framework.coverage_command:
                     result.coverage_command = framework.coverage_command
                     break
+
+        # Set targeted command template from first framework that has one
+        for framework in result.frameworks:
+            targeted = _targeted_command_for(framework)
+            if targeted:
+                result.targeted_command = targeted
+                break
 
         self._cache[cache_key] = result
         return result
@@ -967,6 +1017,7 @@ class TestDiscovery:
             "package_manager": result.package_manager,
             "has_tests": result.has_tests,
             "coverage_command": result.coverage_command,
+            "targeted_command": result.targeted_command,
         }
 
     def clear_cache(self) -> None:

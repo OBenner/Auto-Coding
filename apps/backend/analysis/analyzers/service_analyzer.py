@@ -210,22 +210,47 @@ class ServiceAnalyzer(BaseAnalyzer):
             self.analysis["dependencies"] = deps[:20]
 
     def _detect_testing(self) -> None:
-        """Detect testing framework and configuration."""
-        if self._exists("package.json"):
-            pkg = self._read_json("package.json")
-            if pkg:
-                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-                if "vitest" in deps:
-                    self.analysis["testing"] = "Vitest"
-                elif "jest" in deps:
-                    self.analysis["testing"] = "Jest"
-                if "@playwright/test" in deps:
-                    self.analysis["e2e_testing"] = "Playwright"
-                elif "cypress" in deps:
-                    self.analysis["e2e_testing"] = "Cypress"
+        """Detect testing framework, commands, and configuration."""
+        # Full discovery across all supported ecosystems (JS, Python, JVM,
+        # .NET, C/C++, Rust, Go, Ruby, PHP, Elixir, Swift, Dart, ...)
+        try:
+            from analysis.test_discovery import TestDiscovery
 
-        elif self._exists("pytest.ini") or self._exists("pyproject.toml"):
-            self.analysis["testing"] = "pytest"
+            discovery = TestDiscovery().discover(self.path)
+            unit_frameworks = [f.name for f in discovery.frameworks if f.type != "e2e"]
+            e2e_frameworks = [f.name for f in discovery.frameworks if f.type == "e2e"]
+
+            if unit_frameworks:
+                self.analysis["testing"] = unit_frameworks[0]
+            if e2e_frameworks:
+                self.analysis["e2e_testing"] = e2e_frameworks[0]
+            if discovery.test_command:
+                self.analysis["test_command"] = discovery.test_command
+            if discovery.coverage_command:
+                self.analysis["coverage_command"] = discovery.coverage_command
+            if discovery.targeted_command:
+                # Template with {target}: path for pytest/jest/go-style
+                # runners, test name/filter for mvn/gradle/dotnet/ctest
+                self.analysis["targeted_test_command"] = discovery.targeted_command
+        except ImportError:
+            # Fall back to the previous minimal detection
+            if self._exists("package.json"):
+                pkg = self._read_json("package.json")
+                if pkg:
+                    deps = {
+                        **pkg.get("dependencies", {}),
+                        **pkg.get("devDependencies", {}),
+                    }
+                    if "vitest" in deps:
+                        self.analysis["testing"] = "vitest"
+                    elif "jest" in deps:
+                        self.analysis["testing"] = "jest"
+                    if "@playwright/test" in deps:
+                        self.analysis["e2e_testing"] = "playwright"
+                    elif "cypress" in deps:
+                        self.analysis["e2e_testing"] = "cypress"
+            elif self._exists("pytest.ini") or self._exists("pyproject.toml"):
+                self.analysis["testing"] = "pytest"
 
         # Find test directory
         for test_dir in ["tests", "test", "__tests__", "spec"]:
