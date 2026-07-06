@@ -708,9 +708,7 @@ class SecurityScanner:
         except Exception as e:
             result.scan_errors.append(f"osv-scanner error: {str(e)}")
 
-    def _parse_osv_output(
-        self, osv_output: dict, result: SecurityScanResult
-    ) -> None:
+    def _parse_osv_output(self, osv_output: dict, result: SecurityScanResult) -> None:
         """Convert osv-scanner JSON results into vulnerabilities."""
         for scan_result in osv_output.get("results", []):
             source = scan_result.get("source", {}).get("path", "")
