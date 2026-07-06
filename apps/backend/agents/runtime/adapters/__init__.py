@@ -1,8 +1,11 @@
 """Runtime adapter factory."""
 
+import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
+
+from core.autonomy_level import ResolvedAutonomySettings, resolve_autonomy_settings
 
 from ..cli_profiles import CLI_RUNNER_PROFILES
 from ..direct_api_autonomy import DIRECT_API_AUTONOMOUS_PROVIDERS
@@ -13,6 +16,8 @@ from .direct_api_autonomous import DirectApiAutonomousRuntimeSession
 from .generic_cli import GenericCliRuntimeSession
 from .generic_edit import GenericEditRuntimeSession
 from .patch_proposal import PatchProposalRuntimeSession
+
+logger = logging.getLogger(__name__)
 
 CLI_RUNTIME_PROVIDER_NAMES = {
     profile.runner_id
@@ -33,6 +38,7 @@ def create_runtime_session(
     allow_direct_api_autonomous: bool = False,
     write_scope_guard: tuple[str, ...] | list[str] | None = None,
     changeset_export: bool = False,
+    autonomy_settings: ResolvedAutonomySettings | None = None,
 ) -> Any:
     """Create a runtime adapter for a provider session.
 
@@ -43,10 +49,27 @@ def create_runtime_session(
     instead of committing them to the shared workspace. Together they build
     mutating subagent child sessions whose write contract is enforced, not
     advisory.
+
+    ``autonomy_settings`` lets callers inject their already-resolved autonomy
+    level; when omitted it is resolved from the environment, so the level is
+    logged for every session regardless of the call path (P3·T3).
     """
 
     provider_name = provider_name.lower()
     runtime_mode = runtime_mode.lower().replace("-", "_")
+
+    autonomy = (
+        autonomy_settings
+        if autonomy_settings is not None
+        else resolve_autonomy_settings()
+    )
+    logger.info(
+        "[runtime-factory] provider=%s mode=%s agent=%s autonomy=%s",
+        provider_name,
+        runtime_mode,
+        agent_type or "-",
+        autonomy.level.value,
+    )
 
     if runtime_mode == "patch_proposal":
         if project_dir is None:
