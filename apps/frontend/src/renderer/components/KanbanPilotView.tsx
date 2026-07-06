@@ -125,7 +125,13 @@ export function KanbanPilotView() {
     },
   };
   const client = useMemo(
-    () => createTaskStoreAutoCodeClient(useTaskStore, () => labelsRef.current),
+    () =>
+      createTaskStoreAutoCodeClient(useTaskStore, () => labelsRef.current, {
+        loadSpecContent: async (task) => {
+          const result = await window.electronAPI.getSpecContent(task.id);
+          return result.success ? (result.data ?? null) : null;
+        },
+      }),
     [],
   );
   const [openId, setOpenId] = useState<string | null>(null);

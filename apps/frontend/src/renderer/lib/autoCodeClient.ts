@@ -117,8 +117,8 @@ export function mapTaskToUiTask(task: Task, labels: UiTaskBadgeLabels): UiTask {
 
 /** Detail view of a store task: base card fields + subtask breakdown.
 
-The renderer store carries no spec body, so ``specContent`` stays undefined
-until an IPC detail fetch is wired (follow-up). */
+The renderer store carries no spec body; the client's ``loadSpecContent``
+option fetches it separately (over IPC) when the detail is requested. */
 export function mapTaskToUiTaskDetail(
   task: Task,
   labels: UiTaskBadgeLabels,
@@ -147,6 +147,15 @@ export interface TaskStoreLike {
   subscribe(listener: (state: { tasks: Task[] }) => void): () => void;
 }
 
+export interface TaskStoreClientOptions {
+  /**
+   * Fetch the spec document body for a task (e.g. over IPC), or null when
+   * unavailable. The spec body is progressive enhancement: failures are
+   * swallowed and the detail view renders without it.
+   */
+  loadSpecContent?: (task: Task) => Promise<string | null>;
+}
+
 /**
  * AutoCodeClient over the renderer task store. The store is already kept
  * fresh over IPC, so subscribeTasks piggybacks on its subscription — shared
@@ -158,6 +167,7 @@ export interface TaskStoreLike {
 export function createTaskStoreAutoCodeClient(
   store: TaskStoreLike,
   labels: UiTaskBadgeLabels | (() => UiTaskBadgeLabels),
+  options: TaskStoreClientOptions = {},
 ): AutoCodeClient {
   const resolveLabels = typeof labels === 'function' ? labels : () => labels;
   const snapshot = (tasks: Task[]) => {
@@ -169,7 +179,15 @@ export function createTaskStoreAutoCodeClient(
     getTask: async (id: string) => {
       const task = store.getState().tasks.find((candidate) => candidate.id === id);
       if (!task) throw new Error(`Task ${id} not found`);
-      return mapTaskToUiTaskDetail(task, resolveLabels());
+      const detail = mapTaskToUiTaskDetail(task, resolveLabels());
+      if (options.loadSpecContent) {
+        try {
+          detail.specContent = (await options.loadSpecContent(task)) ?? undefined;
+        } catch {
+          // Spec body is progressive enhancement — the detail still renders.
+        }
+      }
+      return detail;
     },
     subscribeTasks: (onChange) => {
       // The store fires on every state change; only re-map when the tasks

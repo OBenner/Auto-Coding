@@ -3,8 +3,10 @@
  *
  * Provides utilities for reading task specification files from the worktree.
  * These files are read-only and provide task progress information:
+ * - spec.md: Feature specification body
  * - implementation_plan.json: Implementation stages and progress
  * - artifacts/generic_edit_artifact_manifest.json: Generic Edit runtime artifacts
+ * - artifacts/verification-report.json: Trust Layer verification report
  * - qa_report.md: QA testing results
  * - QA_ESCALATION.md: Escalated issues requiring attention
  */
@@ -1212,6 +1214,29 @@ export async function readQAReport(project: Project, task: Task): Promise<string
       return null;
     }
     console.error(`[spec-file-readers] Error reading QA report:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Read the spec document body from spec.md
+ *
+ * @param project - The project containing the task
+ * @param task - The task to read the spec for
+ * @returns The spec content as markdown string, or null if file doesn't exist
+ */
+export async function readSpecContent(project: Project, task: Task): Promise<string | null> {
+  try {
+    const specDir = getSpecDir(project, task);
+    const specPath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
+
+    const specContent = await fs.readFile(specPath, 'utf-8');
+    return specContent;
+  } catch (err) {
+    if (isFileNotFoundError(err)) {
+      return null;
+    }
+    console.error(`[spec-file-readers] Error reading spec content:`, err);
     throw err;
   }
 }

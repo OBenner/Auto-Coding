@@ -165,6 +165,11 @@ export const taskMock = {
   }),
 
   // Task spec file reading (for task overview display)
+  getSpecContent: async () => ({
+    success: true,
+    data: null
+  }),
+
   getImplementationPlan: async () => ({
     success: true,
     data: null

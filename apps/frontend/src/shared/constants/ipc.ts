@@ -45,6 +45,7 @@ export const IPC_CHANNELS = {
   TASK_CHECK_RUNNING: 'task:checkRunning',
 
   // Task spec file reading (for task overview display)
+  TASK_SPEC_CONTENT_GET: 'task:spec:contentGet',
   TASK_SPEC_IMPLEMENTATION_PLAN_GET: 'task:spec:implementationPlanGet',
   TASK_SPEC_QA_REPORT_GET: 'task:spec:qaReportGet',
   TASK_SPEC_QA_ESCALATION_GET: 'task:spec:qaEscalationGet',

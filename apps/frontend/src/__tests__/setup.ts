@@ -108,6 +108,7 @@ if (typeof window !== 'undefined') {
     onTaskError: vi.fn(() => vi.fn()),
     onTaskLog: vi.fn(() => vi.fn()),
     onTaskStatusChange: vi.fn(() => vi.fn()),
+    getSpecContent: vi.fn().mockResolvedValue({ success: true, data: null }),
     getImplementationPlan: vi.fn().mockResolvedValue({ success: true, data: null }),
     getGenericEditArtifactManifest: vi.fn().mockResolvedValue({ success: true, data: null }),
     getQAReport: vi.fn().mockResolvedValue({ success: true, data: null }),

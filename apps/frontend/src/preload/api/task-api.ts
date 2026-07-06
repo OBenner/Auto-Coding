@@ -99,6 +99,7 @@ export interface TaskAPI {
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>>;
 
   // Task Spec File Reading (for task overview display)
+  getSpecContent: (taskId: string) => Promise<IPCResult<string | null>>;
   getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
   getGenericEditArtifactManifest: (taskId: string) => Promise<IPCResult<GenericEditArtifactManifest | null>>;
   getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
@@ -353,6 +354,9 @@ export const createTaskAPI = (): TaskAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.TASK_TOKEN_STATS_GET, projectPath, specId),
 
   // Task Spec File Reading
+  getSpecContent: (taskId: string): Promise<IPCResult<string | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_CONTENT_GET, taskId),
+
   getImplementationPlan: (taskId: string): Promise<IPCResult<ImplementationPlan | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_IMPLEMENTATION_PLAN_GET, taskId),
 

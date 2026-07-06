@@ -283,15 +283,44 @@ describe('mapTaskToUiTaskDetail', () => {
 });
 
 describe('createTaskStoreAutoCodeClient.getTask', () => {
+  const makeDetailStore = () => ({
+    getState: () => ({ tasks: [makeTask({ id: 'known' })] }),
+    subscribe: () => () => {},
+  });
+
   it('resolves detail from the store and errors on unknown ids', async () => {
-    const store = {
-      getState: () => ({ tasks: [makeTask({ id: 'known' })] }),
-      subscribe: () => () => {},
-    };
-    const client = createTaskStoreAutoCodeClient(store, LABELS);
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS);
     const detail = await client.getTask?.('known');
     expect(detail?.id).toBe('known');
+    expect(detail?.specContent).toBeUndefined();
     await expect(client.getTask?.('missing')).rejects.toThrow('not found');
+  });
+
+  it('injects the spec body from the loadSpecContent option', async () => {
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS, {
+      loadSpecContent: async (task) => `# Spec for ${task.id}`,
+    });
+    const detail = await client.getTask?.('known');
+    expect(detail?.specContent).toBe('# Spec for known');
+  });
+
+  it('leaves specContent undefined when the loader returns null', async () => {
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS, {
+      loadSpecContent: async () => null,
+    });
+    const detail = await client.getTask?.('known');
+    expect(detail?.specContent).toBeUndefined();
+  });
+
+  it('still resolves the detail when the loader fails', async () => {
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS, {
+      loadSpecContent: async () => {
+        throw new Error('IPC unavailable');
+      },
+    });
+    const detail = await client.getTask?.('known');
+    expect(detail?.id).toBe('known');
+    expect(detail?.specContent).toBeUndefined();
   });
 });
 
