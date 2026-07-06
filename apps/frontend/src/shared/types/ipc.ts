@@ -974,6 +974,7 @@ export interface ElectronAPI {
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
 
   // Task spec file reading (for task overview display)
+  getSpecContent: (taskId: string) => Promise<IPCResult<string | null>>;
   getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
   getGenericEditArtifactManifest: (taskId: string) => Promise<IPCResult<GenericEditArtifactManifest | null>>;
   getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
