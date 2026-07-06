@@ -183,8 +183,10 @@ export function createTaskStoreAutoCodeClient(
       if (options.loadSpecContent) {
         try {
           detail.specContent = (await options.loadSpecContent(task)) ?? undefined;
-        } catch {
-          // Spec body is progressive enhancement — the detail still renders.
+        } catch (err) {
+          // Spec body is progressive enhancement — the detail still renders,
+          // but surface the failure so missing content stays diagnosable.
+          console.warn('[autoCodeClient] Failed to load spec content:', err);
         }
       }
       return detail;

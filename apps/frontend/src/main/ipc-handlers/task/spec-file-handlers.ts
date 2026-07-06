@@ -120,7 +120,9 @@ export function registerSpecFileHandlers(): void {
         }
 
         const specContent = await readSpecContent(project, task);
-        if (!specContent) {
+        // == null only: an existing-but-empty spec.md is valid (empty)
+        // content, not a missing file.
+        if (specContent == null) {
           return { success: false, error: 'Spec content not found' };
         }
 
