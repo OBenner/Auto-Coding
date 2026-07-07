@@ -73,9 +73,12 @@ DEFAULT_MODEL_ROUTING_CONFIG: dict[str, Any] = {
             "model": "gpt-4o",
             "max_tokens": 8192,
         },
+        # Trivial subtasks default to Haiku (a cheap Claude model that works
+        # under the default claude-only runtime); override to gpt-4o-mini via
+        # MODEL_ROUTER_LOW_* env vars or the routing YAML.
         "low": {
-            "provider": "openai",
-            "model": "gpt-4o-mini",
+            "provider": "claude",
+            "model": "claude-haiku-4-5-20251001",
             "max_tokens": 4096,
         },
     },
