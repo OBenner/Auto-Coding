@@ -50,11 +50,16 @@
   color: var(--quiet);
 }
 
+/* The groups are fieldsets for semantics; reset the UA chrome. */
 .ac-toolbar__filters {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
 }
 
 .ac-toolbar__chip {
@@ -80,7 +85,9 @@
 
 .ac-toolbar__views {
   display: flex;
-  margin-left: auto;
+  margin: 0 0 0 auto;
+  padding: 0;
+  min-width: 0;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   overflow: hidden;

@@ -76,7 +76,7 @@ export function BoardToolbar({
         </div>
       )}
       {filters != null && filters.length > 0 && (
-        <div className="ac-toolbar__filters" role="group" aria-label={filtersLabel}>
+        <fieldset className="ac-toolbar__filters" aria-label={filtersLabel}>
           {filters.map((filter) => (
             <button
               key={filter.id}
@@ -90,10 +90,10 @@ export function BoardToolbar({
               {filter.label}
             </button>
           ))}
-        </div>
+        </fieldset>
       )}
       {views != null && views.length > 0 && (
-        <div className="ac-toolbar__views" role="group" aria-label={viewsLabel}>
+        <fieldset className="ac-toolbar__views" aria-label={viewsLabel}>
           {views.map((view) => (
             <button
               key={view.id}
@@ -108,7 +108,7 @@ export function BoardToolbar({
               {view.label}
             </button>
           ))}
-        </div>
+        </fieldset>
       )}
     </section>
   );

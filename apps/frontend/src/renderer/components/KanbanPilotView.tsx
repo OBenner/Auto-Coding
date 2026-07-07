@@ -36,12 +36,23 @@ function usePilotColumns(): KanbanColumn[] {
   );
 }
 
+const FILTER_IDS = ['all', 'running', 'review'] as const;
+const VIEW_IDS = ['board', 'table', 'timeline'] as const;
+
 function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
   const { t } = useTranslation(['kanban']);
   const { tasks, loading, error, reload } = useTasks();
   const columns = usePilotColumns();
   const { query, setQuery, filterId, setFilterId, filtering, visibleTasks } =
     useBoardFilter(tasks);
+
+  let matchStatus = '';
+  if (filtering) {
+    matchStatus =
+      visibleTasks.length === 0
+        ? t('kanban:pilot.toolbar.noMatches')
+        : t('kanban:pilot.toolbar.matchCount', { count: visibleTasks.length });
+  }
 
   return (
     <div className="h-full overflow-auto p-4">
@@ -51,32 +62,25 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
         searchPlaceholder={t('kanban:pilot.toolbar.searchPlaceholder')}
         searchLabel={t('kanban:pilot.toolbar.searchLabel')}
         onSearchChange={setQuery}
-        filters={[
-          { id: 'all', label: t('kanban:pilot.toolbar.filters.all') },
-          { id: 'running', label: t('kanban:pilot.toolbar.filters.running') },
-          { id: 'review', label: t('kanban:pilot.toolbar.filters.review') },
-        ]}
+        filters={FILTER_IDS.map((id) => ({
+          id,
+          label: t(`kanban:pilot.toolbar.filters.${id}`),
+        }))}
         filtersLabel={t('kanban:pilot.toolbar.filtersLabel')}
         activeFilterId={filterId}
         onSelectFilter={setFilterId}
-        views={[
-          { id: 'board', label: t('kanban:pilot.toolbar.views.board') },
-          { id: 'table', label: t('kanban:pilot.toolbar.views.table'), disabled: true },
-          { id: 'timeline', label: t('kanban:pilot.toolbar.views.timeline'), disabled: true },
-        ]}
+        views={VIEW_IDS.map((id) => ({
+          id,
+          label: t(`kanban:pilot.toolbar.views.${id}`),
+          disabled: id !== 'board',
+        }))}
         viewsLabel={t('kanban:pilot.toolbar.viewsLabel')}
         activeViewId="board"
       />
       {/* Always mounted so screen readers announce narrowing (WCAG 4.1.3);
           <output> carries an implicit status role. */}
       <output className="mb-2 block min-h-5 text-sm text-muted-foreground">
-        {filtering
-          ? visibleTasks.length === 0
-            ? t('kanban:pilot.toolbar.noMatches')
-            : t('kanban:pilot.toolbar.matchCount', {
-                count: visibleTasks.length,
-              })
-          : ''}
+        {matchStatus}
       </output>
       {loading && <p>{t('kanban:pilot.loading')}</p>}
       {error && (

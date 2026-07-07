@@ -20,6 +20,9 @@ import { useNavigate } from "react-router-dom";
 import { createRestAutoCodeClient } from "../api/autoCodeClient";
 import { apiClient } from "../api/client";
 
+const FILTER_IDS = ["all", "running", "review"] as const;
+const VIEW_IDS = ["board", "table", "timeline"] as const;
+
 function PilotBoard() {
 	const { t } = useTranslation(["tasks"]);
 	const navigate = useNavigate();
@@ -41,6 +44,16 @@ function PilotBoard() {
 		navigate(`/tasks-next/${task.id}`);
 	};
 
+	let matchStatus = "";
+	if (filtering) {
+		matchStatus =
+			visibleTasks.length === 0
+				? t("tasks:kanbanPilot.toolbar.noMatches")
+				: t("tasks:kanbanPilot.toolbar.matchCount", {
+						count: visibleTasks.length,
+					});
+	}
+
 	return (
 		<div style={{ padding: "1rem", height: "100%", overflow: "auto" }}>
 			<h1>{t("tasks:kanbanPilot.title")}</h1>
@@ -49,33 +62,18 @@ function PilotBoard() {
 				searchPlaceholder={t("tasks:kanbanPilot.toolbar.searchPlaceholder")}
 				searchLabel={t("tasks:kanbanPilot.toolbar.searchLabel")}
 				onSearchChange={setQuery}
-				filters={[
-					{ id: "all", label: t("tasks:kanbanPilot.toolbar.filters.all") },
-					{
-						id: "running",
-						label: t("tasks:kanbanPilot.toolbar.filters.running"),
-					},
-					{
-						id: "review",
-						label: t("tasks:kanbanPilot.toolbar.filters.review"),
-					},
-				]}
+				filters={FILTER_IDS.map((id) => ({
+					id,
+					label: t(`tasks:kanbanPilot.toolbar.filters.${id}`),
+				}))}
 				filtersLabel={t("tasks:kanbanPilot.toolbar.filtersLabel")}
 				activeFilterId={filterId}
 				onSelectFilter={setFilterId}
-				views={[
-					{ id: "board", label: t("tasks:kanbanPilot.toolbar.views.board") },
-					{
-						id: "table",
-						label: t("tasks:kanbanPilot.toolbar.views.table"),
-						disabled: true,
-					},
-					{
-						id: "timeline",
-						label: t("tasks:kanbanPilot.toolbar.views.timeline"),
-						disabled: true,
-					},
-				]}
+				views={VIEW_IDS.map((id) => ({
+					id,
+					label: t(`tasks:kanbanPilot.toolbar.views.${id}`),
+					disabled: id !== "board",
+				}))}
 				viewsLabel={t("tasks:kanbanPilot.toolbar.viewsLabel")}
 				activeViewId="board"
 			/>
@@ -84,13 +82,7 @@ function PilotBoard() {
 			<output
 				style={{ display: "block", minHeight: "1.2em", color: "var(--muted)" }}
 			>
-				{filtering
-					? visibleTasks.length === 0
-						? t("tasks:kanbanPilot.toolbar.noMatches")
-						: t("tasks:kanbanPilot.toolbar.matchCount", {
-								count: visibleTasks.length,
-							})
-					: ""}
+				{matchStatus}
 			</output>
 			{loading && <p>{t("tasks:kanbanPilot.loading")}</p>}
 			{error && (
