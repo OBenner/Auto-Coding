@@ -8,6 +8,8 @@ a clear message when the budget is exceeded so the build loops can stop.
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from core.budget_guard import (  # noqa: E402
@@ -38,7 +40,7 @@ class TestResolveCostLimit:
 
     def test_valid_value(self, monkeypatch):
         monkeypatch.setenv(COST_LIMIT_ENV, "5.50")
-        assert resolve_cost_limit() == 5.5
+        assert resolve_cost_limit() == pytest.approx(5.5)
 
     def test_whitespace_and_empty_return_none(self, monkeypatch):
         monkeypatch.setenv(COST_LIMIT_ENV, "   ")
@@ -56,7 +58,7 @@ class TestResolveCostLimit:
 
     def test_explicit_env_mapping_overrides_os_environ(self, monkeypatch):
         monkeypatch.setenv(COST_LIMIT_ENV, "1")
-        assert resolve_cost_limit({COST_LIMIT_ENV: "9"}) == 9.0
+        assert resolve_cost_limit({COST_LIMIT_ENV: "9"}) == pytest.approx(9.0)
 
 
 class TestEvaluateBudget:
@@ -133,6 +135,6 @@ class TestEvaluateBudget:
 
         status = evaluate_budget(spec_dir, {COST_LIMIT_ENV: "1"})
 
-        assert status.total_cost == 0.0
+        assert status.total_cost == pytest.approx(0.0)
         assert status.exceeded is False
         assert status.warning is False
