@@ -9,6 +9,7 @@
 import type { KanbanColumn, UiTask } from "@auto-code/ui";
 import {
 	AutoCodeClientProvider,
+	BoardSkeleton,
 	BoardView,
 	buildBoardViewLabels,
 	useTasks,
@@ -45,7 +46,7 @@ function PilotBoard() {
 	return (
 		<div style={{ padding: "1rem", height: "100%", overflow: "auto" }}>
 			<h1>{t("tasks:kanbanPilot.title")}</h1>
-			{loading && <p>{t("tasks:kanbanPilot.loading")}</p>}
+			{loading && <BoardSkeleton label={t("tasks:kanbanPilot.loading")} />}
 			{error && (
 				<p role="alert">
 					{t("tasks:kanbanPilot.error")}{" "}
@@ -60,6 +61,8 @@ function PilotBoard() {
 					columns={columns}
 					labels={labels}
 					onSelectTask={handleSelect}
+					emptyTitle={t("tasks:kanbanPilot.empty.title")}
+					emptyDescription={t("tasks:kanbanPilot.empty.description")}
 				/>
 			)}
 		</div>

@@ -46,6 +46,9 @@ export type {
   BoardViewLabels,
   Translate,
 } from './screens/BoardView';
+// Board data states (U4)
+export { BoardSkeleton } from './screens/BoardSkeleton';
+export type { BoardSkeletonProps } from './screens/BoardSkeleton';
 export { filterUiTasks } from './client/filtering';
 export type { UiTaskFilter } from './client/filtering';
 export { useBoardFilter, FILTER_IDS } from './client/useBoardFilter';

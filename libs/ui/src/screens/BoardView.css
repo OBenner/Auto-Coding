@@ -6,3 +6,30 @@
   font-family: var(--font-sans);
   font-size: 12.5px;
 }
+
+.ac-board-view__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 320px;
+  padding: 48px 28px;
+  text-align: center;
+  font-family: var(--font-sans);
+}
+
+.ac-board-view__empty-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.ac-board-view__empty-desc {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}

@@ -62,6 +62,10 @@ export interface BoardViewProps {
   columns?: KanbanColumn[];
   labels: BoardViewLabels;
   onSelectTask: (task: UiTask) => void;
+  /** Heading for the genuinely-empty board (no tasks at all). */
+  emptyTitle?: string;
+  /** Sub-text under the empty heading. */
+  emptyDescription?: string;
 }
 
 /**
@@ -69,15 +73,31 @@ export interface BoardViewProps {
  * switch) over a live-narrowing KanbanBoard, with a polite status line for
  * the match count (WCAG 4.1.3). Both app pilots render this identically;
  * loading/error states stay with the caller.
+ *
+ * With zero tasks it shows a centered empty state (when emptyTitle is given)
+ * instead of an empty toolbar over four blank columns.
  */
 export function BoardView({
   tasks,
   columns,
   labels,
   onSelectTask,
+  emptyTitle,
+  emptyDescription,
 }: Readonly<BoardViewProps>) {
   const { query, setQuery, filterId, setFilterId, filtering, visibleTasks } =
     useBoardFilter(tasks);
+
+  if (tasks.length === 0 && emptyTitle != null) {
+    return (
+      <div className="ac-board-view__empty">
+        <h2 className="ac-board-view__empty-title">{emptyTitle}</h2>
+        {emptyDescription != null && (
+          <p className="ac-board-view__empty-desc">{emptyDescription}</p>
+        )}
+      </div>
+    );
+  }
 
   let matchStatus = '';
   if (filtering) {

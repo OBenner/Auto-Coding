@@ -11,6 +11,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AutoCodeClientProvider,
+  BoardSkeleton,
   BoardView,
   TaskDetail as UiTaskDetail,
   buildBoardViewLabels,
@@ -47,7 +48,7 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
   return (
     <div className="h-full overflow-auto p-4">
       <h1 className="mb-4 text-lg font-semibold">{t('kanban:pilot.title')}</h1>
-      {loading && <p>{t('kanban:pilot.loading')}</p>}
+      {loading && <BoardSkeleton label={t('kanban:pilot.loading')} />}
       {error && (
         <p role="alert">
           {t('kanban:pilot.error')}{' '}
@@ -62,6 +63,8 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
           columns={columns}
           labels={labels}
           onSelectTask={(task) => onOpen(task.id)}
+          emptyTitle={t('kanban:pilot.empty.title')}
+          emptyDescription={t('kanban:pilot.empty.description')}
         />
       )}
     </div>

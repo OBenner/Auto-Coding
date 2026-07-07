@@ -120,6 +120,10 @@
     "loading": "Chargement des tâches…",
     "error": "Échec du chargement des tâches.",
     "retry": "Réessayer",
+    "empty": {
+      "title": "Aucune tâche pour le moment",
+      "description": "Créez votre première spéc pour la voir sur le tableau."
+    },
     "columns": {
       "draft": "Brouillon",
       "running": "En cours",
