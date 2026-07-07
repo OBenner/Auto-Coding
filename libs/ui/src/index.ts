@@ -42,3 +42,5 @@ export type {
 } from './screens/BoardToolbar';
 export { filterUiTasks } from './client/filtering';
 export type { UiTaskFilter } from './client/filtering';
+export { useBoardFilter } from './client/useBoardFilter';
+export type { UseBoardFilterResult } from './client/useBoardFilter';

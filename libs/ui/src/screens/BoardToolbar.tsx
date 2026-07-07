@@ -17,15 +17,21 @@ export interface BoardToolbarProps {
   /** Controlled search value; the search box renders only with onSearchChange. */
   searchValue?: string;
   searchPlaceholder?: string;
+  /** Accessible name for the search input; falls back to searchPlaceholder. */
+  searchLabel?: string;
   /** Keyboard hint rendered inside the search box (e.g. "⌘K"). */
   searchShortcut?: string;
   onSearchChange?: (value: string) => void;
   /** Single-active filter chips. */
   filters?: BoardToolbarFilter[];
+  /** Accessible name for the filter chip group. */
+  filtersLabel?: string;
   activeFilterId?: string;
   onSelectFilter?: (id: string) => void;
   /** Segmented view switch (Board / Table / Timeline). */
   views?: BoardToolbarView[];
+  /** Accessible name for the view switch group. */
+  viewsLabel?: string;
   activeViewId?: string;
   onSelectView?: (id: string) => void;
 }
@@ -38,15 +44,18 @@ export interface BoardToolbarProps {
 export function BoardToolbar({
   searchValue,
   searchPlaceholder,
+  searchLabel,
   searchShortcut,
   onSearchChange,
   filters,
+  filtersLabel,
   activeFilterId,
   onSelectFilter,
   views,
+  viewsLabel,
   activeViewId,
   onSelectView,
-}: BoardToolbarProps) {
+}: Readonly<BoardToolbarProps>) {
   const handleSearch = (event: ChangeEvent<HTMLInputElement>) =>
     onSearchChange?.(event.target.value);
 
@@ -58,7 +67,7 @@ export function BoardToolbar({
             type="search"
             value={searchValue ?? ''}
             placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
+            aria-label={searchLabel ?? searchPlaceholder}
             onChange={handleSearch}
           />
           {searchShortcut != null && (
@@ -67,7 +76,7 @@ export function BoardToolbar({
         </div>
       )}
       {filters != null && filters.length > 0 && (
-        <div className="ac-toolbar__filters">
+        <div className="ac-toolbar__filters" role="group" aria-label={filtersLabel}>
           {filters.map((filter) => (
             <button
               key={filter.id}
@@ -84,16 +93,16 @@ export function BoardToolbar({
         </div>
       )}
       {views != null && views.length > 0 && (
-        <div className="ac-toolbar__views">
+        <div className="ac-toolbar__views" role="group" aria-label={viewsLabel}>
           {views.map((view) => (
             <button
               key={view.id}
               type="button"
               disabled={view.disabled}
-              className={
-                view.id === activeViewId ? 'ac-toolbar__view--on' : undefined
-              }
-              aria-pressed={view.id === activeViewId}
+              className={`ac-toolbar__view${
+                view.id === activeViewId ? ' ac-toolbar__view--on' : ''
+              }`}
+              aria-pressed={view.disabled ? undefined : view.id === activeViewId}
               onClick={() => onSelectView?.(view.id)}
             >
               {view.label}

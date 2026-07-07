@@ -128,6 +128,12 @@
     },
     "toolbar": {
       "searchPlaceholder": "Rechercher des tâches…",
+      "searchLabel": "Rechercher des tâches par id, titre ou description",
+      "filtersLabel": "Filtrer les tâches",
+      "viewsLabel": "Vue du tableau",
+      "noMatches": "Aucune tâche ne correspond à votre recherche ou filtre",
+      "matchCount_one": "{{count}} tâche correspondante",
+      "matchCount_other": "{{count}} tâches correspondantes",
       "filters": {
         "all": "Toutes",
         "running": "En cours",

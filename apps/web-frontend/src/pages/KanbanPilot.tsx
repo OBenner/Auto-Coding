@@ -6,33 +6,26 @@
  * /kanban-next alongside the legacy /kanban until the migration completes.
  */
 
-import { useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import type { KanbanColumn, UiTask } from "@auto-code/ui";
 import {
 	AutoCodeClientProvider,
 	BoardToolbar,
 	KanbanBoard,
-	filterUiTasks,
+	useBoardFilter,
 	useTasks,
 } from "@auto-code/ui";
-import type { KanbanColumn, TaskStatus, UiTask } from "@auto-code/ui";
+import { useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { createRestAutoCodeClient } from "../api/autoCodeClient";
 import { apiClient } from "../api/client";
-
-// Status behind each toolbar filter chip; "all" clears the narrowing.
-const FILTER_STATUS: Record<string, TaskStatus | undefined> = {
-	all: undefined,
-	running: "running",
-	review: "review",
-};
 
 function PilotBoard() {
 	const { t } = useTranslation(["tasks"]);
 	const navigate = useNavigate();
 	const { tasks, loading, error, reload } = useTasks();
-	const [query, setQuery] = useState("");
-	const [filterId, setFilterId] = useState("all");
+	const { query, setQuery, filterId, setFilterId, filtering, visibleTasks } =
+		useBoardFilter(tasks);
 
 	const columns = useMemo<KanbanColumn[]>(
 		() => [
@@ -42,11 +35,6 @@ function PilotBoard() {
 			{ status: "done", label: t("tasks:kanbanPilot.columns.done") },
 		],
 		[t],
-	);
-
-	const visibleTasks = useMemo(
-		() => filterUiTasks(tasks, { query, status: FILTER_STATUS[filterId] }),
-		[tasks, query, filterId],
 	);
 
 	const handleSelect = (task: UiTask) => {
@@ -59,6 +47,7 @@ function PilotBoard() {
 			<BoardToolbar
 				searchValue={query}
 				searchPlaceholder={t("tasks:kanbanPilot.toolbar.searchPlaceholder")}
+				searchLabel={t("tasks:kanbanPilot.toolbar.searchLabel")}
 				onSearchChange={setQuery}
 				filters={[
 					{ id: "all", label: t("tasks:kanbanPilot.toolbar.filters.all") },
@@ -71,6 +60,7 @@ function PilotBoard() {
 						label: t("tasks:kanbanPilot.toolbar.filters.review"),
 					},
 				]}
+				filtersLabel={t("tasks:kanbanPilot.toolbar.filtersLabel")}
 				activeFilterId={filterId}
 				onSelectFilter={setFilterId}
 				views={[
@@ -86,8 +76,22 @@ function PilotBoard() {
 						disabled: true,
 					},
 				]}
+				viewsLabel={t("tasks:kanbanPilot.toolbar.viewsLabel")}
 				activeViewId="board"
 			/>
+			{/* Always mounted so screen readers announce narrowing (WCAG 4.1.3);
+			    <output> carries an implicit status role. */}
+			<output
+				style={{ display: "block", minHeight: "1.2em", color: "var(--muted)" }}
+			>
+				{filtering
+					? visibleTasks.length === 0
+						? t("tasks:kanbanPilot.toolbar.noMatches")
+						: t("tasks:kanbanPilot.toolbar.matchCount", {
+								count: visibleTasks.length,
+							})
+					: ""}
+			</output>
 			{loading && <p>{t("tasks:kanbanPilot.loading")}</p>}
 			{error && (
 				<p role="alert">

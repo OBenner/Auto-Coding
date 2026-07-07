@@ -32,6 +32,14 @@
   outline: none;
 }
 
+/* The inner input suppresses its outline, so the wrapper carries the
+   keyboard-focus indicator (WCAG 2.4.7). */
+.ac-toolbar__search:focus-within {
+  border-color: var(--blue);
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+
 .ac-toolbar__search input::placeholder {
   color: var(--muted);
 }
@@ -78,7 +86,7 @@
   overflow: hidden;
 }
 
-.ac-toolbar__views button {
+.ac-toolbar__view {
   min-height: 32px;
   padding: 0 10px;
   border: 0;
@@ -89,14 +97,21 @@
   cursor: pointer;
 }
 
-.ac-toolbar__views button:disabled {
+.ac-toolbar__view:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
-.ac-toolbar__views button.ac-toolbar__view--on {
+.ac-toolbar__view--on {
   color: var(--ink);
   background: var(--soft);
+}
+
+/* Inset ring: the container's overflow: hidden would clip the default,
+   outside-painted focus outline (WCAG 2.4.7). */
+.ac-toolbar__view:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
 }
 
 @media (max-width: 760px) {
