@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 from context.constants import SKIP_DIRS
+from core.budget_guard import evaluate_budget
 from core.file_utils import write_json_atomic
 from core.model_fallback import get_fallback_model
 from core.providers.base import SessionConfig
@@ -872,6 +873,17 @@ async def run_autonomous_agent(
             print(f"\nReached max iterations ({max_iterations})")
             print("To continue, run the script again without --max-iterations")
             break
+
+        # Stop before spending more once the spec's cost budget is exhausted
+        # (P5.T4). Prior sessions record cost post-run, so this catches the
+        # cumulative total at the top of the next iteration.
+        budget = evaluate_budget(spec_dir)
+        if budget.exceeded:
+            print_status(budget.message, "error")
+            emit_phase(ExecutionPhase.FAILED, "Cost budget exceeded")
+            break
+        if budget.warning:
+            print_status(budget.message, "warning")
 
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
         next_subtask = None if first_run else get_next_subtask(spec_dir, restart_from)

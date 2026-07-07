@@ -262,6 +262,7 @@ cp .env.example .env
 | `AUTO_BUILD_MODEL` | No | Model override (default: claude-opus-4-5-20251101) |
 | `DEFAULT_BRANCH` | No | Base branch for worktrees (auto-detects main/master) |
 | `DEBUG` | No | Enable debug logging (default: false) |
+| `AUTO_CODE_COST_LIMIT` | No | Per-spec USD cost budget; the build stops with a clear message once the spec's accumulated cost reaches it (warns at 80%). Unset/≤0 disables the guard. |
 
 ### Integrations
 
