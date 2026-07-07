@@ -11,10 +11,9 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AutoCodeClientProvider,
-  BoardToolbar,
-  KanbanBoard as UiKanbanBoard,
+  BoardView,
   TaskDetail as UiTaskDetail,
-  useBoardFilter,
+  buildBoardViewLabels,
   useTask,
   useTasks,
 } from '@auto-code/ui';
@@ -36,52 +35,18 @@ function usePilotColumns(): KanbanColumn[] {
   );
 }
 
-const FILTER_IDS = ['all', 'running', 'review'] as const;
-const VIEW_IDS = ['board', 'table', 'timeline'] as const;
-
 function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
   const { t } = useTranslation(['kanban']);
   const { tasks, loading, error, reload } = useTasks();
   const columns = usePilotColumns();
-  const { query, setQuery, filterId, setFilterId, filtering, visibleTasks } =
-    useBoardFilter(tasks);
-
-  let matchStatus = '';
-  if (filtering) {
-    matchStatus =
-      visibleTasks.length === 0
-        ? t('kanban:pilot.toolbar.noMatches')
-        : t('kanban:pilot.toolbar.matchCount', { count: visibleTasks.length });
-  }
+  const labels = useMemo(
+    () => buildBoardViewLabels(t, 'kanban:pilot.toolbar'),
+    [t],
+  );
 
   return (
     <div className="h-full overflow-auto p-4">
       <h1 className="mb-4 text-lg font-semibold">{t('kanban:pilot.title')}</h1>
-      <BoardToolbar
-        searchValue={query}
-        searchPlaceholder={t('kanban:pilot.toolbar.searchPlaceholder')}
-        searchLabel={t('kanban:pilot.toolbar.searchLabel')}
-        onSearchChange={setQuery}
-        filters={FILTER_IDS.map((id) => ({
-          id,
-          label: t(`kanban:pilot.toolbar.filters.${id}`),
-        }))}
-        filtersLabel={t('kanban:pilot.toolbar.filtersLabel')}
-        activeFilterId={filterId}
-        onSelectFilter={setFilterId}
-        views={VIEW_IDS.map((id) => ({
-          id,
-          label: t(`kanban:pilot.toolbar.views.${id}`),
-          disabled: id !== 'board',
-        }))}
-        viewsLabel={t('kanban:pilot.toolbar.viewsLabel')}
-        activeViewId="board"
-      />
-      {/* Always mounted so screen readers announce narrowing (WCAG 4.1.3);
-          <output> carries an implicit status role. */}
-      <output className="mb-2 block min-h-5 text-sm text-muted-foreground">
-        {matchStatus}
-      </output>
       {loading && <p>{t('kanban:pilot.loading')}</p>}
       {error && (
         <p role="alert">
@@ -92,9 +57,10 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
         </p>
       )}
       {!loading && !error && (
-        <UiKanbanBoard
-          tasks={visibleTasks}
+        <BoardView
+          tasks={tasks}
           columns={columns}
+          labels={labels}
           onSelectTask={(task) => onOpen(task.id)}
         />
       )}

@@ -2,8 +2,14 @@ import { useMemo, useState } from 'react';
 import { filterUiTasks } from './filtering';
 import type { TaskStatus, UiTask } from './types';
 
-/** Status behind each toolbar filter chip; 'all' clears the narrowing. */
-const FILTER_STATUS: Record<string, TaskStatus | undefined> = {
+/** Board filter chip ids (single-active). */
+export type FilterId = 'all' | 'running' | 'review';
+
+/** Ordered filter ids, shared by the toolbar wiring in both pilots. */
+export const FILTER_IDS: readonly FilterId[] = ['all', 'running', 'review'];
+
+/** Status behind each filter chip; 'all' clears the narrowing. */
+const FILTER_STATUS: Record<FilterId, TaskStatus | undefined> = {
   all: undefined,
   running: 'running',
   review: 'review',
@@ -12,8 +18,8 @@ const FILTER_STATUS: Record<string, TaskStatus | undefined> = {
 export interface UseBoardFilterResult {
   query: string;
   setQuery: (value: string) => void;
-  filterId: string;
-  setFilterId: (id: string) => void;
+  filterId: FilterId;
+  setFilterId: (id: FilterId) => void;
   /** True when a query or a non-'all' chip narrows the board. */
   filtering: boolean;
   visibleTasks: UiTask[];
@@ -25,7 +31,7 @@ export interface UseBoardFilterResult {
  */
 export function useBoardFilter(tasks: UiTask[]): UseBoardFilterResult {
   const [query, setQuery] = useState('');
-  const [filterId, setFilterId] = useState('all');
+  const [filterId, setFilterId] = useState<FilterId>('all');
   const visibleTasks = useMemo(
     () => filterUiTasks(tasks, { query, status: FILTER_STATUS[filterId] }),
     [tasks, query, filterId],

@@ -40,7 +40,13 @@ export type {
   BoardToolbarFilter,
   BoardToolbarView,
 } from './screens/BoardToolbar';
+export { BoardView, buildBoardViewLabels } from './screens/BoardView';
+export type {
+  BoardViewProps,
+  BoardViewLabels,
+  Translate,
+} from './screens/BoardView';
 export { filterUiTasks } from './client/filtering';
 export type { UiTaskFilter } from './client/filtering';
-export { useBoardFilter } from './client/useBoardFilter';
-export type { UseBoardFilterResult } from './client/useBoardFilter';
+export { useBoardFilter, FILTER_IDS } from './client/useBoardFilter';
+export type { UseBoardFilterResult, FilterId } from './client/useBoardFilter';

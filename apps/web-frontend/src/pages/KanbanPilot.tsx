@@ -9,9 +9,8 @@
 import type { KanbanColumn, UiTask } from "@auto-code/ui";
 import {
 	AutoCodeClientProvider,
-	BoardToolbar,
-	KanbanBoard,
-	useBoardFilter,
+	BoardView,
+	buildBoardViewLabels,
 	useTasks,
 } from "@auto-code/ui";
 import { useMemo, useRef } from "react";
@@ -20,15 +19,10 @@ import { useNavigate } from "react-router-dom";
 import { createRestAutoCodeClient } from "../api/autoCodeClient";
 import { apiClient } from "../api/client";
 
-const FILTER_IDS = ["all", "running", "review"] as const;
-const VIEW_IDS = ["board", "table", "timeline"] as const;
-
 function PilotBoard() {
 	const { t } = useTranslation(["tasks"]);
 	const navigate = useNavigate();
 	const { tasks, loading, error, reload } = useTasks();
-	const { query, setQuery, filterId, setFilterId, filtering, visibleTasks } =
-		useBoardFilter(tasks);
 
 	const columns = useMemo<KanbanColumn[]>(
 		() => [
@@ -39,51 +33,18 @@ function PilotBoard() {
 		],
 		[t],
 	);
+	const labels = useMemo(
+		() => buildBoardViewLabels(t, "tasks:kanbanPilot.toolbar"),
+		[t],
+	);
 
 	const handleSelect = (task: UiTask) => {
 		navigate(`/tasks-next/${task.id}`);
 	};
 
-	let matchStatus = "";
-	if (filtering) {
-		matchStatus =
-			visibleTasks.length === 0
-				? t("tasks:kanbanPilot.toolbar.noMatches")
-				: t("tasks:kanbanPilot.toolbar.matchCount", {
-						count: visibleTasks.length,
-					});
-	}
-
 	return (
 		<div style={{ padding: "1rem", height: "100%", overflow: "auto" }}>
 			<h1>{t("tasks:kanbanPilot.title")}</h1>
-			<BoardToolbar
-				searchValue={query}
-				searchPlaceholder={t("tasks:kanbanPilot.toolbar.searchPlaceholder")}
-				searchLabel={t("tasks:kanbanPilot.toolbar.searchLabel")}
-				onSearchChange={setQuery}
-				filters={FILTER_IDS.map((id) => ({
-					id,
-					label: t(`tasks:kanbanPilot.toolbar.filters.${id}`),
-				}))}
-				filtersLabel={t("tasks:kanbanPilot.toolbar.filtersLabel")}
-				activeFilterId={filterId}
-				onSelectFilter={setFilterId}
-				views={VIEW_IDS.map((id) => ({
-					id,
-					label: t(`tasks:kanbanPilot.toolbar.views.${id}`),
-					disabled: id !== "board",
-				}))}
-				viewsLabel={t("tasks:kanbanPilot.toolbar.viewsLabel")}
-				activeViewId="board"
-			/>
-			{/* Always mounted so screen readers announce narrowing (WCAG 4.1.3);
-			    <output> carries an implicit status role. */}
-			<output
-				style={{ display: "block", minHeight: "1.2em", color: "var(--muted)" }}
-			>
-				{matchStatus}
-			</output>
 			{loading && <p>{t("tasks:kanbanPilot.loading")}</p>}
 			{error && (
 				<p role="alert">
@@ -94,9 +55,10 @@ function PilotBoard() {
 				</p>
 			)}
 			{!loading && !error && (
-				<KanbanBoard
-					tasks={visibleTasks}
+				<BoardView
+					tasks={tasks}
 					columns={columns}
+					labels={labels}
 					onSelectTask={handleSelect}
 				/>
 			)}
