@@ -58,6 +58,7 @@ function transformSummary(raw: Record<string, unknown>): ModelUsageSummary {
     agents,
     top_models_by_usage,
     top_models_by_cost,
+    cost_by_phase: (raw.cost_by_phase ?? {}) as Record<string, number>,
   };
 }
 

@@ -43,6 +43,15 @@
     "totalCost": "Total Cost",
     "modelsUsed": "Models Used",
     "usageByAgent": "Model Usage by Agent",
+    "costByPhase": "Cost by Phase",
+    "phases": {
+      "planning": "Planning",
+      "coding": "Coding",
+      "test_generation": "Test generation",
+      "validation": "QA",
+      "performance_profiling": "Profiling",
+      "unknown": "Other"
+    },
     "topByUsage": "Top Models by Usage",
     "topByCost": "Top Models by Cost",
     "allModels": "All Models",

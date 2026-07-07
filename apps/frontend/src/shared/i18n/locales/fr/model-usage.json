@@ -43,6 +43,15 @@
     "totalCost": "Coût total",
     "modelsUsed": "Modèles utilisés",
     "usageByAgent": "Utilisation par agent",
+    "costByPhase": "Coût par phase",
+    "phases": {
+      "planning": "Planification",
+      "coding": "Codage",
+      "test_generation": "Génération de tests",
+      "validation": "QA",
+      "performance_profiling": "Profilage",
+      "unknown": "Autre"
+    },
     "topByUsage": "Top modèles par utilisation",
     "topByCost": "Top modèles par coût",
     "allModels": "Tous les modèles",
