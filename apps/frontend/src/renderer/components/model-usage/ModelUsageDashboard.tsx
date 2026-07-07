@@ -61,6 +61,27 @@ function ModelListSection({ title, models, limit }: { title: string; models: Mod
   );
 }
 
+function CostByPhaseCard({ costByPhase }: { costByPhase?: Record<string, number> }) {
+  const { t } = useTranslation(['model-usage']);
+  const phaseCosts = orderPhaseCosts(costByPhase);
+  if (phaseCosts.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-border bg-card p-6">
+      <h2 className="text-lg font-semibold mb-4">{t('model-usage:dashboard.costByPhase')}</h2>
+      <div className="space-y-2">
+        {phaseCosts.map(({ phase, cost }) => (
+          <div key={phase} className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              {t(`model-usage:dashboard.phases.${phase}`, { defaultValue: phase })}
+            </span>
+            <span className="font-medium text-green-600">${cost.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
   const { t } = useTranslation(['model-usage']);
   const { toast } = useToast();
@@ -335,35 +356,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           )}
 
           {/* Cost by Phase */}
-          {summary &&
-            (() => {
-              const phaseCosts = orderPhaseCosts(summary.cost_by_phase);
-              if (phaseCosts.length === 0) return null;
-              return (
-                <div className="rounded-lg border border-border bg-card p-6">
-                  <h2 className="text-lg font-semibold mb-4">
-                    {t('model-usage:dashboard.costByPhase')}
-                  </h2>
-                  <div className="space-y-2">
-                    {phaseCosts.map(({ phase, cost }) => (
-                      <div
-                        key={phase}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-muted-foreground">
-                          {t(`model-usage:dashboard.phases.${phase}`, {
-                            defaultValue: phase,
-                          })}
-                        </span>
-                        <span className="font-medium text-green-600">
-                          ${cost.toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+          {summary && <CostByPhaseCard costByPhase={summary.cost_by_phase} />}
 
           {/* Top Models by Usage */}
           {summary && <ModelListSection title={t('model-usage:dashboard.topByUsage')} models={summary.top_models_by_usage} limit={5} />}
