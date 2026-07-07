@@ -170,6 +170,30 @@ def test_low_complexity_routes_to_haiku_under_claude_only():
     assert "not compatible" not in route.reasoning
 
 
+def test_low_complexity_fallback_uses_cheap_model_not_provider_default():
+    """When the low tier can't use Claude, the fallback must pick a CHEAP model
+    of the available provider (gpt-4o-mini), not that provider's expensive
+    default — otherwise trivial subtasks silently upgrade and low >= medium."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+    router.risk_analyzer = MagicMock()
+    router.risk_analyzer.analyze_subtask_risks.return_value = []
+
+    route = router.route(
+        {"description": "Fix typo", "files_to_modify": []},
+        provider_config=ProviderConfig(
+            provider="openai",
+            openai_api_key="test-openai-key",
+            anthropic_api_key="test-anthropic-key",  # Claude available, but...
+        ),
+        allowed_providers={"openai"},  # ...the runtime only allows OpenAI.
+    )
+
+    assert route.complexity == "low"
+    assert route.provider == "openai"
+    assert route.model == "gpt-4o-mini"
+    assert "not compatible" in route.reasoning
+
+
 def test_route_falls_back_to_available_provider_when_route_provider_unavailable():
     """A medium (OpenAI) route falls back to Claude when only Claude auth is set."""
     router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
