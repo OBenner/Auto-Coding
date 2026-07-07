@@ -6,6 +6,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
 import { ModelUsageCard } from './ModelUsageCard';
 import { CostChart } from './CostChart';
+import { orderPhaseCosts } from '../../lib/phase-costs';
 import type {
   ModelUsageSummary,
   ModelUsageTrendPoint,
@@ -332,6 +333,37 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
               </div>
             </div>
           )}
+
+          {/* Cost by Phase */}
+          {summary &&
+            (() => {
+              const phaseCosts = orderPhaseCosts(summary.cost_by_phase);
+              if (phaseCosts.length === 0) return null;
+              return (
+                <div className="rounded-lg border border-border bg-card p-6">
+                  <h2 className="text-lg font-semibold mb-4">
+                    {t('model-usage:dashboard.costByPhase')}
+                  </h2>
+                  <div className="space-y-2">
+                    {phaseCosts.map(({ phase, cost }) => (
+                      <div
+                        key={phase}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-muted-foreground">
+                          {t(`model-usage:dashboard.phases.${phase}`, {
+                            defaultValue: phase,
+                          })}
+                        </span>
+                        <span className="font-medium text-green-600">
+                          ${cost.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
           {/* Top Models by Usage */}
           {summary && <ModelListSection title={t('model-usage:dashboard.topByUsage')} models={summary.top_models_by_usage} limit={5} />}

@@ -71,6 +71,11 @@ export interface ModelUsageSummary {
   // Top models (computed in IPC handler from models array)
   top_models_by_usage: ModelMetrics[];
   top_models_by_cost: ModelMetrics[];
+
+  // USD cost keyed by execution phase (planning/coding/validation/…),
+  // passed through from the backend summary. Optional so summaries cached
+  // before this field existed still validate.
+  cost_by_phase?: Record<string, number>;
 }
 
 // ============================================
