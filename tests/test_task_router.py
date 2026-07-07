@@ -130,8 +130,8 @@ def test_route_maps_score_to_configured_low_medium_high_models():
     )
 
     assert low_route.complexity == "low"
-    assert low_route.provider == "openai"
-    assert low_route.model == "gpt-4o-mini"
+    assert low_route.provider == "claude"
+    assert low_route.model == "claude-haiku-4-5-20251001"
     assert medium_route.complexity == "medium"
     assert medium_route.model == "gpt-4o"
     assert high_route.complexity == "high"
@@ -145,8 +145,9 @@ def test_route_maps_score_to_configured_low_medium_high_models():
     )
 
 
-def test_route_falls_back_to_available_provider_when_route_provider_unavailable():
-    """Routing should not select OpenAI when only Claude auth is configured."""
+def test_low_complexity_routes_to_haiku_under_claude_only():
+    """Trivial subtasks route to Haiku, which needs no fallback under a
+    claude-only runtime — the P5.T5 cost-saving default."""
     router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
     router.risk_analyzer = MagicMock()
     router.risk_analyzer.analyze_subtask_risks.return_value = []
@@ -158,9 +159,60 @@ def test_route_falls_back_to_available_provider_when_route_provider_unavailable(
             anthropic_api_key="test-anthropic-key",
             claude_model="claude-sonnet-4-5-20250929",
         ),
+        allowed_providers={"claude"},
     )
 
     assert route.complexity == "low"
+    assert route.provider == "claude"
+    assert route.model == "claude-haiku-4-5-20251001"
+    # Haiku is already claude, so no fallback/compat downgrade fires.
+    assert "unavailable" not in route.reasoning
+    assert "not compatible" not in route.reasoning
+
+
+def test_low_complexity_fallback_uses_cheap_model_not_provider_default():
+    """When the low tier can't use Claude, the fallback must pick a CHEAP model
+    of the available provider (gpt-4o-mini), not that provider's expensive
+    default — otherwise trivial subtasks silently upgrade and low >= medium."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+    router.risk_analyzer = MagicMock()
+    router.risk_analyzer.analyze_subtask_risks.return_value = []
+
+    route = router.route(
+        {"description": "Fix typo", "files_to_modify": []},
+        provider_config=ProviderConfig(
+            provider="openai",
+            openai_api_key="test-openai-key",
+            anthropic_api_key="test-anthropic-key",  # Claude available, but...
+        ),
+        allowed_providers={"openai"},  # ...the runtime only allows OpenAI.
+    )
+
+    assert route.complexity == "low"
+    assert route.provider == "openai"
+    assert route.model == "gpt-4o-mini"
+    assert "not compatible" in route.reasoning
+
+
+def test_route_falls_back_to_available_provider_when_route_provider_unavailable():
+    """A medium (OpenAI) route falls back to Claude when only Claude auth is set."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+    router.risk_analyzer = MagicMock()
+    router.risk_analyzer.analyze_subtask_risks.return_value = [_issue("medium")] * 2
+
+    route = router.route(
+        {
+            "description": "Add pagination endpoint",
+            "files_to_modify": ["api/users.py", "tests/test_users.py"],
+        },
+        provider_config=ProviderConfig(
+            provider="claude",
+            anthropic_api_key="test-anthropic-key",
+            claude_model="claude-sonnet-4-5-20250929",
+        ),
+    )
+
+    assert route.complexity == "medium"
     assert route.provider == "claude"
     assert route.model == "claude-sonnet-4-5-20250929"
     assert "configured provider openai is unavailable" in route.reasoning
@@ -170,10 +222,13 @@ def test_route_respects_runtime_provider_allowlist():
     """Runtime compatibility should override an otherwise available provider."""
     router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
     router.risk_analyzer = MagicMock()
-    router.risk_analyzer.analyze_subtask_risks.return_value = []
+    router.risk_analyzer.analyze_subtask_risks.return_value = [_issue("medium")] * 2
 
     route = router.route(
-        {"description": "Fix typo", "files_to_modify": []},
+        {
+            "description": "Add pagination endpoint",
+            "files_to_modify": ["api/users.py", "tests/test_users.py"],
+        },
         provider_config=ProviderConfig(
             provider="openai",
             anthropic_api_key="test-anthropic-key",
@@ -183,7 +238,7 @@ def test_route_respects_runtime_provider_allowlist():
         allowed_providers={"claude"},
     )
 
-    assert route.complexity == "low"
+    assert route.complexity == "medium"
     assert route.provider == "claude"
     assert route.model == "claude-sonnet-4-5-20250929"
     assert "not compatible with the selected runtime" in route.reasoning
@@ -227,7 +282,8 @@ def test_missing_yaml_uses_defaults():
 
     assert config["routing"]["high"]["provider"] == "claude"
     assert config["routing"]["medium"]["model"] == "gpt-4o"
-    assert config["routing"]["low"]["model"] == "gpt-4o-mini"
+    assert config["routing"]["low"]["provider"] == "claude"
+    assert config["routing"]["low"]["model"] == "claude-haiku-4-5-20251001"
 
 
 def test_invalid_yaml_model_fails_validation(tmp_path):

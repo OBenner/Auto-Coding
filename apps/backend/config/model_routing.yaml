@@ -43,9 +43,13 @@ routing:
     provider: openai
     model: gpt-4o
     max_tokens: 8192
+  # Trivial subtasks route to Haiku by default: it stays inside the Claude
+  # runtime (works under AUTO_CODE_AUTONOMY=claude, no second provider needed)
+  # and is far cheaper than the Sonnet fallback. Override to gpt-4o-mini via
+  # MODEL_ROUTER_LOW_PROVIDER=openai + MODEL_ROUTER_LOW_MODEL=gpt-4o-mini.
   low:
-    provider: openai
-    model: gpt-4o-mini
+    provider: claude
+    model: claude-haiku-4-5-20251001
     max_tokens: 4096
 
 # Default estimated tokens for cost calculation

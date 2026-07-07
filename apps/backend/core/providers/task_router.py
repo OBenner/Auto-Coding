@@ -21,6 +21,16 @@ from prediction.risk_analyzer import RiskAnalyzer
 
 logger = logging.getLogger(__name__)
 
+# Cheap "Haiku-equivalent" model per provider. Used when the low (trivial)
+# tier can't reach its configured provider and must fall back: without this,
+# the fallback would use the provider's *default* (expensive) model, silently
+# upgrading trivial subtasks and inverting the low < medium cost ordering.
+CHEAP_MODEL_BY_PROVIDER: dict[str, str] = {
+    "claude": "claude-haiku-4-5-20251001",
+    "openai": "gpt-4o-mini",
+    "google": "gemini-1.5-flash",
+}
+
 
 @dataclass
 class TaskRoute:
@@ -175,7 +185,12 @@ class TaskComplexityRouter:
             )
             return configured_route
 
-        fallback_model = provider_config.get_model_for(fallback_provider)
+        # For the cheap (low) tier, keep the fallback cheap: use the
+        # provider's Haiku-equivalent rather than its expensive default model.
+        if complexity == "low" and fallback_provider in CHEAP_MODEL_BY_PROVIDER:
+            fallback_model = CHEAP_MODEL_BY_PROVIDER[fallback_provider]
+        else:
+            fallback_model = provider_config.get_model_for(fallback_provider)
         if not fallback_model:
             configured_route["fallback_reason"] = (
                 f"configured provider {configured_provider} is {unavailable_reason}; "
