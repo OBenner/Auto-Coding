@@ -6,22 +6,33 @@
  * /kanban-next alongside the legacy /kanban until the migration completes.
  */
 
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
 	AutoCodeClientProvider,
+	BoardToolbar,
 	KanbanBoard,
+	filterUiTasks,
 	useTasks,
 } from "@auto-code/ui";
-import type { KanbanColumn, UiTask } from "@auto-code/ui";
+import type { KanbanColumn, TaskStatus, UiTask } from "@auto-code/ui";
 import { createRestAutoCodeClient } from "../api/autoCodeClient";
 import { apiClient } from "../api/client";
+
+// Status behind each toolbar filter chip; "all" clears the narrowing.
+const FILTER_STATUS: Record<string, TaskStatus | undefined> = {
+	all: undefined,
+	running: "running",
+	review: "review",
+};
 
 function PilotBoard() {
 	const { t } = useTranslation(["tasks"]);
 	const navigate = useNavigate();
 	const { tasks, loading, error, reload } = useTasks();
+	const [query, setQuery] = useState("");
+	const [filterId, setFilterId] = useState("all");
 
 	const columns = useMemo<KanbanColumn[]>(
 		() => [
@@ -33,6 +44,11 @@ function PilotBoard() {
 		[t],
 	);
 
+	const visibleTasks = useMemo(
+		() => filterUiTasks(tasks, { query, status: FILTER_STATUS[filterId] }),
+		[tasks, query, filterId],
+	);
+
 	const handleSelect = (task: UiTask) => {
 		navigate(`/tasks-next/${task.id}`);
 	};
@@ -40,6 +56,38 @@ function PilotBoard() {
 	return (
 		<div style={{ padding: "1rem", height: "100%", overflow: "auto" }}>
 			<h1>{t("tasks:kanbanPilot.title")}</h1>
+			<BoardToolbar
+				searchValue={query}
+				searchPlaceholder={t("tasks:kanbanPilot.toolbar.searchPlaceholder")}
+				onSearchChange={setQuery}
+				filters={[
+					{ id: "all", label: t("tasks:kanbanPilot.toolbar.filters.all") },
+					{
+						id: "running",
+						label: t("tasks:kanbanPilot.toolbar.filters.running"),
+					},
+					{
+						id: "review",
+						label: t("tasks:kanbanPilot.toolbar.filters.review"),
+					},
+				]}
+				activeFilterId={filterId}
+				onSelectFilter={setFilterId}
+				views={[
+					{ id: "board", label: t("tasks:kanbanPilot.toolbar.views.board") },
+					{
+						id: "table",
+						label: t("tasks:kanbanPilot.toolbar.views.table"),
+						disabled: true,
+					},
+					{
+						id: "timeline",
+						label: t("tasks:kanbanPilot.toolbar.views.timeline"),
+						disabled: true,
+					},
+				]}
+				activeViewId="board"
+			/>
 			{loading && <p>{t("tasks:kanbanPilot.loading")}</p>}
 			{error && (
 				<p role="alert">
@@ -51,7 +99,7 @@ function PilotBoard() {
 			)}
 			{!loading && !error && (
 				<KanbanBoard
-					tasks={tasks}
+					tasks={visibleTasks}
 					columns={columns}
 					onSelectTask={handleSelect}
 				/>

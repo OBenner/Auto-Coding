@@ -33,3 +33,12 @@ export type { KanbanBoardProps, KanbanColumn } from './screens/KanbanBoard';
 // Canonical screens (U2)
 export { TaskDetail } from './screens/TaskDetail';
 export type { TaskDetailProps } from './screens/TaskDetail';
+// Board chrome (U3)
+export { BoardToolbar } from './screens/BoardToolbar';
+export type {
+  BoardToolbarProps,
+  BoardToolbarFilter,
+  BoardToolbarView,
+} from './screens/BoardToolbar';
+export { filterUiTasks } from './client/filtering';
+export type { UiTaskFilter } from './client/filtering';

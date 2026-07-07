@@ -51,6 +51,19 @@
       "qa_fixing": "Correction QA",
       "complete": "Terminé",
       "failed": "Échoué"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Rechercher des tâches…",
+      "filters": {
+        "all": "Toutes",
+        "running": "En cours",
+        "review": "Revue"
+      },
+      "views": {
+        "board": "Tableau",
+        "table": "Table",
+        "timeline": "Chronologie"
+      }
     }
   }
 }

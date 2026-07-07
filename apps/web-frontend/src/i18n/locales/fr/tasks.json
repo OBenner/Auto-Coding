@@ -125,6 +125,19 @@
       "running": "En cours",
       "review": "Revue",
       "done": "Terminé"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Rechercher des tâches…",
+      "filters": {
+        "all": "Toutes",
+        "running": "En cours",
+        "review": "Revue"
+      },
+      "views": {
+        "board": "Tableau",
+        "table": "Table",
+        "timeline": "Chronologie"
+      }
     }
   }
 }

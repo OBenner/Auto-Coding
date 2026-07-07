@@ -11,8 +11,10 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AutoCodeClientProvider,
+  BoardToolbar,
   KanbanBoard as UiKanbanBoard,
   TaskDetail as UiTaskDetail,
+  filterUiTasks,
   useTask,
   useTasks,
 } from '@auto-code/ui';
@@ -34,14 +36,46 @@ function usePilotColumns(): KanbanColumn[] {
   );
 }
 
+// Status behind each toolbar filter chip; 'all' clears the narrowing.
+const FILTER_STATUS: Record<string, TaskStatus | undefined> = {
+  all: undefined,
+  running: 'running',
+  review: 'review',
+};
+
 function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
   const { t } = useTranslation(['kanban']);
   const { tasks, loading, error, reload } = useTasks();
   const columns = usePilotColumns();
+  const [query, setQuery] = useState('');
+  const [filterId, setFilterId] = useState('all');
+
+  const visibleTasks = useMemo(
+    () => filterUiTasks(tasks, { query, status: FILTER_STATUS[filterId] }),
+    [tasks, query, filterId],
+  );
 
   return (
     <div className="h-full overflow-auto p-4">
       <h1 className="mb-4 text-lg font-semibold">{t('kanban:pilot.title')}</h1>
+      <BoardToolbar
+        searchValue={query}
+        searchPlaceholder={t('kanban:pilot.toolbar.searchPlaceholder')}
+        onSearchChange={setQuery}
+        filters={[
+          { id: 'all', label: t('kanban:pilot.toolbar.filters.all') },
+          { id: 'running', label: t('kanban:pilot.toolbar.filters.running') },
+          { id: 'review', label: t('kanban:pilot.toolbar.filters.review') },
+        ]}
+        activeFilterId={filterId}
+        onSelectFilter={setFilterId}
+        views={[
+          { id: 'board', label: t('kanban:pilot.toolbar.views.board') },
+          { id: 'table', label: t('kanban:pilot.toolbar.views.table'), disabled: true },
+          { id: 'timeline', label: t('kanban:pilot.toolbar.views.timeline'), disabled: true },
+        ]}
+        activeViewId="board"
+      />
       {loading && <p>{t('kanban:pilot.loading')}</p>}
       {error && (
         <p role="alert">
@@ -53,7 +87,7 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
       )}
       {!loading && !error && (
         <UiKanbanBoard
-          tasks={tasks}
+          tasks={visibleTasks}
           columns={columns}
           onSelectTask={(task) => onOpen(task.id)}
         />
