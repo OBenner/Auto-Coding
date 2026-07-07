@@ -25,6 +25,7 @@ from analysis.coverage_reporter import collect_coverage, format_coverage_summary
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
 from analysis.failure_storage import store_failure_analysis
 from analysis.ts_analyzer import TypeScriptAnalyzer
+from core.budget_guard import evaluate_budget
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from integrations.graphiti.memory import is_graphiti_enabled
@@ -978,6 +979,23 @@ Focus on files with the lowest coverage first for maximum impact.
     while qa_iteration < MAX_QA_ITERATIONS:
         qa_iteration += 1
         iteration_start = time_module.time()
+
+        # Stop before spending more once the spec's cost budget is exhausted
+        # (P5.T4). Coding + prior QA sessions record cost, so this catches the
+        # cumulative total at the top of each QA iteration.
+        budget = evaluate_budget(spec_dir)
+        if budget.exceeded:
+            print(f"\n{budget.message}")
+            emit_phase(ExecutionPhase.FAILED, "Cost budget exceeded")
+            if task_logger:
+                task_logger.end_phase(
+                    LogPhase.VALIDATION,
+                    success=False,
+                    message="Cost budget exceeded",
+                )
+            return False
+        if budget.warning:
+            print(f"\n{budget.message}")
 
         debug_section("qa_loop", f"QA Iteration {qa_iteration}")
         debug(
