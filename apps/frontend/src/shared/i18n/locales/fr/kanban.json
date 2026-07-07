@@ -51,6 +51,25 @@
       "qa_fixing": "Correction QA",
       "complete": "Terminé",
       "failed": "Échoué"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Rechercher des tâches…",
+      "searchLabel": "Rechercher des tâches par id, titre ou description",
+      "filtersLabel": "Filtrer les tâches",
+      "viewsLabel": "Sélectionner la vue",
+      "noMatches": "Aucune tâche ne correspond à votre recherche ou filtre",
+      "matchCount_one": "{{count}} tâche correspondante",
+      "matchCount_other": "{{count}} tâches correspondantes",
+      "filters": {
+        "all": "Toutes",
+        "running": "En cours",
+        "review": "Revue"
+      },
+      "views": {
+        "board": "Tableau",
+        "table": "Table",
+        "timeline": "Chronologie"
+      }
     }
   }
 }

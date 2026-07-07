@@ -51,6 +51,25 @@
       "qa_fixing": "QA fixing",
       "complete": "Complete",
       "failed": "Failed"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Search tasks…",
+      "searchLabel": "Search tasks by id, title, or description",
+      "filtersLabel": "Filter tasks",
+      "viewsLabel": "Select view",
+      "noMatches": "No tasks match your search or filter",
+      "matchCount_one": "{{count}} matching task",
+      "matchCount_other": "{{count}} matching tasks",
+      "filters": {
+        "all": "All",
+        "running": "Running",
+        "review": "Review"
+      },
+      "views": {
+        "board": "Board",
+        "table": "Table",
+        "timeline": "Timeline"
+      }
     }
   }
 }

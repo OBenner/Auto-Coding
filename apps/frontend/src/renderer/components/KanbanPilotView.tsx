@@ -11,8 +11,9 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AutoCodeClientProvider,
-  KanbanBoard as UiKanbanBoard,
+  BoardView,
   TaskDetail as UiTaskDetail,
+  buildBoardViewLabels,
   useTask,
   useTasks,
 } from '@auto-code/ui';
@@ -38,6 +39,10 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
   const { t } = useTranslation(['kanban']);
   const { tasks, loading, error, reload } = useTasks();
   const columns = usePilotColumns();
+  const labels = useMemo(
+    () => buildBoardViewLabels(t, 'kanban:pilot.toolbar'),
+    [t],
+  );
 
   return (
     <div className="h-full overflow-auto p-4">
@@ -52,9 +57,10 @@ function PilotBoard({ onOpen }: Readonly<{ onOpen: (id: string) => void }>) {
         </p>
       )}
       {!loading && !error && (
-        <UiKanbanBoard
+        <BoardView
           tasks={tasks}
           columns={columns}
+          labels={labels}
           onSelectTask={(task) => onOpen(task.id)}
         />
       )}

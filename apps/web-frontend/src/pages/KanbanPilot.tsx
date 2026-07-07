@@ -6,15 +6,16 @@
  * /kanban-next alongside the legacy /kanban until the migration completes.
  */
 
+import type { KanbanColumn, UiTask } from "@auto-code/ui";
+import {
+	AutoCodeClientProvider,
+	BoardView,
+	buildBoardViewLabels,
+	useTasks,
+} from "@auto-code/ui";
 import { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import {
-	AutoCodeClientProvider,
-	KanbanBoard,
-	useTasks,
-} from "@auto-code/ui";
-import type { KanbanColumn, UiTask } from "@auto-code/ui";
 import { createRestAutoCodeClient } from "../api/autoCodeClient";
 import { apiClient } from "../api/client";
 
@@ -30,6 +31,10 @@ function PilotBoard() {
 			{ status: "review", label: t("tasks:kanbanPilot.columns.review") },
 			{ status: "done", label: t("tasks:kanbanPilot.columns.done") },
 		],
+		[t],
+	);
+	const labels = useMemo(
+		() => buildBoardViewLabels(t, "tasks:kanbanPilot.toolbar"),
 		[t],
 	);
 
@@ -50,9 +55,10 @@ function PilotBoard() {
 				</p>
 			)}
 			{!loading && !error && (
-				<KanbanBoard
+				<BoardView
 					tasks={tasks}
 					columns={columns}
+					labels={labels}
 					onSelectTask={handleSelect}
 				/>
 			)}

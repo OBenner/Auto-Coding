@@ -1,0 +1,133 @@
+.ac-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-family: var(--font-sans);
+}
+
+.ac-toolbar__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 340px;
+  min-width: 200px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.ac-toolbar__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+/* The inner input suppresses its outline, so the wrapper carries the
+   keyboard-focus indicator (WCAG 2.4.7). */
+.ac-toolbar__search:focus-within {
+  border-color: var(--blue);
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+
+.ac-toolbar__search input::placeholder {
+  color: var(--muted);
+}
+
+.ac-toolbar__kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--quiet);
+}
+
+/* The groups are fieldsets for semantics; reset the UA chrome. */
+.ac-toolbar__filters {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.ac-toolbar__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.ac-toolbar__chip--active {
+  color: var(--ink);
+  background: var(--panel);
+  border-color: var(--line-strong);
+}
+
+.ac-toolbar__views {
+  display: flex;
+  margin: 0 0 0 auto;
+  padding: 0;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ac-toolbar__view {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.ac-toolbar__view:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ac-toolbar__view--on {
+  color: var(--ink);
+  background: var(--soft);
+}
+
+/* Inset ring: the container's overflow: hidden would clip the default,
+   outside-painted focus outline (WCAG 2.4.7). */
+.ac-toolbar__view:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+@media (max-width: 760px) {
+  .ac-toolbar {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+
+  .ac-toolbar__search {
+    flex-basis: 100%;
+  }
+}
