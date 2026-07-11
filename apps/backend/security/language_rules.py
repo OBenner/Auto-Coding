@@ -6,6 +6,10 @@ Security scanners and validation rules for different programming languages.
 Defines language-specific security tools and common security patterns.
 """
 
+# Shared guidance strings (JVM languages)
+_USE_SECURE_RANDOM_JVM = "Use java.security.SecureRandom for random numbers"
+
+
 # =============================================================================
 # LANGUAGE SECURITY SCANNERS
 # =============================================================================
@@ -58,6 +62,39 @@ LANGUAGE_SECURITY_SCANNERS: dict[str, set[str]] = {
         "cppcheck",  # C/C++ static analysis
         "clang-tidy",  # Clang-based linter (includes security checks)
         "flawfinder",  # C/C++ security weakness scanner
+    },
+    "java": {
+        "spotbugs",  # Java bytecode static analysis (with find-sec-bugs)
+        "semgrep",  # Multi-language security scanner
+        "osv-scanner",  # Known-vulnerability scanner for Maven/Gradle deps
+    },
+    "kotlin": {
+        "detekt",  # Kotlin static analysis
+        "semgrep",  # Multi-language security scanner
+        "osv-scanner",  # Known-vulnerability scanner for Maven/Gradle deps
+    },
+    "csharp": {
+        "security-scan",  # Security Code Scan for .NET
+        "semgrep",  # Multi-language security scanner
+        "osv-scanner",  # Known-vulnerability scanner for NuGet deps
+    },
+    "elixir": {
+        "sobelow",  # Phoenix/Elixir security scanner
+        "credo",  # Elixir static analysis
+        "osv-scanner",  # Known-vulnerability scanner for Hex deps
+    },
+    "swift": {
+        "swiftlint",  # Swift linter
+        "osv-scanner",  # Known-vulnerability scanner for SwiftPM deps
+    },
+    "scala": {
+        "scalafix",  # Scala linter/refactoring tool
+        "semgrep",  # Multi-language security scanner
+        "osv-scanner",  # Known-vulnerability scanner for sbt/Maven deps
+    },
+    "dart": {
+        "dart-analyze",  # Dart static analysis (dart analyze)
+        "osv-scanner",  # Known-vulnerability scanner for pub deps
     },
 }
 
@@ -285,6 +322,145 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
             "Use crypto.randomBytes for secure random numbers",
             "Use textContent instead of innerHTML",
             "Use === for comparisons",
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "java": {
+        "dangerous_functions": [
+            "Runtime.exec",  # Command injection risk
+            "ProcessBuilder",  # Command injection risk
+            "ObjectInputStream",  # Deserialization vulnerability
+            "XMLDecoder",  # Deserialization vulnerability
+            "Class.forName",  # Reflection-based code loading
+            "ScriptEngine.eval",  # Code injection
+        ],
+        "unsafe_patterns": [
+            "createStatement",  # SQL injection, use PreparedStatement
+            "DocumentBuilderFactory",  # XXE unless secure processing enabled
+            "TrustAllCerts",  # Disabled TLS validation
+            "MD5",  # Weak hash algorithm
+            "SHA1",  # Weak hash algorithm
+        ],
+        "secure_alternatives": [
+            "Use PreparedStatement with parameterized queries",
+            "Enable FEATURE_SECURE_PROCESSING on XML factories",
+            _USE_SECURE_RANDOM_JVM,
+            "Avoid Java serialization; prefer JSON with strict typing",
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "kotlin": {
+        "dangerous_functions": [
+            "Runtime.exec",  # Command injection risk
+            "ProcessBuilder",  # Command injection risk
+            "ObjectInputStream",  # Deserialization vulnerability
+            "ScriptEngine.eval",  # Code injection
+        ],
+        "unsafe_patterns": [
+            "!!",  # Non-null assertion, runtime crash risk
+            "createStatement",  # SQL injection, use PreparedStatement
+            "TrustAllCerts",  # Disabled TLS validation
+        ],
+        "secure_alternatives": [
+            "Use safe calls (?.) and requireNotNull instead of !!",
+            "Use PreparedStatement with parameterized queries",
+            _USE_SECURE_RANDOM_JVM,
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "csharp": {
+        "dangerous_functions": [
+            "Process.Start",  # Command injection risk
+            "BinaryFormatter",  # Deserialization vulnerability
+            "Assembly.Load",  # Code loading risk
+            "XmlDocument.Load",  # XXE risk without secure resolver
+        ],
+        "unsafe_patterns": [
+            "SqlCommand",  # SQL injection without parameters
+            "MD5",  # Weak hash algorithm
+            "SHA1",  # Weak hash algorithm
+            "Random",  # Not cryptographically secure
+            "unsafe",  # Memory safety bypass
+        ],
+        "secure_alternatives": [
+            "Use SqlParameter for parameterized queries",
+            "Use System.Text.Json instead of BinaryFormatter",
+            "Use RandomNumberGenerator for secure random numbers",
+            "Set XmlResolver = null to prevent XXE",
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "elixir": {
+        "dangerous_functions": [
+            "Code.eval_string",  # Code injection
+            ":os.cmd",  # Command injection
+            "System.cmd",  # Command injection with user input
+            ":erlang.binary_to_term",  # Deserialization vulnerability
+        ],
+        "unsafe_patterns": [
+            "String.to_atom",  # Atom table exhaustion (DoS)
+            "raw: true",  # Raw SQL, injection risk
+            "Plug.Conn.put_resp_header",  # Header injection if unvalidated
+        ],
+        "secure_alternatives": [
+            "Use String.to_existing_atom instead of String.to_atom",
+            "Use Ecto parameterized queries instead of raw SQL",
+            "Use Plug.Crypto for secure tokens and comparison",
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "swift": {
+        "dangerous_functions": [
+            "NSTask",  # Command execution
+            "Process",  # Command execution with user input
+            "unsafeBitCast",  # Type safety bypass
+            "UnsafeMutablePointer",  # Memory safety bypass
+        ],
+        "unsafe_patterns": [
+            "try!",  # Crash on error
+            "as!",  # Crash on failed cast
+            "String(format:",  # Format string risk with user input
+        ],
+        "secure_alternatives": [
+            "Use do/catch or try? instead of try!",
+            "Use conditional casts (as?) with unwrapping",
+            "Use SecRandomCopyBytes for secure random numbers",
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "scala": {
+        "dangerous_functions": [
+            "sys.process",  # Command injection risk
+            "ObjectInputStream",  # Deserialization vulnerability
+            "Class.forName",  # Reflection-based code loading
+        ],
+        "unsafe_patterns": [
+            "createStatement",  # SQL injection, use PreparedStatement
+            "asInstanceOf",  # Unchecked cast
+            "null",  # Prefer Option
+        ],
+        "secure_alternatives": [
+            "Use PreparedStatement or a typed query DSL",
+            "Use Option instead of null",
+            _USE_SECURE_RANDOM_JVM,
+            "Validate and sanitize all user inputs",
+        ],
+    },
+    "dart": {
+        "dangerous_functions": [
+            "Process.run",  # Command injection risk
+            "Process.start",  # Command injection risk
+            "dart:mirrors",  # Reflection-based code loading
+        ],
+        "unsafe_patterns": [
+            "Random()",  # Not cryptographically secure
+            "!",  # Null assertion, runtime crash risk
+            "Uri.http",  # Cleartext transport constructor
+        ],
+        "secure_alternatives": [
+            "Use Random.secure() for security-sensitive randomness",
+            "Use null-aware operators instead of null assertions",
+            "Use HTTPS for all network calls",
             "Validate and sanitize all user inputs",
         ],
     },
