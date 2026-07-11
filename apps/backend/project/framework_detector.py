@@ -41,6 +41,11 @@ class FrameworkDetector:
         self.detect_dart_frameworks()
         self.detect_go_frameworks()
         self.detect_rust_frameworks()
+        self.detect_jvm_frameworks()
+        self.detect_dotnet_frameworks()
+        self.detect_cpp_frameworks()
+        self.detect_elixir_frameworks()
+        self.detect_swift_frameworks()
         return self.frameworks
 
     def detect_nodejs_frameworks(self) -> None:
@@ -307,3 +312,97 @@ class FrameworkDetector:
         for dep, framework in rust_framework_deps.items():
             if dep in content:
                 self.frameworks.append(framework)
+
+    def detect_jvm_frameworks(self) -> None:
+        """Detect JVM frameworks from Maven/Gradle build files."""
+        content = ""
+        for build_file in (
+            "pom.xml",
+            "build.gradle",
+            "build.gradle.kts",
+            "settings.gradle",
+            "settings.gradle.kts",
+        ):
+            file_content = self.parser.read_text(build_file)
+            if file_content:
+                content += file_content
+
+        if not content:
+            return
+
+        jvm_framework_deps = {
+            "spring-boot": "spring-boot",
+            "org.springframework": "spring-boot",
+            "io.quarkus": "quarkus",
+            "io.micronaut": "micronaut",
+            "com.android.application": "android",
+            "com.android.library": "android",
+            "org.jetbrains.compose": "compose",
+        }
+
+        for dep, framework in jvm_framework_deps.items():
+            if dep in content and framework not in self.frameworks:
+                self.frameworks.append(framework)
+
+    def detect_dotnet_frameworks(self) -> None:
+        """Detect .NET frameworks from project files."""
+        csproj_files = self.parser.glob_files("*.csproj") + self.parser.glob_files(
+            "*/*.csproj"
+        )
+        content = ""
+        for csproj in csproj_files:
+            try:
+                with open(csproj, encoding="utf-8") as f:
+                    content += f.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        if content:
+            if "Microsoft.AspNetCore" in content or "Microsoft.NET.Sdk.Web" in content:
+                self.frameworks.append("aspnet")
+            if "Microsoft.Maui" in content or "UseMaui" in content:
+                self.frameworks.append("maui")
+
+        # Unity projects carry a ProjectVersion.txt under ProjectSettings/
+        if self.parser.file_exists("ProjectSettings/ProjectVersion.txt"):
+            self.frameworks.append("unity")
+
+    def detect_cpp_frameworks(self) -> None:
+        """Detect C/C++ frameworks and test libraries from CMake files."""
+        content = self.parser.read_text("CMakeLists.txt")
+        if not content:
+            return
+
+        cpp_framework_markers = {
+            "Qt5": "qt",
+            "Qt6": "qt",
+            "find_package(Qt": "qt",
+            "Boost": "boost",
+            "GTest": "gtest",
+            "googletest": "gtest",
+            "Catch2": "catch2",
+        }
+
+        for marker, framework in cpp_framework_markers.items():
+            if marker in content and framework not in self.frameworks:
+                self.frameworks.append(framework)
+
+    def detect_elixir_frameworks(self) -> None:
+        """Detect Elixir frameworks from mix.exs."""
+        content = self.parser.read_text("mix.exs")
+        if not content:
+            return
+
+        if ":phoenix" in content:
+            self.frameworks.append("phoenix")
+        if ":ecto" in content and "ecto" not in self.frameworks:
+            self.frameworks.append("ecto")
+
+    def detect_swift_frameworks(self) -> None:
+        """Detect Swift frameworks from Package.swift."""
+        content = self.parser.read_text("Package.swift")
+        if not content:
+            return
+
+        if "vapor" in content.lower():
+            self.frameworks.append("vapor")
