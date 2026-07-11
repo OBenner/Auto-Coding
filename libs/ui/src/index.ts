@@ -1,3 +1,8 @@
+// Primitives (U0.5)
+export { Badge } from './primitives/Badge';
+export type { BadgeProps } from './primitives/Badge';
+export { Kbd } from './primitives/Kbd';
+export type { KbdProps } from './primitives/Kbd';
 export { ThemeProvider, useTheme } from './theme/ThemeProvider';
 export type { Theme, ResolvedTheme, ThemeProviderProps } from './theme/ThemeProvider';
 export { AppShell } from './shell/AppShell';

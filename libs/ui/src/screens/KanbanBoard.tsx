@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import type { KeyboardEvent } from 'react';
+import { Badge } from '../primitives/Badge';
 import type { TaskStatus, UiTask } from '../client/types';
 import './KanbanBoard.css';
 
@@ -81,11 +82,9 @@ function KanbanCard({ task, onSelect }: KanbanCardProps) {
       <div className="ac-kanban__card-top">
         <span className="ac-kanban__card-id">{task.id}</span>
         {task.statusChip != null && (
-          <span
-            className={`ac-kanban__badge ac-kanban__badge--${task.statusChip.tone ?? 'neutral'}`}
-          >
+          <Badge tone={task.statusChip.tone ?? 'neutral'} size="sm">
             {task.statusChip.label}
-          </span>
+          </Badge>
         )}
       </div>
       <h3 className="ac-kanban__card-title">{task.title}</h3>
@@ -100,12 +99,13 @@ function KanbanCard({ task, onSelect }: KanbanCardProps) {
       {task.badges != null && task.badges.length > 0 && (
         <div className="ac-kanban__card-badges">
           {task.badges.map((badge) => (
-            <span
+            <Badge
               key={`${badge.tone ?? 'neutral'}:${badge.label}`}
-              className={`ac-kanban__badge ac-kanban__badge--${badge.tone ?? 'neutral'}`}
+              tone={badge.tone ?? 'neutral'}
+              size="sm"
             >
               {badge.label}
-            </span>
+            </Badge>
           ))}
         </div>
       )}

@@ -1,3 +1,4 @@
+import { Badge } from '../primitives/Badge';
 import type { TaskStatus, UiTaskDetail } from '../client/types';
 import './TaskDetail.css';
 
@@ -95,12 +96,13 @@ function TaskDetailBody({ task, statusLabels }: Readonly<TaskDetailBodyProps>) {
       {task.badges != null && task.badges.length > 0 && (
         <div className="ac-task-detail__badges">
           {task.badges.map((badge) => (
-            <span
+            <Badge
               key={`${badge.tone ?? 'neutral'}:${badge.label}`}
-              className={`ac-task-detail__badge ac-task-detail__badge--${badge.tone ?? 'neutral'}`}
+              tone={badge.tone ?? 'neutral'}
+              size="md"
             >
               {badge.label}
-            </span>
+            </Badge>
           ))}
         </div>
       )}

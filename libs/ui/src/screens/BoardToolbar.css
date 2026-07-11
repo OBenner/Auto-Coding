@@ -44,11 +44,7 @@
   color: var(--muted);
 }
 
-.ac-toolbar__kbd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  color: var(--quiet);
-}
+/* The ⌘K hint uses the shared <Kbd> primitive. */
 
 /* The groups are fieldsets for semantics; reset the UA chrome. */
 .ac-toolbar__filters {

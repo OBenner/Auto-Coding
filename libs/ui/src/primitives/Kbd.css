@@ -1,0 +1,5 @@
+.ac-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--quiet);
+}
