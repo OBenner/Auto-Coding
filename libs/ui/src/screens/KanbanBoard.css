@@ -101,22 +101,7 @@
   flex-wrap: wrap;
 }
 
-.ac-kanban__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-size: 10.5px;
-  font-weight: 780;
-  white-space: nowrap;
-}
-
-.ac-kanban__badge--good { color: var(--green); background: var(--green-soft); }
-.ac-kanban__badge--info { color: var(--blue); background: var(--blue-soft); }
-.ac-kanban__badge--warn { color: var(--amber); background: var(--amber-soft); }
-.ac-kanban__badge--bad { color: var(--red); background: var(--red-soft); }
-.ac-kanban__badge--neutral { color: var(--muted); background: var(--rail); }
+/* Status chip + outcome badges use the shared <Badge size="sm"> primitive. */
 
 .ac-kanban__card-meta {
   display: flex;

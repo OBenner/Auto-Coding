@@ -1,0 +1,42 @@
+.ac-badge {
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Dense card chip (was .ac-kanban__badge). */
+.ac-badge--sm {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 780;
+}
+
+/* Detail / label badge (was .ac-task-detail__badge). */
+.ac-badge--md {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ac-badge--good {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.ac-badge--info {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.ac-badge--warn {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+.ac-badge--bad {
+  color: var(--red);
+  background: var(--red-soft);
+}
+.ac-badge--neutral {
+  color: var(--muted);
+  background: var(--rail);
+}

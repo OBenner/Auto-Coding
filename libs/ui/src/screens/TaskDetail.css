@@ -80,17 +80,7 @@
   flex-wrap: wrap;
   gap: 6px;
 }
-.ac-task-detail__badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-.ac-task-detail__badge--good { color: var(--green); background: var(--green-soft); }
-.ac-task-detail__badge--info { color: var(--blue); background: var(--blue-soft); }
-.ac-task-detail__badge--warn { color: var(--amber); background: var(--amber-soft); }
-.ac-task-detail__badge--bad { color: var(--red); background: var(--red-soft); }
-.ac-task-detail__badge--neutral { color: var(--muted); background: var(--rail); }
+/* Badges use the shared <Badge size="md"> primitive. */
 
 .ac-task-detail__desc {
   margin: 0;

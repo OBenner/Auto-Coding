@@ -1,4 +1,5 @@
 import type { ChangeEvent } from 'react';
+import { Kbd } from '../primitives/Kbd';
 import './BoardToolbar.css';
 
 export interface BoardToolbarFilter {
@@ -70,9 +71,7 @@ export function BoardToolbar({
             aria-label={searchLabel ?? searchPlaceholder}
             onChange={handleSearch}
           />
-          {searchShortcut != null && (
-            <span className="ac-toolbar__kbd">{searchShortcut}</span>
-          )}
+          {searchShortcut != null && <Kbd>{searchShortcut}</Kbd>}
         </div>
       )}
       {filters != null && filters.length > 0 && (
