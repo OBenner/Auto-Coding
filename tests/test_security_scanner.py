@@ -663,6 +663,20 @@ class TestNativeAndDependencyScanners:
         (temp_dir / "mix.lock").write_text("%{}")
         assert scanner._has_osv_manifests(temp_dir) is True
 
+    def test_has_osv_manifests_nested(self, scanner, temp_dir):
+        """Nested manifests in monorepos trigger osv-scanner."""
+        service = temp_dir / "services" / "api"
+        service.mkdir(parents=True)
+        (service / "go.mod").write_text("module api")
+        assert scanner._has_osv_manifests(temp_dir) is True
+
+    def test_has_osv_manifests_ignores_vendor_dirs(self, scanner, temp_dir):
+        """Manifests inside vendor directories do not trigger osv-scanner."""
+        nested = temp_dir / "node_modules" / "some-pkg"
+        nested.mkdir(parents=True)
+        (nested / "pom.xml").write_text("<project/>")
+        assert scanner._has_osv_manifests(temp_dir) is False
+
     def test_has_osv_manifests_negative(self, scanner, temp_dir):
         """Manifests covered by dedicated audits do not trigger osv-scanner."""
         (temp_dir / "package-lock.json").write_text("{}")
@@ -689,7 +703,14 @@ class TestNativeAndDependencyScanners:
                                         {
                                             "id": "GHSA-xxxx-yyyy",
                                             "summary": "RCE in demo library",
-                                        }
+                                        },
+                                        {
+                                            "id": "GHSA-aaaa-bbbb",
+                                            "summary": "ReDoS in demo library",
+                                            "database_specific": {
+                                                "severity": "MODERATE"
+                                            },
+                                        },
                                     ],
                                 }
                             ],
@@ -704,13 +725,16 @@ class TestNativeAndDependencyScanners:
         result = SecurityScanResult()
         scanner._run_osv_scanner(temp_dir, result)
 
-        assert len(result.vulnerabilities) == 1
+        assert len(result.vulnerabilities) == 2
         vuln = result.vulnerabilities[0]
         assert vuln.source == "osv_scanner"
+        # No severity in payload: defaults to high
         assert vuln.severity == "high"
         assert "org.example:demo" in vuln.title
         assert "GHSA-xxxx-yyyy" in vuln.title
         assert vuln.file == "pom.xml"
+        # OSV MODERATE maps to medium
+        assert result.vulnerabilities[1].severity == "medium"
 
     @patch("subprocess.run")
     def test_osv_scanner_missing_tool_is_silent(self, mock_run, scanner, temp_dir):

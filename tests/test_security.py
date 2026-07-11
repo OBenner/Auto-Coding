@@ -1672,15 +1672,16 @@ class TestLanguageSecurityRules:
         from security.profile import get_security_rules
 
         expectations = {
-            "java": "Runtime.exec",
-            "kotlin": "Runtime.exec",
-            "csharp": "BinaryFormatter",
-            "elixir": "Code.eval_string",
-            "swift": "unsafeBitCast",
-            "scala": "sys.process",
-            "dart": "Process.run",
+            "java": ("Runtime.exec", "createStatement"),
+            "kotlin": ("Runtime.exec", "!!"),
+            "csharp": ("BinaryFormatter", "SqlCommand"),
+            "elixir": ("Code.eval_string", "String.to_atom"),
+            "swift": ("unsafeBitCast", "try!"),
+            "scala": ("sys.process", "asInstanceOf"),
+            "dart": ("Process.run", "Random()"),
         }
-        for lang, dangerous in expectations.items():
+        for lang, (dangerous, unsafe) in expectations.items():
             rules = get_security_rules(lang)
             assert dangerous in rules["dangerous_functions"]
+            assert unsafe in rules["unsafe_patterns"]
             assert rules["secure_alternatives"]

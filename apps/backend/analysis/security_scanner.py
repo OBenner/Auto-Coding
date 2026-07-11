@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -675,9 +676,29 @@ class SecurityScanner:
         "go.mod",
     )
 
+    # Vendor/build directories skipped when searching for nested manifests
+    _MANIFEST_SKIP_DIRS = frozenset(
+        {
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            "target",
+            "build",
+            "dist",
+            "vendor",
+        }
+    )
+
     def _has_osv_manifests(self, project_dir: Path) -> bool:
-        """Check for manifests osv-scanner should audit."""
-        return any((project_dir / m).exists() for m in self.OSV_MANIFESTS)
+        """Check for manifests osv-scanner should audit (recursively)."""
+        manifest_names = set(self.OSV_MANIFESTS)
+        for _root, dirs, files in os.walk(project_dir):
+            dirs[:] = [d for d in dirs if d not in self._MANIFEST_SKIP_DIRS]
+            if manifest_names.intersection(files):
+                return True
+        return False
 
     def _run_osv_scanner(self, project_dir: Path, result: SecurityScanResult) -> None:
         """Run osv-scanner against known-vulnerability database."""
@@ -708,6 +729,17 @@ class SecurityScanner:
         except Exception as e:
             result.scan_errors.append(f"osv-scanner error: {str(e)}")
 
+    @staticmethod
+    def _osv_severity(vuln: dict) -> str:
+        """Map an OSV vulnerability payload to a severity level."""
+        raw = str(vuln.get("database_specific", {}).get("severity", "")).lower()
+        if raw in ("critical", "high", "medium", "low"):
+            return raw
+        if raw == "moderate":
+            return "medium"
+        # Unknown severity on a known vulnerability: treat as high
+        return "high"
+
     def _parse_osv_output(self, osv_output: dict, result: SecurityScanResult) -> None:
         """Convert osv-scanner JSON results into vulnerabilities."""
         for scan_result in osv_output.get("results", []):
@@ -718,7 +750,7 @@ class SecurityScanner:
                 for vuln in package.get("vulnerabilities", []):
                     result.vulnerabilities.append(
                         SecurityVulnerability(
-                            severity="high",
+                            severity=self._osv_severity(vuln),
                             source="osv_scanner",
                             title=(
                                 f"Vulnerable dependency: {pkg_name} "
