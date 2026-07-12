@@ -183,6 +183,7 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
+from core.build_cache import get_build_cache_env
 from core.providers.config import get_provider_config
 from enterprise.data_residency import get_data_residency_config
 from linear_updater import is_linear_enabled
@@ -941,6 +942,13 @@ def create_client(
 
     # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
     sdk_env = get_sdk_env_vars()
+
+    # Reuse compiler caches across fresh worktrees for compiled stacks
+    # (ccache for CMake C/C++ builds, sccache for Cargo builds)
+    build_cache_env = get_build_cache_env(project_dir, sdk_env)
+    if build_cache_env:
+        sdk_env.update(build_cache_env)
+        logger.info(f"Build cache enabled: {', '.join(sorted(build_cache_env))}")
 
     # Configure data residency (regional API endpoints)
     data_residency_config = get_data_residency_config()

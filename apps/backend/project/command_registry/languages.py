@@ -41,6 +41,7 @@ LANGUAGE_COMMANDS: dict[str, set[str]] = {
         "rustup",
         "rustfmt",
         "rust-analyzer",
+        "sccache",  # Compiler cache (RUSTC_WRAPPER)
         # Cargo subcommand binaries
         "cargo-clippy",
         "cargo-fmt",
