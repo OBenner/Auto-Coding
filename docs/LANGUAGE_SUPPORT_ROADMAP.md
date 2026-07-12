@@ -23,7 +23,8 @@ snapshot, kept for historical context.
   project index (#402); ccache/sccache compiler-cache env for fresh worktrees (#412).
 - **Phase 5 — DONE (CLI slice).** `run_cli_session` MCP tool: pseudo-terminal E2E
   harness for terminal applications, available to QA agents (#415). Native GUI,
-  mobile, and embedded verification remain out of scope (see Phase 5 section).
+  mobile, and embedded verification are planned separately in the
+  [Device & GUI Verification Roadmap](DEVICE_GUI_VERIFICATION_ROADMAP.md).
 - **Audit note:** `LANGUAGE_SECURITY_SCANNERS`/`LANGUAGE_SECURITY_RULES` in
   `security/language_rules.py` are a public API (`security/profile.py`) with no runtime
   consumers yet — actual scanning happens in `analysis/security_scanner.py`
