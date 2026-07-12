@@ -279,6 +279,13 @@ FRAMEWORK_PATTERNS = {
         "command": "cabal test",
         "coverage_command": None,
     },
+    # Android instrumented tests (emulator/device; managed devices preferred)
+    "android_instrumented": {
+        "config_files": ["build.gradle", "build.gradle.kts"],
+        "type": "e2e",
+        "command": "./gradlew connectedAndroidTest",
+        "coverage_command": None,
+    },
 }
 
 
@@ -387,6 +394,7 @@ class TestDiscovery:
 
         # Additional language ecosystems (each method checks its own markers)
         self._discover_jvm_frameworks(project_dir, result)
+        self._discover_android_instrumented(project_dir, result)
         self._discover_sbt_frameworks(project_dir, result)
         self._discover_dotnet_frameworks(project_dir, result)
         self._discover_c_cpp_frameworks(project_dir, result)
@@ -711,6 +719,83 @@ class TestDiscovery:
                     config_file=gradle_config,
                 )
             )
+
+    # Root and single-module Android build file locations
+    _ANDROID_BUILD_FILES = (
+        "build.gradle",
+        "build.gradle.kts",
+        "app/build.gradle",
+        "app/build.gradle.kts",
+    )
+
+    def _discover_android_instrumented(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover Android instrumented (emulator/device) test setups."""
+        content = ""
+        config_file = None
+        for build_file in self._ANDROID_BUILD_FILES:
+            path = project_dir / build_file
+            if not path.exists():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if config_file is None:
+                config_file = build_file
+            content += text
+
+        if "com.android" not in content:
+            return
+
+        gradle = "./gradlew" if (project_dir / "gradlew").exists() else "gradle"
+
+        # Gradle Managed Virtual Devices provision and tear down their own
+        # emulator, so they are the preferred instrumented-test path
+        device = self._find_managed_device_name(content)
+        if device:
+            command = f"{gradle} {device}DebugAndroidTest"
+        elif self._has_android_test_sources(project_dir):
+            # Requires an attached device or a running emulator
+            command = f"{gradle} connectedAndroidTest"
+        else:
+            return
+
+        result.frameworks.append(
+            TestFramework(
+                name="android_instrumented",
+                type="e2e",
+                command=command,
+                config_file=config_file,
+            )
+        )
+
+    @staticmethod
+    def _find_managed_device_name(build_content: str) -> str | None:
+        """Extract the first Gradle managed-device name, if configured."""
+        if "managedDevices" not in build_content:
+            return None
+        # Limit the search to the section after the managedDevices block opens
+        section = build_content.split("managedDevices", 1)[1][:2000]
+        # Kotlin DSL: create("pixel2api30") { ... }
+        match = re.search(r'(?:create|maybeCreate|register)\("(\w+)"\)', section)
+        if match:
+            return match.group(1)
+        # Groovy DSL: localDevices { pixel2api30 { ... } }
+        match = re.search(
+            r"(?:localDevices|allDevices|devices)\s*\{\s*(\w+)\s*\{", section
+        )
+        if match:
+            return match.group(1)
+        return None
+
+    @staticmethod
+    def _has_android_test_sources(project_dir: Path) -> bool:
+        """Check for instrumented test sources (src/androidTest)."""
+        if (project_dir / "src" / "androidTest").is_dir():
+            return True
+        return any(project_dir.glob("*/src/androidTest"))
 
     def _discover_sbt_frameworks(
         self, project_dir: Path, result: TestDiscoveryResult
