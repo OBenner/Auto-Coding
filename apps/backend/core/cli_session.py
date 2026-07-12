@@ -113,6 +113,9 @@ def _run_with_pty(
     import select
 
     master_fd, slave_fd = pty.openpty()
+    # Non-blocking master: a child that never reads stdin must not let
+    # os.write block past the timeout when the pty buffer fills up
+    os.set_blocking(master_fd, False)
     proc = subprocess.Popen(
         argv,
         cwd=cwd,
@@ -125,6 +128,7 @@ def _run_with_pty(
     os.close(slave_fd)
 
     pending = list(inputs or [])
+    write_buf = b""
     chunks: list[bytes] = []
     total = 0
     deadline = time.monotonic() + timeout_seconds
@@ -143,9 +147,10 @@ def _run_with_pty(
             if eof:
                 break
 
-            if pending and time.monotonic() >= next_write:
-                os.write(master_fd, (pending.pop(0) + "\n").encode())
+            if not write_buf and pending and time.monotonic() >= next_write:
+                write_buf = (pending.pop(0) + "\n").encode()
                 next_write = time.monotonic() + INPUT_INTERVAL_SECONDS
+            write_buf = _flush_input(master_fd, write_buf)
 
             if proc.poll() is not None:
                 # Process exited: drain whatever is left, then stop
@@ -155,7 +160,11 @@ def _run_with_pty(
 
             select.select([master_fd], [], [], 0.05)
     finally:
-        os.close(master_fd)
+        # Independent cleanup steps: a failure in one must not skip the rest
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
         if proc.poll() is None:
             proc.kill()
         proc.wait()
@@ -183,6 +192,9 @@ def _drain_output(master_fd: int, chunks: list[bytes], total: int) -> bool:
             return False
         try:
             data = os.read(master_fd, 4096)
+        except BlockingIOError:
+            # Non-blocking fd raced with select: no data right now
+            return False
         except OSError:
             # EIO: slave side closed - treat as EOF
             return True
@@ -191,6 +203,25 @@ def _drain_output(master_fd: int, chunks: list[bytes], total: int) -> bool:
         if total < MAX_OUTPUT_CHARS:
             chunks.append(data)
             total += len(data)
+
+
+def _flush_input(master_fd: int, write_buf: bytes) -> bytes:
+    """
+    Write as much buffered stdin as the pty accepts without blocking.
+
+    Returns:
+        The unwritten remainder of the buffer
+    """
+    if not write_buf:
+        return write_buf
+    try:
+        written = os.write(master_fd, write_buf)
+    except BlockingIOError:
+        return write_buf
+    except OSError:
+        # Slave side closed: nothing left to feed
+        return b""
+    return write_buf[written:]
 
 
 __all__ = ["CliSessionResult", "run_cli_session", "MAX_OUTPUT_CHARS"]

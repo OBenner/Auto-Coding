@@ -81,6 +81,17 @@ class TestRunCliSession:
 
         assert result.timed_out is True
 
+    def test_timeout_fires_when_child_never_reads_stdin(self, tmp_path):
+        """Unconsumed stdin filling the pty buffer must not block the timeout."""
+        result = run_cli_session(
+            f'{PYTHON} -c "import time; time.sleep(60)"',
+            cwd=str(tmp_path),
+            inputs=["x" * 65536] * 8,
+            timeout_seconds=3,
+        )
+
+        assert result.timed_out is True
+
     def test_output_is_capped(self, tmp_path):
         """Runaway output is truncated to the cap."""
         result = run_cli_session(
