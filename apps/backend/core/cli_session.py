@@ -46,7 +46,8 @@ def run_cli_session(
     Run a CLI application and capture its output.
 
     Args:
-        command: Command line to run (parsed with shlex, no shell)
+        command: Command line to run (shlex-parsed on POSIX, passed to
+            CreateProcess unchanged on Windows; never run through a shell)
         cwd: Working directory for the process
         inputs: Lines to send to stdin, in order (newline appended)
         timeout_seconds: Kill the process after this many seconds
@@ -54,17 +55,22 @@ def run_cli_session(
     Returns:
         CliSessionResult with exit code, combined output, and timeout flag
     """
-    argv = shlex.split(command, posix=not is_windows())
-    if not argv:
+    if not command.strip():
         return CliSessionResult(exit_code=None, output="", timed_out=False)
 
     if is_windows():
-        return _run_with_pipes(argv, cwd, inputs, timeout_seconds)
+        # CreateProcess parses the command line itself; shlex quoting rules
+        # do not apply on Windows, so pass the string through unchanged
+        return _run_with_pipes(command, cwd, inputs, timeout_seconds)
+
+    argv = shlex.split(command)
+    if not argv:
+        return CliSessionResult(exit_code=None, output="", timed_out=False)
     return _run_with_pty(argv, cwd, inputs, timeout_seconds)
 
 
 def _run_with_pipes(
-    argv: list[str],
+    command: str,
     cwd: str,
     inputs: list[str] | None,
     timeout_seconds: int,
@@ -72,7 +78,7 @@ def _run_with_pipes(
     """Run with plain pipes (Windows fallback, no pty in stdlib)."""
     stdin_data = "".join(line + "\n" for line in inputs) if inputs else None
     proc = subprocess.Popen(
-        argv,
+        command,
         cwd=cwd,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
