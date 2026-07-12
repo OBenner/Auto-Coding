@@ -15,14 +15,19 @@
     "*.css"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@storybook/react-vite": "^10.5.0",
     "@types/react": "^19.2.7",
-    "typescript": "^6.0.2"
+    "storybook": "^10.5.0",
+    "typescript": "^6.0.2",
+    "vite": "^7.3.6"
   }
 }

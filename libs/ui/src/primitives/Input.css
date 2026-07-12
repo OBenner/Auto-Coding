@@ -1,0 +1,24 @@
+.ac-input {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+}
+
+.ac-input::placeholder {
+  color: var(--muted);
+}
+
+.ac-input:focus-visible {
+  border-color: var(--blue);
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+
+.ac-input:disabled {
+  opacity: 0.55;
+}
