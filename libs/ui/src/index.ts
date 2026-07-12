@@ -1,6 +1,10 @@
 // Primitives (U0.5)
 export { Badge } from './primitives/Badge';
 export type { BadgeProps } from './primitives/Badge';
+export { Button } from './primitives/Button';
+export type { ButtonProps } from './primitives/Button';
+export { Input } from './primitives/Input';
+export type { InputProps } from './primitives/Input';
 export { Kbd } from './primitives/Kbd';
 export type { KbdProps } from './primitives/Kbd';
 export { ThemeProvider, useTheme } from './theme/ThemeProvider';
