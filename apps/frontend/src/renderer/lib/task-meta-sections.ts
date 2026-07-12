@@ -53,7 +53,16 @@ export function buildTaskMetaSections(
   sections.push({ title: labels.workspaceTitle, rows: workspaceRows });
 
   const costRows = [];
-  if (costReport != null) {
+  // cost_report.json crosses IPC as a bare JSON.parse cast — historical or
+  // hand-edited files can carry a missing/string total_cost (the backend's
+  // cost_tracking loader is defensive for the same reason). Skip the row
+  // rather than throwing and losing the whole rail.
+  if (
+    costReport != null &&
+    typeof costReport.total_cost === 'number' &&
+    Number.isFinite(costReport.total_cost) &&
+    costReport.total_cost >= 0
+  ) {
     costRows.push({
       label: labels.cost,
       value: `$${costReport.total_cost.toFixed(2)}`,

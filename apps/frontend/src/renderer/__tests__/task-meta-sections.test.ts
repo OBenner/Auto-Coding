@@ -90,6 +90,11 @@ describe('formatTokenCount', () => {
     expect(formatTokenCount(-5)).toBe('0');
     expect(formatTokenCount(Number.NaN)).toBe('0');
   });
+
+  it('pins the k/M boundary behavior', () => {
+    expect(formatTokenCount(999_999)).toBe('1000k');
+    expect(formatTokenCount(1_234_000_000)).toBe('1234.0M');
+  });
 });
 
 describe('buildTaskMetaSections', () => {
@@ -139,5 +144,32 @@ describe('buildTaskMetaSections', () => {
   it('omits the location row when the task has none', () => {
     const sections = buildTaskMetaSections(makeTask(), null, null, LABELS);
     expect(sections[0].rows.map((row) => row.label)).toEqual(['Spec', 'Updated']);
+  });
+
+  it('renders a cost-only card when token stats are missing', () => {
+    const sections = buildTaskMetaSections(makeTask(), null, COST_REPORT, LABELS);
+    expect(sections).toHaveLength(2);
+    expect(sections[1].rows).toEqual([{ label: 'Cost', value: '$4.87' }]);
+  });
+
+  it('skips the cost row on malformed, negative, or non-finite total_cost', () => {
+    const malformed = (total_cost: unknown): CostReport =>
+      ({ ...COST_REPORT, total_cost }) as CostReport;
+    for (const bad of ['4.87', null, undefined, -1, Number.POSITIVE_INFINITY]) {
+      const sections = buildTaskMetaSections(
+        makeTask(),
+        makeTokenStats(),
+        malformed(bad),
+        LABELS,
+      );
+      // The rail must survive a bad cost_report.json: workspace card intact,
+      // token rows intact, only the cost row dropped.
+      expect(sections).toHaveLength(2);
+      expect(sections[1].rows.map((row) => row.label)).toEqual([
+        'Input',
+        'Output',
+        'Sessions',
+      ]);
+    }
   });
 });
