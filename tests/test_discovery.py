@@ -546,6 +546,56 @@ class TestScriptingTailFrameworks:
         assert cabal.command == "cabal test"
 
 
+class TestTargetedCommands:
+    """Tests for targeted (subset) test command templates."""
+
+    def test_pytest_targeted_command(self, discovery, temp_dir):
+        """Python project gets a path-based targeted template."""
+        (temp_dir / "requirements.txt").write_text("pytest\n")
+
+        result = discovery.discover(temp_dir)
+
+        assert result.targeted_command == "pytest {target}"
+
+    def test_gradle_wrapper_targeted_command(self, discovery, temp_dir):
+        """Gradle project with wrapper keeps ./gradlew in targeted template."""
+        (temp_dir / "build.gradle.kts").write_text('plugins { kotlin("jvm") }')
+        (temp_dir / "gradlew").write_text("#!/bin/sh")
+
+        result = discovery.discover(temp_dir)
+
+        assert result.targeted_command == "./gradlew test --tests {target}"
+
+    def test_ctest_targeted_command(self, discovery, temp_dir):
+        """CMake project gets a ctest -R filter template."""
+        (temp_dir / "CMakeLists.txt").write_text(
+            "project(demo)\nenable_testing()\nadd_test(NAME t COMMAND t)"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        assert result.targeted_command == (
+            "ctest --test-dir build -R {target} --output-on-failure"
+        )
+
+    def test_no_targeted_command_for_zig(self, discovery, temp_dir):
+        """Frameworks without a reliable targeted form yield None."""
+        (temp_dir / "build.zig").write_text("pub fn build() void {}")
+
+        result = discovery.discover(temp_dir)
+
+        assert result.targeted_command is None
+
+    def test_targeted_command_in_to_dict(self, discovery, temp_dir):
+        """to_dict includes the targeted command template."""
+        (temp_dir / "requirements.txt").write_text("pytest\n")
+
+        result = discovery.discover(temp_dir)
+        data = discovery.to_dict(result)
+
+        assert data["targeted_command"] == "pytest {target}"
+
+
 class TestPrimaryCommandPrecedence:
     """New ecosystems must not change the primary command of existing ones."""
 

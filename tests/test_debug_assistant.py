@@ -738,8 +738,9 @@ class TestServiceAnalyzer:
         analyzer = ServiceAnalyzer(tmp_path, "test")
         result = analyzer.analyze()
 
-        assert result["testing"] == "Vitest"
-        assert result["e2e_testing"] == "Playwright"
+        # TestDiscovery reports canonical lowercase framework names
+        assert result["testing"] == "vitest"
+        assert result["e2e_testing"] == "playwright"
 
     def test_find_entry_point(self, tmp_path):
         """Finds main entry point file."""
