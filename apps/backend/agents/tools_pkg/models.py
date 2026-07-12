@@ -48,6 +48,9 @@ TOOL_GET_TASK_STATUS = "mcp__auto-claude__get_task_status"
 TOOL_GET_TASK_OUTPUT = "mcp__auto-claude__get_task_output"
 TOOL_CANCEL_TASK = "mcp__auto-claude__cancel_task"
 
+# CLI E2E harness (pseudo-terminal runner for terminal apps)
+TOOL_RUN_CLI_SESSION = "mcp__auto-claude__run_cli_session"
+
 # =============================================================================
 # External MCP Tools
 # =============================================================================
@@ -282,6 +285,7 @@ AGENT_CONFIGS = {
             TOOL_UPDATE_QA_STATUS,
             TOOL_GET_SESSION_CONTEXT,
             TOOL_SEARCH_TEAM_DOCS,  # Verify against team standards
+            TOOL_RUN_CLI_SESSION,  # E2E-verify terminal apps
         ],
         "thinking_default": "high",
     },
@@ -294,6 +298,7 @@ AGENT_CONFIGS = {
             TOOL_GET_BUILD_PROGRESS,
             TOOL_UPDATE_QA_STATUS,
             TOOL_RECORD_GOTCHA,
+            TOOL_RUN_CLI_SESSION,  # Verify CLI fixes end-to-end
         ],
         "thinking_default": "medium",
     },
