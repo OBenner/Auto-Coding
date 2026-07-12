@@ -2,7 +2,8 @@
  * Test setup file for Vitest
  */
 import { vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 
 // Mock localStorage for tests that need it
@@ -57,39 +58,31 @@ if (typeof global.requestAnimationFrame === 'undefined') {
   });
 }
 
-// Test data directory for isolated file operations
-export const TEST_DATA_DIR = '/tmp/auto-code-ui-tests';
+// Base directory scoped to this worker process so parallel vitest workers
+// never touch each other's files. mkdtemp creates an unpredictable 0700
+// directory, so no other local user can pre-create or tamper with it.
+const WORKER_DATA_DIR = mkdtempSync(path.join(tmpdir(), 'auto-code-ui-tests-'));
+
+// Test data directory for isolated file operations - reassigned to a unique
+// directory before each test, and only that directory is ever cleaned up
+export let TEST_DATA_DIR = WORKER_DATA_DIR;
 
 // Create fresh test directory before each test
 beforeEach(() => {
   // Clear localStorage
   localStorageMock.clear();
 
-  // Use a unique subdirectory per test to avoid race conditions in parallel tests
+  // Unique subdirectory per test; never delete the shared parent
   const testId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const _testDir = path.join(TEST_DATA_DIR, testId);
-
-  try {
-    if (existsSync(TEST_DATA_DIR)) {
-      rmSync(TEST_DATA_DIR, { recursive: true, force: true });
-    }
-  } catch {
-    // Ignore errors if directory is in use by another parallel test
-    // Each test uses unique subdirectory anyway
-  }
-
-  try {
-    mkdirSync(TEST_DATA_DIR, { recursive: true });
-    mkdirSync(path.join(TEST_DATA_DIR, 'store'), { recursive: true });
-  } catch {
-    // Ignore errors if directory already exists from another parallel test
-  }
+  TEST_DATA_DIR = path.join(WORKER_DATA_DIR, testId);
+  mkdirSync(path.join(TEST_DATA_DIR, 'store'), { recursive: true });
 });
 
-// Clean up test directory after each test
+// Clean up this test's directory after each test
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  rmSync(TEST_DATA_DIR, { recursive: true, force: true });
 });
 
 // Mock window.electronAPI for renderer tests

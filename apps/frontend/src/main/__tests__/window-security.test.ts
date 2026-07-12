@@ -212,6 +212,28 @@ vi.mock("../notification-service", () => ({
   },
 }));
 
+type CapturedWindowOptions = { webPreferences?: Record<string, unknown> } | null;
+
+/**
+ * Poll until the BrowserWindow constructor has been invoked (app.whenReady()
+ * and createWindow() run asynchronously after the module import). Polling is
+ * deterministic under parallel test load, unlike a fixed sleep.
+ */
+async function waitForCapturedOptions(timeout = 5000): Promise<CapturedWindowOptions> {
+  const start = Date.now();
+  const getOptions = () =>
+    (
+      BrowserWindow as unknown as { getCapturedOptions: () => Record<string, unknown> }
+    ).getCapturedOptions() as CapturedWindowOptions;
+
+  while (Date.now() - start < timeout) {
+    const options = getOptions();
+    if (options !== null) return options;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return getOptions();
+}
+
 describe("BrowserWindow Security Configuration", () => {
   beforeEach(() => {
     // Reset captured options before each test
@@ -225,13 +247,8 @@ describe("BrowserWindow Security Configuration", () => {
     // This must happen after all mocks are set up
     await import("../index");
 
-    // Wait a bit for app.whenReady() to resolve and createWindow() to be called
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    // Get the captured options from BrowserWindow constructor
-    const capturedOptions = (
-      BrowserWindow as unknown as { getCapturedOptions: () => Record<string, unknown> }
-    ).getCapturedOptions() as { webPreferences?: Record<string, unknown> } | null;
+    // Wait for app.whenReady() to resolve and createWindow() to be called
+    const capturedOptions = await waitForCapturedOptions();
 
     // Verify options were captured
     expect(capturedOptions).not.toBeNull();
@@ -249,11 +266,7 @@ describe("BrowserWindow Security Configuration", () => {
     await import("../index");
 
     // Wait for window creation
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    const capturedOptions = (
-      BrowserWindow as unknown as { getCapturedOptions: () => Record<string, unknown> }
-    ).getCapturedOptions() as { webPreferences?: Record<string, unknown> } | null;
+    const capturedOptions = await waitForCapturedOptions();
 
     expect(capturedOptions).not.toBeNull();
     expect(capturedOptions?.webPreferences).toBeDefined();
@@ -266,11 +279,7 @@ describe("BrowserWindow Security Configuration", () => {
     await import("../index");
 
     // Wait for window creation
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    const capturedOptions = (
-      BrowserWindow as unknown as { getCapturedOptions: () => Record<string, unknown> }
-    ).getCapturedOptions() as { webPreferences?: Record<string, unknown> } | null;
+    const capturedOptions = await waitForCapturedOptions();
 
     expect(capturedOptions).not.toBeNull();
     const webPreferences = capturedOptions?.webPreferences;

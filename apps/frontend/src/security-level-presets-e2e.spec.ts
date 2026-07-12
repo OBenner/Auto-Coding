@@ -11,12 +11,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { promises as fs } from 'fs';
+import { mkdtempSync, promises as fs } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import type { SecurityProfile, SecurityLevel, CommandAllowlistEntry } from './shared/types/security';
 
-// Test data paths
-const TEST_DATA_DIR = path.join(process.cwd(), 'test-data');
+// Test data paths - mkdtemp gives this spec file its own unpredictable
+// 0700 directory, so parallel vitest workers running the other security
+// e2e specs never share it (and no other local user can pre-create it)
+const TEST_DATA_DIR = mkdtempSync(path.join(tmpdir(), 'security-level-presets-e2e-'));
 const TEST_PROFILE_PATH = path.join(TEST_DATA_DIR, '.auto-claude-security.json');
 
 // Security level preset configurations (matching SecuritySettings.tsx)
