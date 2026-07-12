@@ -74,6 +74,32 @@
         "table": "Table",
         "timeline": "Chronologie"
       }
+    },
+    "detail": {
+      "tabs": {
+        "overview": "Aperçu",
+        "subtasks": "Sous-tâches",
+        "logs": "Journaux",
+        "files": "Fichiers",
+        "timeline": "Chronologie"
+      },
+      "subtaskStatus": {
+        "pending": "En attente",
+        "in_progress": "En cours",
+        "completed": "Terminé",
+        "failed": "Échoué"
+      },
+      "meta": {
+        "workspaceTitle": "Espace de travail",
+        "costTokensTitle": "Coût et tokens",
+        "specId": "Spéc",
+        "location": "Emplacement",
+        "updated": "Mis à jour",
+        "cost": "Coût",
+        "inputTokens": "Entrée",
+        "outputTokens": "Sortie",
+        "sessions": "Sessions"
+      }
     }
   }
 }

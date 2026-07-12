@@ -41,6 +41,28 @@ export interface UiTaskProgress {
   total: number;
 }
 
+export type UiSubtaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+/** One subtask row in the detail's pipeline view. */
+export interface UiSubtask {
+  id: string;
+  title: string;
+  description?: string;
+  status: UiSubtaskStatus;
+}
+
+/** Key-value row inside a detail meta card. */
+export interface UiMetaRow {
+  label: string;
+  value: string;
+}
+
+/** Right-rail meta card on the detail (e.g. "Cost & tokens"). */
+export interface UiMetaSection {
+  title: string;
+  rows: UiMetaRow[];
+}
+
 /**
  * The detail view of a task/spec. Extends UiTask with the spec body and a
  * per-status progress breakdown; each adapter maps its richer model down to
@@ -51,6 +73,10 @@ export interface UiTaskDetail extends UiTask {
   specContent?: string;
   /** Subtask counts by status, when a build plan exists. */
   progressBreakdown?: UiTaskProgress;
+  /** Subtask rows for the pipeline view, when the source exposes them. */
+  subtasks?: UiSubtask[];
+  /** Right-rail meta cards (workspace, cost & tokens, …), when available. */
+  metaSections?: UiMetaSection[];
 }
 
 /** Input for creating a new task/spec from the shared UI. */

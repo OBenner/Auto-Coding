@@ -148,6 +148,15 @@
         "table": "Table",
         "timeline": "Timeline"
       }
+    },
+    "detail": {
+      "tabs": {
+        "overview": "Overview",
+        "subtasks": "Subtasks",
+        "logs": "Logs",
+        "files": "Files",
+        "timeline": "Timeline"
+      }
     }
   }
 }

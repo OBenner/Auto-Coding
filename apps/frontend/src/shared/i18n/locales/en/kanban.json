@@ -74,6 +74,32 @@
         "table": "Table",
         "timeline": "Timeline"
       }
+    },
+    "detail": {
+      "tabs": {
+        "overview": "Overview",
+        "subtasks": "Subtasks",
+        "logs": "Logs",
+        "files": "Files",
+        "timeline": "Timeline"
+      },
+      "subtaskStatus": {
+        "pending": "Pending",
+        "in_progress": "Running",
+        "completed": "Done",
+        "failed": "Failed"
+      },
+      "meta": {
+        "workspaceTitle": "Workspace",
+        "costTokensTitle": "Cost & tokens",
+        "specId": "Spec",
+        "location": "Location",
+        "updated": "Updated",
+        "cost": "Cost",
+        "inputTokens": "Input",
+        "outputTokens": "Output",
+        "sessions": "Sessions"
+      }
     }
   }
 }
