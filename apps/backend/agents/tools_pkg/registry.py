@@ -17,6 +17,7 @@ except ImportError:
 
 from .tools import (
     create_background_task_tools,
+    create_cli_harness_tools,
     create_debugging_tools,
     create_knowledge_base_tools,
     create_memory_tools,
@@ -50,6 +51,7 @@ def create_all_tools(spec_dir: Path, project_dir: Path) -> list:
     all_tools.extend(create_qa_tools(spec_dir, project_dir))
     all_tools.extend(create_statistics_tools(spec_dir, project_dir))
     all_tools.extend(create_background_task_tools(spec_dir, project_dir))
+    all_tools.extend(create_cli_harness_tools(spec_dir, project_dir))
     all_tools.extend(create_debugging_tools(spec_dir, project_dir))
     all_tools.extend(create_knowledge_base_tools(spec_dir, project_dir))
 
