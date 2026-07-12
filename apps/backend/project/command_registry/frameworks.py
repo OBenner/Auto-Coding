@@ -167,7 +167,7 @@ FRAMEWORK_COMMANDS: dict[str, set[str]] = {
     "spring-boot": {"mvn", "gradle", "gradlew"},
     "quarkus": {"quarkus", "mvn", "gradle"},
     "micronaut": {"mn", "mvn", "gradle"},
-    "android": {"gradlew", "adb"},
+    "android": {"gradlew", "adb", "emulator", "avdmanager", "sdkmanager"},
     "compose": {"gradle", "gradlew"},  # Jetpack/Multiplatform Compose
     # .NET frameworks
     "aspnet": {"dotnet"},

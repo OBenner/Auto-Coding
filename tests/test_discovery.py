@@ -381,6 +381,87 @@ class TestJvmFrameworks:
         assert sbt.command == "sbt test"
 
 
+class TestAndroidInstrumented:
+    """Tests for Android instrumented test detection."""
+
+    def test_managed_devices_kts(self, discovery, temp_dir):
+        """Kotlin-DSL managed device produces a managed-device task."""
+        (temp_dir / "build.gradle.kts").write_text(
+            'plugins { id("com.android.application") }\n'
+            "android { testOptions { managedDevices { localDevices {\n"
+            '    create("pixel2api30") { device = "Pixel 2" }\n'
+            "} } } }\n"
+        )
+        (temp_dir / "gradlew").write_text("#!/bin/sh")
+
+        result = discovery.discover(temp_dir)
+
+        android = next(f for f in result.frameworks if f.name == "android_instrumented")
+        assert android.command == "./gradlew pixel2api30DebugAndroidTest"
+        assert android.type == "e2e"
+
+    def test_managed_devices_groovy(self, discovery, temp_dir):
+        """Groovy named device block produces a managed-device task."""
+        (temp_dir / "build.gradle").write_text(
+            "apply plugin: 'com.android.application'\n"
+            "android { testOptions { managedDevices { localDevices {\n"
+            "    pixel6api33 { device = 'Pixel 6' }\n"
+            "} } } }\n"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        android = next(f for f in result.frameworks if f.name == "android_instrumented")
+        assert android.command == "gradle pixel6api33DebugAndroidTest"
+
+    def test_android_test_sources_fall_back_to_connected(self, discovery, temp_dir):
+        """androidTest sources without managed devices use connectedAndroidTest."""
+        app = temp_dir / "app"
+        (app / "src" / "androidTest").mkdir(parents=True)
+        (app / "build.gradle").write_text("apply plugin: 'com.android.application'")
+        (temp_dir / "gradlew").write_text("#!/bin/sh")
+
+        result = discovery.discover(temp_dir)
+
+        android = next(f for f in result.frameworks if f.name == "android_instrumented")
+        assert android.command == "./gradlew connectedAndroidTest"
+
+    def test_android_without_instrumented_tests_not_detected(self, discovery, temp_dir):
+        """Android project without androidTest sources gets no e2e entry."""
+        (temp_dir / "build.gradle").write_text(
+            "apply plugin: 'com.android.application'"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "android_instrumented" not in framework_names
+
+    def test_plain_jvm_gradle_project_not_detected(self, discovery, temp_dir):
+        """Non-Android Gradle project gets no instrumented entry."""
+        (temp_dir / "build.gradle").write_text("plugins { id 'java' }")
+        (temp_dir / "src" / "androidTest").mkdir(parents=True)
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "android_instrumented" not in framework_names
+
+    def test_unit_gradle_command_stays_primary(self, discovery, temp_dir):
+        """Instrumented entry does not displace the unit-test command."""
+        (temp_dir / "build.gradle.kts").write_text(
+            'plugins { id("com.android.application") }\n'
+            "android { testOptions { managedDevices { localDevices {\n"
+            '    create("pixel2api30") { }\n'
+            "} } } }\n"
+        )
+        (temp_dir / "gradlew").write_text("#!/bin/sh")
+
+        result = discovery.discover(temp_dir)
+
+        assert result.test_command == "./gradlew test"
+
+
 class TestDotnetFrameworks:
     """Tests for .NET test framework detection."""
 
