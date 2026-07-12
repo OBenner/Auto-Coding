@@ -7,17 +7,27 @@ detected languages to parity with Python/JavaScript.
 
 ## Status
 
-- **Phase 1 — DONE.** Detection bug fixes landed in #387; test discovery parity for
-  JVM/.NET/native/scripting-tail ecosystems landed in #388. The state matrix below is
-  the original audit snapshot — columns 1–3 are now ✅ for all listed languages.
-- **Phase 2 — in progress.** Real SAST/dependency-audit runners for C/C++ (cppcheck),
-  Go (gosec), Rust (cargo audit), and PHP (composer audit): #390.
+**All five phases are COMPLETE.** The state matrix below is the original audit
+snapshot, kept for historical context.
+
+- **Phase 1 — DONE.** Detection bug fixes (#387); test discovery parity for
+  JVM/.NET/native/scripting-tail ecosystems (#388).
+- **Phase 2 — DONE.** SAST/dependency-audit runners for C/C++ (cppcheck), Go (gosec),
+  Rust (cargo audit), PHP (composer audit) in #390; osv-scanner universal lockfile
+  audit (Maven/Gradle, NuGet, Hex, SwiftPM, pub, Go modules) plus scanner/rules
+  tables for all remaining languages in #394.
+- **Phase 3 — DONE.** Framework detection for JVM (Spring Boot, Quarkus, Micronaut,
+  Android, Compose), .NET (ASP.NET, MAUI, Unity), C/C++ (Qt, Boost, GTest, Catch2),
+  Elixir (Phoenix, Ecto), and Swift (Vapor): #395.
+- **Phase 4 — DONE.** Targeted test command templates + full test discovery in the
+  project index (#402); ccache/sccache compiler-cache env for fresh worktrees (#412).
+- **Phase 5 — DONE (CLI slice).** `run_cli_session` MCP tool: pseudo-terminal E2E
+  harness for terminal applications, available to QA agents (#415). Native GUI,
+  mobile, and embedded verification remain out of scope (see Phase 5 section).
 - **Audit note:** `LANGUAGE_SECURITY_SCANNERS`/`LANGUAGE_SECURITY_RULES` in
   `security/language_rules.py` are a public API (`security/profile.py`) with no runtime
   consumers yet — actual scanning happens in `analysis/security_scanner.py`
-  (used by the security auditor agent). Phase 2 work should extend *both*: the scanner
-  runners for automated scans, and the rules tables so prompts/audits can reference
-  per-language guidance.
+  (used by the security auditor agent).
 
 ## Subsystems that define "language support"
 
