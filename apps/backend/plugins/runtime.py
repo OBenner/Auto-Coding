@@ -64,6 +64,15 @@ def _can_use_tool_hooks(plugin: PluginBase) -> bool:
     )
 
 
+def can_use_tool_hooks(plugin: PluginBase) -> bool:
+    """Public predicate: whether an enabled plugin may participate in tool hooks.
+
+    Backends that run their own tool loop (e.g. the Direct-API runtime) use this
+    to filter hook-capable plugins without reaching into private module state.
+    """
+    return _can_use_tool_hooks(plugin)
+
+
 def build_agent_context(
     project_dir: Path,
     spec_dir: Path,
