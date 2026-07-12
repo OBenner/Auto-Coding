@@ -2,7 +2,7 @@
  * Test setup file for Vitest
  */
 import { vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 
@@ -59,13 +59,9 @@ if (typeof global.requestAnimationFrame === 'undefined') {
 }
 
 // Base directory scoped to this worker process so parallel vitest workers
-// never touch each other's files (pid covers the forks pool, VITEST_POOL_ID
-// covers the threads pool where workers share a pid)
-const WORKER_DATA_DIR = path.join(
-  tmpdir(),
-  'auto-code-ui-tests',
-  `worker-${process.pid}-${process.env.VITEST_POOL_ID ?? '0'}`
-);
+// never touch each other's files. mkdtemp creates an unpredictable 0700
+// directory, so no other local user can pre-create or tamper with it.
+const WORKER_DATA_DIR = mkdtempSync(path.join(tmpdir(), 'auto-code-ui-tests-'));
 
 // Test data directory for isolated file operations - reassigned to a unique
 // directory before each test, and only that directory is ever cleaned up
