@@ -46,6 +46,7 @@ export class ProjectStore {
    */
   private consecutiveFailures = 0;
   private static readonly MAX_FAILURES_BEFORE_WARNING = 3;
+  private readonly initPromise: Promise<void>;
 
   constructor() {
     // Store in app's userData directory
@@ -57,9 +58,18 @@ export class ProjectStore {
     this.data = { projects: [], settings: {} };
 
     // Start async initialization in background
-    this.initializeAsync().catch(error => {
+    this.initPromise = this.initializeAsync().catch(error => {
       console.error('[ProjectStore] Failed to initialize store:', error);
     });
+  }
+
+  /**
+   * Resolves once the background initialization (mkdir + load from disk)
+   * has finished. Callers that need the on-disk data loaded should await
+   * this before reading or mutating the store.
+   */
+  whenReady(): Promise<void> {
+    return this.initPromise;
   }
 
   /**

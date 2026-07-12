@@ -13,11 +13,13 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import type { SecurityProfile, CommandAllowlistEntry } from './shared/types/security';
 
-// Test data paths
-const TEST_DATA_DIR = path.join(process.cwd(), 'test-data');
+// Test data paths - unique per spec file and process so parallel vitest
+// workers running the other security e2e specs never share this directory
+const TEST_DATA_DIR = path.join(tmpdir(), 'auto-code-ui-tests', `security-allowlist-e2e-${process.pid}`);
 const TEST_PROFILE_PATH = path.join(TEST_DATA_DIR, '.auto-claude-security.json');
 
 /**

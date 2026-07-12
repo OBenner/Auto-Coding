@@ -48,15 +48,11 @@ async function waitForFile(filePath: string, timeout = 2000): Promise<string> {
 /**
  * Wait for the ProjectStore's async initialization to complete.
  * The constructor fires initializeAsync() in the background (fire-and-forget),
- * which can race with subsequent method calls on macOS. This helper
- * yields enough event-loop ticks for the async init (mkdir + readFile) to finish.
+ * which can race with subsequent method calls. Awaiting whenReady() is
+ * deterministic regardless of I/O load, unlike fixed sleeps.
  */
-async function waitForStoreInit(): Promise<void> {
-  // Two async I/O ops in initializeAsync (mkdir + readFile) plus microtask overhead.
-  // Yielding a few times ensures they complete before we proceed.
-  for (let i = 0; i < 5; i++) {
-    await new Promise(r => setTimeout(r, 10));
-  }
+async function waitForStoreInit(store: { whenReady(): Promise<void> }): Promise<void> {
+  await store.whenReady();
 }
 
 /**
@@ -186,7 +182,7 @@ describe('ProjectStore', () => {
     it('should persist project to disk', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       store.addProject(TEST_PROJECT_PATH);
 
@@ -225,7 +221,7 @@ describe('ProjectStore', () => {
     it('should persist removal to disk', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       // Wait for addProject's async save to complete before removing
@@ -313,7 +309,7 @@ describe('ProjectStore', () => {
     it('should update settings and return updated project', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const updated = store.updateProjectSettings(project.id, {
@@ -329,7 +325,7 @@ describe('ProjectStore', () => {
     it('should update updatedAt timestamp', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const originalUpdatedAt = project.updatedAt;
@@ -345,7 +341,7 @@ describe('ProjectStore', () => {
     it('should persist settings changes', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       // Wait for addProject's async save to flush
@@ -680,7 +676,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       // Wait for async initialization to load the file from disk
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const projects = store.getProjects();
 
@@ -698,7 +694,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       // Wait for async initialization to attempt loading the corrupted file
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const projects = store.getProjects();
 
@@ -725,7 +721,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const result = await store.archiveTasks(project.id, ['001-test-task'], '1.0.0');
@@ -775,7 +771,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const result = await store.archiveTasks(project.id, ['002-multi-location'], '2.0.0');
@@ -825,7 +821,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const result = await store.archiveTasks(project.id, ['003-worktree-only'], '1.0.0');
@@ -843,7 +839,7 @@ describe('ProjectStore', () => {
     it('should skip non-existent task gracefully', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       // Create .auto-claude directory so project is recognized
       mkdirSync(path.join(TEST_PROJECT_PATH, '.auto-claude'), { recursive: true });
@@ -866,7 +862,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -891,7 +887,7 @@ describe('ProjectStore', () => {
     it('should return false for non-existent project', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const result = await store.archiveTasks('nonexistent-project-id', ['some-task']);
 
@@ -937,7 +933,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const result = await store.unarchiveTasks(project.id, ['004-unarchive-test']);
@@ -984,7 +980,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       expect(project.id).toBe(projectId);
@@ -1025,7 +1021,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       expect(project.id).toBe(projectId);
@@ -1095,7 +1091,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      await waitForStoreInit();
+      await waitForStoreInit(store);
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const tasks = await store.getTasks(project.id);
