@@ -202,6 +202,65 @@ Check logs for your plugin's output.
 
 ---
 
+## Tool Hooks and Backend Coverage
+
+Beyond the lifecycle hooks above, a plugin declaring the `generic_edit` or
+`full_agent_runtime` capability can intercept individual tool calls:
+
+- `augment_prompt(context)` - contribute scoped instructions to the agent prompt
+- `pre_tool(context, tool_name, tool_input)` - inspect a tool call before it
+  runs; return `ToolHookDecision.block(reason)` to prevent execution
+- `post_tool(context, tool_name, tool_input, tool_result)` - observe a tool
+  call after it ran
+
+### Which hooks run on which backend
+
+Auto Code runs agents on more than one execution backend. Coverage differs, so
+write hooks defensively:
+
+| Hook | Claude SDK (`full_autonomous`) | Direct-API in-process (`generic_edit`) | Codex / generic CLI |
+|------|:---:|:---:|:---:|
+| `before_session` / `after_session` / `on_message` | ✅ | ✅ | ✅ |
+| `pre_tool` (block) | ✅ | ✅ | ❌ (opaque CLI loop) |
+| `post_tool` (observe) | ✅ | ✅ (observational) | ❌ |
+| `augment_prompt` | ✅ | see note | ❌ |
+
+Codex and other CLI backends run their own tool loop inside a separate process,
+so per-tool interception is not possible there — only prompt-level and lifecycle
+hooks can reach them.
+
+### Direct-API tool-name normalization
+
+The Direct-API runtime speaks its own local-action vocabulary (`run_command`,
+`write_file`, `replace_text`, ...). Before your hook is called, each action is
+normalized to the **canonical Claude SDK tool vocabulary** so a hook written
+against SDK names matches on both backends. Match against the SDK name, not the
+native one — e.g. a shell command is `Bash` with `{"command": ...}`, a full-file
+write is `Write` with `{"file_path", "content"}`, an in-place edit is `Edit` with
+`{"file_path", "old_string", "new_string"}`. Actions without an SDK equivalent
+use a stable extension name: `Delete`, `Move`, `ApplyPatch`. The mapping lives in
+`apps/backend/agents/runtime/plugin_tool_bridge.py`.
+
+### Direct-API limitations (design decisions, not bugs)
+
+1. **`pre_tool` is block-only.** On the SDK path a hook may return a *modified*
+   `tool_input`; on Direct-API the normalization is one-directional
+   (native → inspection view), so only `block`/allow is honored — input rewrite
+   is ignored.
+2. **`post_tool` is observational.** The action has already executed, so a
+   `post_tool` block cannot un-run it. The block is logged and annotated onto
+   the result (`plugin_post_tool_block`) rather than rolled back.
+3. **Read-only actions are gated off by default.** Reads/searches/listings
+   (`Read`, `Grep`, `LS`, git status/diff) do not trigger hooks on Direct-API
+   unless read-only hooking is explicitly enabled, so plugins don't run on every
+   file read.
+
+> **Note (`augment_prompt`)**: prompt augmentation currently reaches the Claude
+> SDK backend only. Cross-backend prompt augmentation is tracked as separate
+> work; do not rely on `augment_prompt` for Direct-API/Codex runs yet.
+
+---
+
 ## Plugin Manifest
 
 Every plugin requires a `plugin.json` manifest file:

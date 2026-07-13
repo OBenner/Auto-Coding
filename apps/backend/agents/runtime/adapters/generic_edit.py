@@ -44,6 +44,11 @@ from ..mcp_bridge import (
     resolve_runtime_mcp_support,
     unavailable_mcp_action_result,
 )
+from ..plugin_tool_bridge import (
+    decision_to_result,
+    to_canonical_result,
+    to_canonical_tool,
+)
 from ..result import AgentRunResult
 from ..subagents import (
     DEFAULT_SUBAGENT_MERGE_POLICY,
@@ -64,6 +69,34 @@ from .patch_proposal import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _load_tool_hook_plugins(project_dir: Path) -> list[Any]:
+    """Load enabled plugins that can participate in tool hooks.
+
+    Mirrors the Claude SDK path (``build_plugin_tool_hook_matchers``): keep only
+    enabled plugins whose capabilities include generic_edit/full_agent_runtime.
+    Any failure degrades to an empty list and a warning so a plugin problem
+    never breaks the Direct-API runtime loop.
+    """
+    try:
+        from plugins.runtime import (
+            can_use_tool_hooks,
+            load_enabled_runtime_plugins,
+        )
+    except Exception as exc:  # pragma: no cover - import guard
+        logger.warning("Plugin tool hooks unavailable: %s", exc)
+        return []
+    try:
+        return [
+            plugin
+            for plugin in load_enabled_runtime_plugins(project_dir)
+            if can_use_tool_hooks(plugin)
+        ]
+    except Exception as exc:
+        logger.warning("Failed to load plugin tool hooks: %s", exc)
+        return []
+
 
 GENERIC_EDIT_CANCELLED_MESSAGE = "Generic edit runtime was cancelled."
 
@@ -676,6 +709,121 @@ class GenericEditRuntimeSession:
         self._resume_metadata: dict[str, Any] | None = None
         self._active_batch_id: str | None = None
         self._batch_recovery_blockers: dict[str, list[str]] = {}
+        # Plugin tool hooks: the enabled hook-capable plugins are loaded once
+        # (project-scoped, lazy), and the per-run AgentContext is built in run()
+        # once spec_dir is known. Both stay []/None when no generic_edit or
+        # full_agent_runtime plugin is enabled, so the hook path is a cheap
+        # no-op on the common runtime.
+        self._tool_hook_plugins: list[Any] | None = None
+        self._plugin_hook_context: Any | None = None
+
+    def _ensure_tool_hook_plugins(self) -> list[Any]:
+        if self._tool_hook_plugins is None:
+            self._tool_hook_plugins = _load_tool_hook_plugins(
+                self._executor.project_dir
+            )
+        return self._tool_hook_plugins
+
+    def _prepare_plugin_hook_context(
+        self, spec_dir: Path, subtask_id: str | None
+    ) -> None:
+        """Build the per-run plugin hook AgentContext once spec_dir is known.
+
+        Leaves the context ``None`` (hook path becomes a no-op) when no
+        hook-capable plugin is enabled or context construction fails.
+        """
+        self._plugin_hook_context = None
+        if not self._ensure_tool_hook_plugins():
+            return
+        try:
+            from plugins.runtime import build_agent_context
+
+            self._plugin_hook_context = build_agent_context(
+                self._executor.project_dir,
+                spec_dir,
+                self.agent_type or "",
+                metadata={"subtask_id": subtask_id} if subtask_id else None,
+            )
+        except Exception as exc:
+            logger.warning("Failed to build plugin hook context: %s", exc)
+            self._plugin_hook_context = None
+
+    async def _run_plugin_pre_tool_hook(
+        self, action: dict[str, Any], tool: str
+    ) -> ToolActionResult | None:
+        """Run enabled plugin ``pre_tool`` hooks for one native local action.
+
+        Returns a blocked ``ToolActionResult`` when a plugin blocks the tool,
+        else ``None``. The native action is normalized to the canonical SDK
+        tool vocabulary first (see ``plugin_tool_bridge``) so hooks written
+        against the Claude SDK match; read-only actions are gated off.
+        """
+        plugins = self._tool_hook_plugins
+        context = self._plugin_hook_context
+        if not plugins or context is None:
+            return None
+        canonical = to_canonical_tool(action, include_read_only=False)
+        if canonical is None:
+            return None
+        try:
+            from plugins.runtime import run_plugin_pre_tool_hooks
+
+            decision = await run_plugin_pre_tool_hooks(
+                plugins,
+                context=context,
+                input_data={
+                    "tool_name": canonical.tool_name,
+                    "tool_input": canonical.tool_input,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Plugin pre_tool hook failed: %s", exc)
+            return None
+        if decision.get("decision") == "block":
+            return decision_to_result(decision, tool)
+        return None
+
+    async def _run_plugin_post_tool_hook(
+        self, action: dict[str, Any], tool: str, result: ToolActionResult
+    ) -> None:
+        """Run enabled plugin ``post_tool`` hooks after a native action ran.
+
+        Observational only: the action has already executed, so a post_tool
+        ``block`` cannot un-run it. A block is logged and annotated onto the
+        result (``result.data["plugin_post_tool_block"]``) rather than rolling
+        the mutation back — staged-snapshot rollback is a deliberate follow-up,
+        not part of this slice.
+        """
+        plugins = self._tool_hook_plugins
+        context = self._plugin_hook_context
+        if not plugins or context is None:
+            return
+        canonical = to_canonical_tool(action, include_read_only=False)
+        if canonical is None:
+            return
+        try:
+            from plugins.runtime import run_plugin_post_tool_hooks
+
+            decision = await run_plugin_post_tool_hooks(
+                plugins,
+                context=context,
+                input_data={
+                    "tool_name": canonical.tool_name,
+                    "tool_input": canonical.tool_input,
+                    "tool_result": to_canonical_result(result),
+                },
+            )
+        except Exception as exc:
+            logger.warning("Plugin post_tool hook failed: %s", exc)
+            return
+        if decision.get("decision") == "block":
+            reason = decision.get("reason") or "blocked by plugin runtime hook"
+            logger.warning(
+                "Plugin post_tool blocked %s after execution (observational): %s",
+                tool,
+                reason,
+            )
+            result.data["plugin_post_tool_block"] = str(reason)
 
     @property
     def context_client(self) -> Any:
@@ -710,6 +858,7 @@ class GenericEditRuntimeSession:
             project_dir=self._executor.project_dir,
             agent_type=self.agent_type,
         )
+        self._prepare_plugin_hook_context(spec_dir, subtask_id)
 
         try:
             if self._supports_native_tool_calls():
@@ -750,6 +899,9 @@ class GenericEditRuntimeSession:
             project_dir=self._executor.project_dir,
             agent_type=self.agent_type,
         )
+        # Resumed runs drive _execute_action just like run(); build the plugin
+        # hook context here too, otherwise tool hooks stay a no-op on resume.
+        self._prepare_plugin_hook_context(spec_dir, subtask_id)
         checkpoint_path = resolve_generic_edit_resume_checkpoint_path(
             checkpoint_path=checkpoint_path,
             spec_dir=spec_dir,
@@ -1937,6 +2089,15 @@ class GenericEditRuntimeSession:
         self._auto_open_changeset_batch(action)
 
         tool = action_tool(action)
+
+        # Plugin pre_tool hooks — Direct-API parity with the Claude SDK
+        # PreToolUse path. A hook may block a tool before it runs; this sits
+        # after the scope/batch/isolation guards above so those stronger
+        # invariants still report first.
+        plugin_block = await self._run_plugin_pre_tool_hook(action, tool)
+        if plugin_block is not None:
+            return plugin_block
+
         try:
             staged_workspace = self._materialize_staged_batch_workspace(action)
         except GenericEditRuntimeError as e:
@@ -1988,6 +2149,7 @@ class GenericEditRuntimeSession:
         )
         if restore_error is not None:
             return restore_error
+        await self._run_plugin_post_tool_hook(action, tool, result)
         return result
 
     def _materialize_staged_batch_workspace(
