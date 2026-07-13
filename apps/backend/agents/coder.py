@@ -130,6 +130,39 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _augment_direct_api_prompt(
+    prompt: str,
+    provider_name: str,
+    project_dir: Path,
+    spec_dir: Path,
+    agent_type: str,
+    metadata: dict[str, object] | None,
+) -> str:
+    """Append enabled plugins' prompt augmentations to a Direct-API agent message.
+
+    The Claude SDK path augments the system prompt inside ``create_client()``,
+    so this is a no-op for the ``claude`` provider to avoid double-applying.
+    Direct providers (OpenAI, Codex, ...) carry their instructions in the
+    message, so the same plugin contributions are appended there. Any failure
+    degrades to the original prompt rather than breaking the build.
+    """
+    if provider_name == "claude":
+        return prompt
+    try:
+        from plugins.runtime import apply_plugin_prompt_augmentations
+
+        return apply_plugin_prompt_augmentations(
+            prompt,
+            project_dir,
+            spec_dir,
+            agent_type,
+            metadata=metadata,
+        )
+    except Exception as exc:
+        logger.warning("Failed to apply plugin prompt augmentations: %s", exc)
+        return prompt
+
+
 # =============================================================================
 # FILE VALIDATION UTILITIES
 # =============================================================================
@@ -1288,6 +1321,20 @@ async def run_autonomous_agent(
         analysis_only_terminal_message: str | None = None
 
         provider = create_engine_provider(provider_config)
+
+        # Plugin prompt augmentation for Direct-API / Codex backends. The Claude
+        # SDK path augments the system prompt inside create_client(); direct
+        # providers carry their instructions in the message, so append the same
+        # plugin contributions there (no-op for claude to avoid double-applying).
+        prompt = _augment_direct_api_prompt(
+            prompt,
+            provider.name,
+            project_dir,
+            spec_dir,
+            agent_type_for_session,
+            runtime_metadata,
+        )
+
         runtime_phase = (
             "planning" if current_log_phase == LogPhase.PLANNING else "coding"
         )
