@@ -1,0 +1,106 @@
+name: Roadmap Wiki Reminder
+
+# When roadmap source docs change on develop, open (or update) a reminder issue
+# to sync the GitHub wiki: https://github.com/OBenner/Auto-Coding/wiki
+# The workflow never edits the wiki itself — updating the prose needs a human.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'ROADMAP.md'
+      - 'docs/strategy/roadmap.md'
+      - 'docs/roadmap/**'
+      - 'docs/LANGUAGE_SUPPORT_ROADMAP.md'
+      - 'docs/DEVICE_GUI_VERIFICATION_ROADMAP.md'
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the wiki-sync reminder
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const patterns = [
+              /^ROADMAP\.md$/,
+              /^docs\/strategy\/roadmap\.md$/,
+              /^docs\/roadmap\//,
+              /^docs\/LANGUAGE_SUPPORT_ROADMAP\.md$/,
+              /^docs\/DEVICE_GUI_VERIFICATION_ROADMAP\.md$/,
+            ];
+
+            // Collect roadmap files touched by this push.
+            const changed = new Set();
+            for (const c of context.payload.commits || []) {
+              for (const f of [...(c.added || []), ...(c.modified || [])]) {
+                if (patterns.some((p) => p.test(f))) changed.add(f);
+              }
+            }
+            if (changed.size === 0) {
+              console.log('No roadmap files in this push after diffing commits; nothing to do.');
+              return;
+            }
+
+            const wiki = 'https://github.com/OBenner/Auto-Coding/wiki';
+            const head = context.payload.head_commit || {};
+            const shortSha = context.sha.slice(0, 7);
+            const firstLine = (head.message || '').split('\n')[0];
+
+            const body = [
+              `📋 Roadmap source docs changed on \`develop\` — please reflect them in the [wiki](${wiki}).`,
+              '',
+              '**Changed files:**',
+              ...[...changed].sort().map((f) => `- \`${f}\``),
+              '',
+              `**Commit:** ${shortSha}${firstLine ? ` — ${firstLine}` : ''}`,
+              '',
+              '**Wiki pages to keep in sync:**',
+              '- `Home` — the "Status at a glance" table + "Last PR reflected"',
+              '- `Strategy-Goals`, `Multi-Provider-Runtime`, `Non-Claude-Autonomy`, `Language-Support`, `Device-GUI-Verification`',
+              '',
+              '_Edit in the browser (Edit button on the page) or clone `git@github.com:OBenner/Auto-Coding.wiki.git`._',
+              '_Close this issue once the wiki matches `develop`._',
+            ].join('\n');
+
+            const label = 'wiki-sync';
+            const { owner, repo } = context.repo;
+
+            // Ensure the label exists.
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: label });
+            } catch {
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: label,
+                color: '0e8a16',
+                description: 'Wiki needs updating to match the roadmap docs',
+              });
+            }
+
+            // De-dupe: comment on the open reminder if one exists, else create it.
+            const open = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: label,
+              per_page: 1,
+            });
+
+            if (open.data.length > 0) {
+              const n = open.data[0].number;
+              await github.rest.issues.createComment({ owner, repo, issue_number: n, body });
+              console.log(`Commented on existing reminder issue #${n}.`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title: '📋 Roadmap wiki needs updating',
+                body,
+                labels: [label],
+              });
+              console.log(`Created reminder issue #${created.data.number}.`);
+            }
