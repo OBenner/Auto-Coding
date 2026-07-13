@@ -74,3 +74,8 @@ memory-profiler>=0.61.0
 # uvloop: Ultra fast asyncio event loop for Unix/Linux/macOS
 # Drop-in replacement for asyncio's event loop (2-4x faster)
 uvloop>=0.22.1; sys_platform != "win32"
+
+# Image processing
+# Pillow: screenshot compression for QA device tools (Android adb screencap
+# must fit the Claude SDK's 1MB message buffer)
+Pillow>=10.0.0
