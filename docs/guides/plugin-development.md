@@ -223,7 +223,7 @@ write hooks defensively:
 | `before_session` / `after_session` / `on_message` | ✅ | ✅ | ✅ |
 | `pre_tool` (block) | ✅ | ✅ | ❌ (opaque CLI loop) |
 | `post_tool` (observe) | ✅ | ✅ (observational) | ❌ |
-| `augment_prompt` | ✅ | see note | ❌ |
+| `augment_prompt` | ✅ | ✅ | ✅ (via message) |
 
 Codex and other CLI backends run their own tool loop inside a separate process,
 so per-tool interception is not possible there — only prompt-level and lifecycle
@@ -255,9 +255,11 @@ use a stable extension name: `Delete`, `Move`, `ApplyPatch`. The mapping lives i
    unless read-only hooking is explicitly enabled, so plugins don't run on every
    file read.
 
-> **Note (`augment_prompt`)**: prompt augmentation currently reaches the Claude
-> SDK backend only. Cross-backend prompt augmentation is tracked as separate
-> work; do not rely on `augment_prompt` for Direct-API/Codex runs yet.
+> **Note (`augment_prompt`)**: the Claude SDK path applies augmentation to the
+> system prompt inside `create_client()`; Direct-API/Codex backends carry their
+> instructions in the agent message, so the same plugin contributions are
+> appended there instead (guarded on provider name so the Claude path is never
+> augmented twice). Applied via `augment_direct_api_prompt` in `plugins.runtime`.
 
 ---
 

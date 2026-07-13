@@ -186,6 +186,37 @@ def apply_plugin_prompt_augmentations(
     return append_prompt_augmentations(base_prompt, contributions)
 
 
+def augment_direct_api_prompt(
+    prompt: str,
+    provider_name: str,
+    project_dir: Path,
+    spec_dir: Path,
+    agent_type: str,
+    metadata: dict[str, Any] | None = None,
+) -> str:
+    """Append plugin prompt augmentations to a Direct-API agent message.
+
+    The Claude SDK path augments the system prompt inside ``create_client()``,
+    so this is a no-op for the ``claude`` provider to avoid double-applying.
+    Direct providers (OpenAI, Codex, ...) carry their instructions in the
+    message, so the same plugin contributions are appended there. Any failure
+    degrades to the original prompt rather than breaking the run.
+    """
+    if provider_name == "claude":
+        return prompt
+    try:
+        return apply_plugin_prompt_augmentations(
+            prompt,
+            project_dir,
+            spec_dir,
+            agent_type,
+            metadata=metadata,
+        )
+    except Exception as exc:
+        logger.warning("Failed to apply plugin prompt augmentations: %s", exc)
+        return prompt
+
+
 async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
