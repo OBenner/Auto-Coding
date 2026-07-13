@@ -268,6 +268,24 @@ async def run_followup_planner(
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
 
+    # Plugin prompt augmentation for Direct-API / Codex backends. The Claude SDK
+    # path augments the system prompt inside create_client(); direct providers
+    # carry their instructions in the message, so append the same plugin
+    # contributions there (no-op for claude to avoid double-applying).
+    try:
+        from plugins.runtime import augment_direct_api_prompt
+
+        prompt = augment_direct_api_prompt(
+            prompt,
+            provider_name,
+            project_dir,
+            spec_dir,
+            "planner",
+            None,
+        )
+    except Exception as exc:
+        logger.warning("Failed to apply plugin prompt augmentations: %s", exc)
+
     # Run prevention scanner before planning
     print_status("Running prevention scanner...", "progress")
     try:
