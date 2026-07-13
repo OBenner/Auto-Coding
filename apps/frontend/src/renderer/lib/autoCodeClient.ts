@@ -10,6 +10,7 @@
 import type {
   AutoCodeClient,
   TaskStatus as UiTaskStatus,
+  UiMetaSection,
   UiTask,
   UiTaskBadge,
   UiTaskDetail,
@@ -115,7 +116,7 @@ export function mapTaskToUiTask(task: Task, labels: UiTaskBadgeLabels): UiTask {
   };
 }
 
-/** Detail view of a store task: base card fields + subtask breakdown.
+/** Detail view of a store task: base card fields + subtask breakdown + rows.
 
 The renderer store carries no spec body; the client's ``loadSpecContent``
 option fetches it separately (over IPC) when the detail is requested. */
@@ -138,6 +139,16 @@ export function mapTaskToUiTaskDetail(
             total: subtasks.length,
           }
         : undefined,
+    // Desktop subtask statuses are already the shared closed set.
+    subtasks:
+      subtasks.length > 0
+        ? subtasks.map((subtask) => ({
+            id: subtask.id,
+            title: subtask.title,
+            description: subtask.description || undefined,
+            status: subtask.status,
+          }))
+        : undefined,
   };
 }
 
@@ -154,6 +165,12 @@ export interface TaskStoreClientOptions {
    * swallowed and the detail view renders without it.
    */
   loadSpecContent?: (task: Task) => Promise<string | null>;
+  /**
+   * Build the detail's right-rail meta cards (cost & tokens, workspace, …)
+   * for a task, or null when unavailable. Progressive enhancement like
+   * ``loadSpecContent``: failures are swallowed.
+   */
+  loadMetaSections?: (task: Task) => Promise<UiMetaSection[] | null>;
 }
 
 /**
@@ -187,6 +204,15 @@ export function createTaskStoreAutoCodeClient(
           // Spec body is progressive enhancement — the detail still renders,
           // but surface the failure so missing content stays diagnosable.
           console.warn('[autoCodeClient] Failed to load spec content:', err);
+        }
+      }
+      if (options.loadMetaSections) {
+        try {
+          detail.metaSections =
+            (await options.loadMetaSections(task)) ?? undefined;
+        } catch (err) {
+          // Same contract as the spec body: render without the rail.
+          console.warn('[autoCodeClient] Failed to load meta sections:', err);
         }
       }
       return detail;

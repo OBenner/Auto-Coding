@@ -102,6 +102,8 @@ if (typeof window !== 'undefined') {
     onTaskLog: vi.fn(() => vi.fn()),
     onTaskStatusChange: vi.fn(() => vi.fn()),
     getSpecContent: vi.fn().mockResolvedValue({ success: true, data: null }),
+    getTokenStats: vi.fn().mockResolvedValue({ success: true, data: null }),
+    getCostReport: vi.fn().mockResolvedValue({ success: false, error: 'not available' }),
     getImplementationPlan: vi.fn().mockResolvedValue({ success: true, data: null }),
     getGenericEditArtifactManifest: vi.fn().mockResolvedValue({ success: true, data: null }),
     getQAReport: vi.fn().mockResolvedValue({ success: true, data: null }),

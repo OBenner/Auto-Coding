@@ -33,6 +33,10 @@ export type {
   UiTaskBadge,
   UiTaskDetail,
   UiTaskProgress,
+  UiSubtask,
+  UiSubtaskStatus,
+  UiMetaRow,
+  UiMetaSection,
   CreateTaskInput,
   TaskStatus,
   BadgeTone,
@@ -41,7 +45,7 @@ export { KanbanBoard, DEFAULT_KANBAN_COLUMNS } from './screens/KanbanBoard';
 export type { KanbanBoardProps, KanbanColumn } from './screens/KanbanBoard';
 // Canonical screens (U2)
 export { TaskDetail } from './screens/TaskDetail';
-export type { TaskDetailProps } from './screens/TaskDetail';
+export type { TaskDetailProps, TaskDetailTabId } from './screens/TaskDetail';
 // Board chrome (U3)
 export { BoardToolbar } from './screens/BoardToolbar';
 export type {

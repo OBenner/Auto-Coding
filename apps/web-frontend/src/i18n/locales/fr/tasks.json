@@ -148,6 +148,15 @@
         "table": "Table",
         "timeline": "Chronologie"
       }
+    },
+    "detail": {
+      "tabs": {
+        "overview": "Aperçu",
+        "subtasks": "Sous-tâches",
+        "logs": "Journaux",
+        "files": "Fichiers",
+        "timeline": "Chronologie"
+      }
     }
   }
 }

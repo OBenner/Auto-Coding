@@ -1,5 +1,12 @@
+import { useState } from 'react';
 import { Badge } from '../primitives/Badge';
-import type { TaskStatus, UiTaskDetail } from '../client/types';
+import type {
+  BadgeTone,
+  TaskStatus,
+  UiSubtask,
+  UiSubtaskStatus,
+  UiTaskDetail,
+} from '../client/types';
 import './TaskDetail.css';
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -7,6 +14,31 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   running: 'Running',
   review: 'Review',
   done: 'Done',
+};
+
+const TAB_IDS = ['overview', 'subtasks', 'logs', 'files', 'timeline'] as const;
+export type TaskDetailTabId = (typeof TAB_IDS)[number];
+
+const TAB_LABELS: Record<TaskDetailTabId, string> = {
+  overview: 'Overview',
+  subtasks: 'Subtasks',
+  logs: 'Logs',
+  files: 'Files',
+  timeline: 'Timeline',
+};
+
+const SUBTASK_STATUS_LABELS: Record<UiSubtaskStatus, string> = {
+  pending: 'Pending',
+  in_progress: 'Running',
+  completed: 'Done',
+  failed: 'Failed',
+};
+
+const SUBTASK_STATUS_TONES: Record<UiSubtaskStatus, BadgeTone> = {
+  pending: 'neutral',
+  in_progress: 'info',
+  completed: 'good',
+  failed: 'bad',
 };
 
 export interface TaskDetailProps {
@@ -18,13 +50,19 @@ export interface TaskDetailProps {
   onRetry?: () => void;
   /** Localized status labels; falls back to English. */
   statusLabels?: Partial<Record<TaskStatus, string>>;
+  /** Localized tab labels; falls back to English. */
+  tabLabels?: Partial<Record<TaskDetailTabId, string>>;
+  /** Localized subtask status labels; falls back to English. */
+  subtaskStatusLabels?: Partial<Record<UiSubtaskStatus, string>>;
 }
 
 /**
- * Presentational task/spec detail: header (id, title, status, badges),
- * a per-status progress breakdown, and the spec body. Data-agnostic — pair
- * with `useTask()` + an AutoCodeClient adapter. Mirrors the `.lazyweb`
- * task-detail layout.
+ * Presentational task/spec detail mirroring the `.lazyweb` pipeline view:
+ * header (id, title, status, badges), tab bar, a two-column body with the
+ * overview/subtasks content on the left and meta cards (workspace, cost &
+ * tokens, …) on the right rail. Logs/Files/Timeline tabs are rendered but
+ * disabled until their data flows land. Data-agnostic — pair with
+ * `useTask()` + an AutoCodeClient adapter.
  */
 export function TaskDetail({
   task,
@@ -33,6 +71,8 @@ export function TaskDetail({
   onBack,
   onRetry,
   statusLabels,
+  tabLabels,
+  subtaskStatusLabels,
 }: Readonly<TaskDetailProps>) {
   return (
     <section className="ac-task-detail">
@@ -64,7 +104,13 @@ export function TaskDetail({
       )}
 
       {!loading && error == null && task != null && (
-        <TaskDetailBody task={task} statusLabels={statusLabels} />
+        <TaskDetailBody
+          key={task.id}
+          task={task}
+          statusLabels={statusLabels}
+          tabLabels={tabLabels}
+          subtaskStatusLabels={subtaskStatusLabels}
+        />
       )}
     </section>
   );
@@ -73,11 +119,36 @@ export function TaskDetail({
 interface TaskDetailBodyProps {
   task: UiTaskDetail;
   statusLabels?: Partial<Record<TaskStatus, string>>;
+  tabLabels?: Partial<Record<TaskDetailTabId, string>>;
+  subtaskStatusLabels?: Partial<Record<UiSubtaskStatus, string>>;
 }
 
-function TaskDetailBody({ task, statusLabels }: Readonly<TaskDetailBodyProps>) {
+function TaskDetailBody({
+  task,
+  statusLabels,
+  tabLabels,
+  subtaskStatusLabels,
+}: Readonly<TaskDetailBodyProps>) {
+  const [activeTab, setActiveTab] = useState<TaskDetailTabId>('overview');
   const statusLabel = statusLabels?.[task.status] ?? STATUS_LABELS[task.status];
-  const breakdown = task.progressBreakdown;
+  const subtasks = task.subtasks ?? [];
+  const metaSections = task.metaSections ?? [];
+
+  // Only tabs whose content exists are selectable; the rest are rendered
+  // disabled so the pipeline chrome matches the mockup honestly.
+  const enabled: Record<TaskDetailTabId, boolean> = {
+    overview: true,
+    subtasks: subtasks.length > 0,
+    logs: false,
+    files: false,
+    timeline: false,
+  };
+  // A live update can disable the selected tab (e.g. subtasks emptied) —
+  // fall back to Overview rather than rendering a dead panel.
+  const currentTab = enabled[activeTab] ? activeTab : 'overview';
+  const counts: Partial<Record<TaskDetailTabId, number>> = {
+    subtasks: subtasks.length > 0 ? subtasks.length : undefined,
+  };
 
   return (
     <>
@@ -107,6 +178,65 @@ function TaskDetailBody({ task, statusLabels }: Readonly<TaskDetailBodyProps>) {
         </div>
       )}
 
+      <nav className="ac-task-detail__tabs">
+        {TAB_IDS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            disabled={!enabled[tab]}
+            className={`ac-task-detail__tab${
+              tab === currentTab ? ' ac-task-detail__tab--on' : ''
+            }`}
+            aria-pressed={enabled[tab] ? tab === currentTab : undefined}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tabLabels?.[tab] ?? TAB_LABELS[tab]}
+            {counts[tab] != null && (
+              <span className="ac-task-detail__tab-count">{counts[tab]}</span>
+            )}
+          </button>
+        ))}
+      </nav>
+
+      <div
+        className={`ac-task-detail__body${
+          metaSections.length > 0 ? '' : ' ac-task-detail__body--single'
+        }`}
+      >
+        <div className="ac-task-detail__center">
+          {currentTab === 'overview' && <OverviewTab task={task} />}
+          {currentTab === 'subtasks' && (
+            <SubtasksPanel
+              subtasks={subtasks}
+              statusLabels={subtaskStatusLabels}
+            />
+          )}
+        </div>
+
+        {metaSections.length > 0 && (
+          <aside className="ac-task-detail__rail">
+            {metaSections.map((section) => (
+              <div key={section.title} className="ac-task-detail__card">
+                <h3>{section.title}</h3>
+                {section.rows.map((row) => (
+                  <div key={row.label} className="ac-task-detail__kv">
+                    <span>{row.label}</span>
+                    <strong>{row.value}</strong>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </aside>
+        )}
+      </div>
+    </>
+  );
+}
+
+function OverviewTab({ task }: Readonly<{ task: UiTaskDetail }>) {
+  const breakdown = task.progressBreakdown;
+  return (
+    <>
       {task.description != null && task.description !== '' && (
         <p className="ac-task-detail__desc">{task.description}</p>
       )}
@@ -142,5 +272,35 @@ function TaskDetailBody({ task, statusLabels }: Readonly<TaskDetailBodyProps>) {
         <pre className="ac-task-detail__spec">{task.specContent}</pre>
       )}
     </>
+  );
+}
+
+function SubtasksPanel({
+  subtasks,
+  statusLabels,
+}: Readonly<{
+  subtasks: UiSubtask[];
+  statusLabels?: Partial<Record<UiSubtaskStatus, string>>;
+}>) {
+  return (
+    <article className="ac-task-detail__panel">
+      {subtasks.map((subtask) => (
+        <div key={subtask.id} className="ac-task-detail__subtask">
+          <span
+            className={`ac-task-detail__check ac-task-detail__check--${subtask.status}`}
+          />
+          <div>
+            <h3>{subtask.title}</h3>
+            {subtask.description != null && subtask.description !== '' && (
+              <p>{subtask.description}</p>
+            )}
+          </div>
+          <Badge tone={SUBTASK_STATUS_TONES[subtask.status]} size="md">
+            {statusLabels?.[subtask.status] ??
+              SUBTASK_STATUS_LABELS[subtask.status]}
+          </Badge>
+        </div>
+      ))}
+    </article>
   );
 }

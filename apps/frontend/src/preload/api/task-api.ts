@@ -98,6 +98,9 @@ export interface TaskAPI {
   // Task Token Stats
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>>;
 
+  // Task Cost Report (cost_report.json for a spec)
+  getCostReport: (projectId: string, specId: string) => Promise<IPCResult<import('../../shared/types').CostReport>>;
+
   // Task Spec File Reading (for task overview display)
   getSpecContent: (taskId: string) => Promise<IPCResult<string | null>>;
   getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
@@ -352,6 +355,10 @@ export const createTaskAPI = (): TaskAPI => ({
   // Task Token Stats
   getTokenStats: (projectPath: string, specId: string): Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_TOKEN_STATS_GET, projectPath, specId),
+
+  // Task Cost Report
+  getCostReport: (projectId: string, specId: string): Promise<IPCResult<import('../../shared/types').CostReport>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROJECT_LOAD_COST_REPORT, projectId, specId),
 
   // Task Spec File Reading
   getSpecContent: (taskId: string): Promise<IPCResult<string | null>> =>

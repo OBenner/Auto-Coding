@@ -280,6 +280,24 @@ describe('mapTaskToUiTaskDetail', () => {
   it('omits the breakdown without subtasks', () => {
     expect(mapTaskToUiTaskDetail(makeTask(), LABELS).progressBreakdown).toBeUndefined();
   });
+
+  it('maps subtasks onto the shared shape, dropping empty descriptions', () => {
+    const task = makeTask({
+      subtasks: [
+        { id: 's1', title: 'First', description: 'does x', status: 'completed', files: [] },
+        { id: 's2', title: 'Second', description: '', status: 'in_progress', files: [] },
+      ],
+    });
+    const detail = mapTaskToUiTaskDetail(task, LABELS);
+    expect(detail.subtasks).toEqual([
+      { id: 's1', title: 'First', description: 'does x', status: 'completed' },
+      { id: 's2', title: 'Second', description: undefined, status: 'in_progress' },
+    ]);
+  });
+
+  it('omits subtasks when the task has none', () => {
+    expect(mapTaskToUiTaskDetail(makeTask(), LABELS).subtasks).toBeUndefined();
+  });
 });
 
 describe('createTaskStoreAutoCodeClient.getTask', () => {
@@ -321,6 +339,36 @@ describe('createTaskStoreAutoCodeClient.getTask', () => {
     const detail = await client.getTask?.('known');
     expect(detail?.id).toBe('known');
     expect(detail?.specContent).toBeUndefined();
+  });
+
+  it('injects meta sections from the loadMetaSections option', async () => {
+    const sections = [
+      { title: 'Cost & tokens', rows: [{ label: 'Cost', value: '$1.20' }] },
+    ];
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS, {
+      loadMetaSections: async () => sections,
+    });
+    const detail = await client.getTask?.('known');
+    expect(detail?.metaSections).toEqual(sections);
+  });
+
+  it('leaves metaSections undefined when the loader returns null', async () => {
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS, {
+      loadMetaSections: async () => null,
+    });
+    const detail = await client.getTask?.('known');
+    expect(detail?.metaSections).toBeUndefined();
+  });
+
+  it('still resolves the detail when the meta loader fails', async () => {
+    const client = createTaskStoreAutoCodeClient(makeDetailStore(), LABELS, {
+      loadMetaSections: async () => {
+        throw new Error('IPC unavailable');
+      },
+    });
+    const detail = await client.getTask?.('known');
+    expect(detail?.id).toBe('known');
+    expect(detail?.metaSections).toBeUndefined();
   });
 });
 

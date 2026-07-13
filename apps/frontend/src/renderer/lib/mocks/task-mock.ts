@@ -170,6 +170,11 @@ export const taskMock = {
     data: null
   }),
 
+  getCostReport: async () => ({
+    success: false,
+    error: 'Cost report not available in browser mode'
+  }),
+
   getImplementationPlan: async () => ({
     success: true,
     data: null

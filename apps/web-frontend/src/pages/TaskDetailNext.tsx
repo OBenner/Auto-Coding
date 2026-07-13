@@ -11,7 +11,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AutoCodeClientProvider, TaskDetail, useTask } from "@auto-code/ui";
-import type { TaskStatus } from "@auto-code/ui";
+import type { TaskDetailTabId, TaskStatus } from "@auto-code/ui";
 import { createRestAutoCodeClient } from "../api/autoCodeClient";
 import { apiClient } from "../api/client";
 
@@ -29,6 +29,16 @@ function DetailBody({ id }: Readonly<{ id: string }>) {
 		}),
 		[t],
 	);
+	const tabLabels = useMemo<Partial<Record<TaskDetailTabId, string>>>(
+		() => ({
+			overview: t("tasks:kanbanPilot.detail.tabs.overview"),
+			subtasks: t("tasks:kanbanPilot.detail.tabs.subtasks"),
+			logs: t("tasks:kanbanPilot.detail.tabs.logs"),
+			files: t("tasks:kanbanPilot.detail.tabs.files"),
+			timeline: t("tasks:kanbanPilot.detail.tabs.timeline"),
+		}),
+		[t],
+	);
 
 	return (
 		<TaskDetail
@@ -38,6 +48,7 @@ function DetailBody({ id }: Readonly<{ id: string }>) {
 			onBack={() => navigate("/kanban-next")}
 			onRetry={reload}
 			statusLabels={statusLabels}
+			tabLabels={tabLabels}
 		/>
 	);
 }

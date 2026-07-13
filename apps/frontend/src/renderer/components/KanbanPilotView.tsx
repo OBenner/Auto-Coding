@@ -18,10 +18,18 @@ import {
   useTask,
   useTasks,
 } from '@auto-code/ui';
-import type { KanbanColumn, TaskStatus } from '@auto-code/ui';
+import type {
+  KanbanColumn,
+  TaskDetailTabId,
+  TaskStatus,
+  UiSubtaskStatus,
+} from '@auto-code/ui';
 import { useTaskStore } from '../stores/task-store';
+import { useProjectStore } from '../stores/project-store';
 import { createTaskStoreAutoCodeClient } from '../lib/autoCodeClient';
 import type { UiTaskBadgeLabels } from '../lib/autoCodeClient';
+import { buildTaskMetaSections } from '../lib/task-meta-sections';
+import type { TaskMetaLabels } from '../lib/task-meta-sections';
 
 function usePilotColumns(): KanbanColumn[] {
   const { t } = useTranslation(['kanban']);
@@ -75,6 +83,7 @@ function PilotDetail({
   id,
   onBack,
 }: Readonly<{ id: string; onBack: () => void }>) {
+  const { t } = useTranslation(['kanban']);
   const columns = usePilotColumns();
   const { task, loading, error, reload } = useTask(id);
 
@@ -82,6 +91,27 @@ function PilotDetail({
     () =>
       Object.fromEntries(columns.map((column) => [column.status, column.label])),
     [columns],
+  );
+  const tabLabels = useMemo<Partial<Record<TaskDetailTabId, string>>>(
+    () => ({
+      overview: t('kanban:pilot.detail.tabs.overview'),
+      subtasks: t('kanban:pilot.detail.tabs.subtasks'),
+      logs: t('kanban:pilot.detail.tabs.logs'),
+      files: t('kanban:pilot.detail.tabs.files'),
+      timeline: t('kanban:pilot.detail.tabs.timeline'),
+    }),
+    [t],
+  );
+  const subtaskStatusLabels = useMemo<
+    Partial<Record<UiSubtaskStatus, string>>
+  >(
+    () => ({
+      pending: t('kanban:pilot.detail.subtaskStatus.pending'),
+      in_progress: t('kanban:pilot.detail.subtaskStatus.in_progress'),
+      completed: t('kanban:pilot.detail.subtaskStatus.completed'),
+      failed: t('kanban:pilot.detail.subtaskStatus.failed'),
+    }),
+    [t],
   );
 
   return (
@@ -93,6 +123,8 @@ function PilotDetail({
         onBack={onBack}
         onRetry={reload}
         statusLabels={statusLabels}
+        tabLabels={tabLabels}
+        subtaskStatusLabels={subtaskStatusLabels}
       />
     </div>
   );
@@ -133,12 +165,50 @@ export function KanbanPilotView() {
       failed: t('kanban:pilot.phases.failed'),
     },
   };
+  const metaLabelsRef = useRef<TaskMetaLabels>({} as TaskMetaLabels);
+  metaLabelsRef.current = {
+    workspaceTitle: t('kanban:pilot.detail.meta.workspaceTitle'),
+    costTokensTitle: t('kanban:pilot.detail.meta.costTokensTitle'),
+    specId: t('kanban:pilot.detail.meta.specId'),
+    location: t('kanban:pilot.detail.meta.location'),
+    updated: t('kanban:pilot.detail.meta.updated'),
+    cost: t('kanban:pilot.detail.meta.cost'),
+    inputTokens: t('kanban:pilot.detail.meta.inputTokens'),
+    outputTokens: t('kanban:pilot.detail.meta.outputTokens'),
+    sessions: t('kanban:pilot.detail.meta.sessions'),
+  };
   const client = useMemo(
     () =>
       createTaskStoreAutoCodeClient(useTaskStore, () => labelsRef.current, {
         loadSpecContent: async (task) => {
           const result = await window.electronAPI.getSpecContent(task.id);
           return result.success ? (result.data ?? null) : null;
+        },
+        loadMetaSections: async (task) => {
+          const project = useProjectStore
+            .getState()
+            .projects.find((p) => p.id === task.projectId);
+          const [tokensResult, costResult] = await Promise.all([
+            project
+              ? window.electronAPI.getTokenStats(project.path, task.specId)
+              : Promise.resolve(null),
+            window.electronAPI.getCostReport(task.projectId, task.specId),
+          ]);
+          const tokenStats =
+            tokensResult?.success && tokensResult.data != null
+              ? tokensResult.data
+              : (task.tokenStats ?? null);
+          const costReport =
+            costResult.success && costResult.data != null
+              ? costResult.data
+              : null;
+          const sections = buildTaskMetaSections(
+            task,
+            tokenStats,
+            costReport,
+            metaLabelsRef.current,
+          );
+          return sections.length > 0 ? sections : null;
         },
       }),
     [],

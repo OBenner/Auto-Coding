@@ -973,6 +973,9 @@ export interface ElectronAPI {
   // Token statistics
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
 
+  // Cost report (cost_report.json for a spec)
+  getCostReport: (projectId: string, specId: string) => Promise<IPCResult<import('./task').CostReport>>;
+
   // Task spec file reading (for task overview display)
   getSpecContent: (taskId: string) => Promise<IPCResult<string | null>>;
   getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
