@@ -10,6 +10,7 @@ Only registered when the project is an Android Gradle project, keeping
 tool context clean for everything else.
 """
 
+import asyncio
 import base64
 import logging
 from pathlib import Path
@@ -23,6 +24,61 @@ except ImportError:
     SDK_AVAILABLE = False
 
 LOGCAT_TAIL_CHARS = 8_000
+
+# Full JSON Schemas: the SDK marks every key of a {name: type} dict schema as
+# required, but these tools have optional and action-specific fields, so we
+# supply explicit schemas that require only what each call genuinely needs.
+_SCREENSHOT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "serial": {
+            "type": "string",
+            "description": "Device serial when multiple devices are connected",
+        }
+    },
+    "required": [],
+}
+
+_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["tap", "swipe", "text", "keyevent"],
+            "description": "Input action to perform",
+        },
+        "x": {"type": "integer", "description": "X coordinate (tap/swipe)"},
+        "y": {"type": "integer", "description": "Y coordinate (tap/swipe)"},
+        "x2": {"type": "integer", "description": "Swipe end X"},
+        "y2": {"type": "integer", "description": "Swipe end Y"},
+        "duration_ms": {"type": "integer", "description": "Swipe duration in ms"},
+        "text": {"type": "string", "description": "Text to type (action=text)"},
+        "key": {
+            "type": "string",
+            "description": "KEYCODE_* name or numeric code (action=keyevent)",
+        },
+        "serial": {"type": "string", "description": "Optional device serial"},
+    },
+    "required": ["action"],
+}
+
+_LOGCAT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "lines": {"type": "integer", "description": "Recent lines to fetch"},
+        "filter_text": {
+            "type": "string",
+            "description": "Substring filter (e.g. app tag or package name)",
+        },
+        "serial": {"type": "string", "description": "Optional device serial"},
+    },
+    "required": [],
+}
+
+
+def _opt_int(value: Any, default: int) -> int:
+    """Coerce an optional int arg, preserving an explicit 0."""
+    return default if value is None else int(value)
 
 
 def create_android_tools(spec_dir: Path, project_dir: Path) -> list:
@@ -55,15 +111,16 @@ def create_android_tools(spec_dir: Path, project_dir: Path) -> list:
         "adb. Use it to visually verify UI state after launching the app or "
         "interacting with it. Optionally pass a device serial when several "
         "devices are connected.",
-        {"serial": str},
+        _SCREENSHOT_SCHEMA,
     )
     async def android_screenshot(args: dict[str, Any]) -> dict[str, Any]:
         """Capture and return a device screenshot."""
         from core.android_device import take_screenshot
 
         try:
-            image, mime_or_error = take_screenshot(
-                serial=(args.get("serial") or "").strip() or None
+            image, mime_or_error = await asyncio.to_thread(
+                take_screenshot,
+                serial=(args.get("serial") or "").strip() or None,
             )
         except Exception as e:
             logging.exception("Error during android_screenshot")
@@ -91,17 +148,7 @@ def create_android_tools(spec_dir: Path, project_dir: Path) -> list:
         "duration_ms), 'text' (text typed into the focused field), "
         "'keyevent' (key: KEYCODE_* name or numeric code, e.g. KEYCODE_BACK). "
         "Use android_screenshot before and after to verify the effect.",
-        {
-            "action": str,
-            "x": int,
-            "y": int,
-            "x2": int,
-            "y2": int,
-            "duration_ms": int,
-            "text": str,
-            "key": str,
-            "serial": str,
-        },
+        _INPUT_SCHEMA,
     )
     async def android_input(args: dict[str, Any]) -> dict[str, Any]:
         """Inject a tap, swipe, text, or key event."""
@@ -117,20 +164,30 @@ def create_android_tools(spec_dir: Path, project_dir: Path) -> list:
 
         try:
             if action == "tap":
-                result = send_tap(args.get("x") or 0, args.get("y") or 0, serial)
+                result = await asyncio.to_thread(
+                    send_tap,
+                    _opt_int(args.get("x"), 0),
+                    _opt_int(args.get("y"), 0),
+                    serial,
+                )
             elif action == "swipe":
-                result = send_swipe(
-                    args.get("x") or 0,
-                    args.get("y") or 0,
-                    args.get("x2") or 0,
-                    args.get("y2") or 0,
-                    args.get("duration_ms") or 300,
+                result = await asyncio.to_thread(
+                    send_swipe,
+                    _opt_int(args.get("x"), 0),
+                    _opt_int(args.get("y"), 0),
+                    _opt_int(args.get("x2"), 0),
+                    _opt_int(args.get("y2"), 0),
+                    _opt_int(args.get("duration_ms"), 300),
                     serial,
                 )
             elif action == "text":
-                result = send_text(args.get("text") or "", serial)
+                result = await asyncio.to_thread(
+                    send_text, args.get("text") or "", serial
+                )
             elif action == "keyevent":
-                result = send_keyevent(args.get("key") or "", serial)
+                result = await asyncio.to_thread(
+                    send_keyevent, args.get("key") or "", serial
+                )
             else:
                 return _text_result("Unknown action: use tap, swipe, text, or keyevent")
         except Exception as e:
@@ -147,16 +204,18 @@ def create_android_tools(spec_dir: Path, project_dir: Path) -> list:
         "android_logcat",
         "Read recent Android log output (adb logcat) for debugging. "
         "Optionally filter lines by a substring (e.g. your app's tag or "
-        "package name) and limit the number of recent lines.",
-        {"lines": int, "filter_text": str, "serial": str},
+        "package name) and limit the number of recent lines. Credential-like "
+        "values are redacted from the output.",
+        _LOGCAT_SCHEMA,
     )
     async def android_logcat(args: dict[str, Any]) -> dict[str, Any]:
         """Fetch recent logcat lines."""
         from core.android_device import read_logcat
 
         try:
-            result = read_logcat(
-                lines=args.get("lines") or 200,
+            result = await asyncio.to_thread(
+                read_logcat,
+                lines=_opt_int(args.get("lines"), 200),
                 filter_text=(args.get("filter_text") or "").strip() or None,
                 serial=(args.get("serial") or "").strip() or None,
             )

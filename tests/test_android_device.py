@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from core.android_device import (
     MAX_SCREENSHOT_BASE64_BYTES,
+    _redact_logcat,
     is_android_project,
     read_logcat,
     send_keyevent,
@@ -45,6 +46,27 @@ class TestAndroidProjectDetection:
         app.mkdir()
         (app / "build.gradle.kts").write_text('plugins { id("com.android.library") }')
         assert is_android_project(tmp_path) is True
+
+    def test_detects_module_outside_app(self, tmp_path):
+        """Android module named something other than app/ is detected."""
+        feature = tmp_path / "feature-login"
+        feature.mkdir()
+        (feature / "build.gradle").write_text("apply plugin: 'com.android.library'")
+        assert is_android_project(tmp_path) is True
+
+    def test_detects_version_catalog_alias(self, tmp_path):
+        """Version-catalog plugin alias is recognized."""
+        (tmp_path / "build.gradle.kts").write_text(
+            "plugins { alias(libs.plugins.android.application) }"
+        )
+        assert is_android_project(tmp_path) is True
+
+    def test_skips_vendor_build_dirs(self, tmp_path):
+        """Android markers inside build/ artifacts do not count."""
+        buried = tmp_path / "build" / "generated"
+        buried.mkdir(parents=True)
+        (buried / "build.gradle").write_text("apply plugin: 'com.android.application'")
+        assert is_android_project(tmp_path) is False
 
     def test_plain_jvm_project_is_not_android(self, tmp_path):
         (tmp_path / "build.gradle").write_text("plugins { id 'java' }")
@@ -164,6 +186,39 @@ class TestLogcat:
         argv = mock_run.call_args[0][0]
         assert argv[argv.index("-t") + 1] == "2000"
 
+    @patch("core.android_device.subprocess.run")
+    def test_secrets_redacted(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                "I/Auth: token=abc123secretvalue\n"
+                "I/Net: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9\n"
+                "I/App: user logged in ok\n"
+            ),
+            stderr="",
+        )
+
+        result = read_logcat()
+
+        assert "abc123secretvalue" not in result.output
+        assert "eyJhbGciOiJIUzI1NiJ9" not in result.output
+        assert "[REDACTED]" in result.output
+        # Non-secret context is preserved
+        assert "user logged in ok" in result.output
+
+
+class TestRedaction:
+    """Direct tests for the logcat redactor."""
+
+    def test_keeps_label_redacts_value(self):
+        out = _redact_logcat("password=hunter2")
+        assert out.startswith("password=")
+        assert "hunter2" not in out
+
+    def test_plain_lines_untouched(self):
+        line = "I/MyApp: rendered 42 items in 16ms"
+        assert _redact_logcat(line) == line
+
 
 class TestScreenshot:
     """Tests for screenshot capture and size handling."""
@@ -237,6 +292,23 @@ class TestToolRegistration:
         tools = create_android_tools(tmp_path, tmp_path)
 
         assert tools == []
+
+    def test_schemas_require_only_action_specific_fields(self):
+        """Optional args must not be forced required by the SDK dict schema.
+
+        The SDK marks every key of a {name: type} dict schema as required, so
+        these tools ship full JSON Schemas. Asserting on the module constants
+        (not the tool objects, which the test harness mocks) verifies the
+        contract directly.
+        """
+        from agents.tools_pkg.tools import android_harness as ah
+
+        assert ah._SCREENSHOT_SCHEMA["required"] == []
+        assert ah._INPUT_SCHEMA["required"] == ["action"]
+        assert ah._LOGCAT_SCHEMA["required"] == []
+        # action-specific fields exist but stay optional
+        assert "text" in ah._INPUT_SCHEMA["properties"]
+        assert "text" not in ah._INPUT_SCHEMA["required"]
 
     def test_qa_agents_have_android_tools(self):
         from agents.tools_pkg.models import (

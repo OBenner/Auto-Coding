@@ -30,12 +30,23 @@ SCREENSHOT_JPEG_QUALITY = 60
 _SAFE_TEXT = re.compile(r"^[\w\s.,:@%+=/?!-]*$")
 _KEYEVENT = re.compile(r"^(KEYCODE_[A-Z0-9_]+|\d{1,4})$")
 
-_ANDROID_BUILD_FILES = (
-    "build.gradle",
-    "build.gradle.kts",
-    "app/build.gradle",
-    "app/build.gradle.kts",
+# Markers of an Android module in a Gradle build file. Covers the classic
+# plugin id ("com.android.application"/"library") and the version-catalog
+# alias form (alias(libs.plugins.android...)) used by modern projects.
+_ANDROID_BUILD_MARKERS = (
+    "com.android",
+    "libs.plugins.android",
+    "android.application",
+    "android.library",
 )
+
+# Directories skipped when scanning a multi-module project for build files
+_SCAN_SKIP_DIRS = frozenset(
+    {".git", "node_modules", ".gradle", "build", ".idea", ".venv", "venv"}
+)
+
+# Bound the multi-module scan so a huge tree cannot stall registration
+_MAX_BUILD_FILES_SCANNED = 200
 
 
 @dataclass
@@ -47,16 +58,27 @@ class AdbResult:
 
 
 def is_android_project(project_dir: Path) -> bool:
-    """Check if the project is an Android Gradle project."""
-    for build_file in _ANDROID_BUILD_FILES:
-        path = Path(project_dir) / build_file
-        if not path.exists():
+    """
+    Check if the project is an Android Gradle project.
+
+    Scans Gradle build files across modules (not just app/), matching both
+    the classic plugin id and version-catalog plugin aliases, so Android
+    modules outside app/ and catalog-based projects are recognized.
+    """
+    root = Path(project_dir)
+    scanned = 0
+    for path in root.rglob("build.gradle*"):
+        if any(part in _SCAN_SKIP_DIRS for part in path.relative_to(root).parts):
             continue
+        scanned += 1
+        if scanned > _MAX_BUILD_FILES_SCANNED:
+            break
         try:
-            if "com.android" in path.read_text(encoding="utf-8"):
-                return True
+            text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        if any(marker in text for marker in _ANDROID_BUILD_MARKERS):
+            return True
     return False
 
 
@@ -195,6 +217,42 @@ def send_keyevent(key: str, serial: str | None = None) -> AdbResult:
     return _run_adb_text(["shell", "input", "keyevent", key], serial)
 
 
+# Credential-ish patterns redacted from logcat before it reaches the agent.
+# Device-wide logs can carry tokens/keys from other apps; QA never needs the
+# secret value, only the surrounding message.
+_REDACT_PATTERNS = (
+    # Sensitive key followed by its value: redact from the separator to the
+    # end of the line (a single value may be several tokens, e.g. "Bearer x")
+    re.compile(
+        r"(?im)\b(password|passwd|pwd|token|secret|api[_-]?key|auth|"
+        r"authorization|bearer|session|cookie|credential)\b"
+        r"(\s*[=:]\s*|\s+).+$"
+    ),
+    # Standalone JWT-like blobs not preceded by a labelled key
+    re.compile(r"\b[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+)
+
+
+def _redact_logcat(text: str) -> str:
+    """Redact obvious secrets from logcat output."""
+    for pattern in _REDACT_PATTERNS:
+        text = pattern.sub(
+            lambda m: m.group(0)[: _redact_prefix_len(m.group(0))] + "[REDACTED]",
+            text,
+        )
+    return text
+
+
+def _redact_prefix_len(match: str) -> int:
+    """Keep the leading label of a match, redact the value after it."""
+    for sep in ("=", ":"):
+        idx = match.find(sep)
+        if idx != -1:
+            return idx + 1
+    # No key=value separator (bearer/blob): redact the whole match
+    return 0
+
+
 def read_logcat(
     lines: int = 200,
     filter_text: str | None = None,
@@ -209,15 +267,19 @@ def read_logcat(
         serial: Optional device serial
 
     Returns:
-        AdbResult with the (optionally filtered) log lines
+        AdbResult with the (optionally filtered) log lines. Credential-like
+        values are redacted before returning, since device-wide logs may
+        contain data from other apps.
     """
     lines = max(1, min(int(lines), 2000))
     result = _run_adb_text(["logcat", "-d", "-t", str(lines)], serial)
-    if not result.ok or not filter_text:
+    if not result.ok:
         return result
 
-    matching = [ln for ln in result.output.splitlines() if filter_text in ln]
-    return AdbResult(True, "\n".join(matching))
+    output = result.output
+    if filter_text:
+        output = "\n".join(ln for ln in output.splitlines() if filter_text in ln)
+    return AdbResult(True, _redact_logcat(output))
 
 
 __all__ = [
