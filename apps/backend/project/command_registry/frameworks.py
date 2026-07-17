@@ -179,6 +179,10 @@ FRAMEWORK_COMMANDS: dict[str, set[str]] = {
     "catch2": {"ctest"},
     # Swift frameworks
     "vapor": {"vapor", "swift"},
+    # Embedded ecosystems (emulation-capable runners only)
+    "platformio": {"pio", "platformio"},
+    "zephyr": {"west", "twister", "qemu-system-arm", "qemu-system-riscv32"},
+    "esp-idf": {"idf.py"},
 }
 
 

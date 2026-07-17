@@ -46,6 +46,7 @@ class FrameworkDetector:
         self.detect_cpp_frameworks()
         self.detect_elixir_frameworks()
         self.detect_swift_frameworks()
+        self.detect_embedded_frameworks()
         return self.frameworks
 
     def detect_nodejs_frameworks(self) -> None:
@@ -406,3 +407,19 @@ class FrameworkDetector:
 
         if "vapor" in content.lower():
             self.frameworks.append("vapor")
+
+    def detect_embedded_frameworks(self) -> None:
+        """Detect embedded ecosystems from their config files."""
+        if self.parser.file_exists("platformio.ini"):
+            self.frameworks.append("platformio")
+
+        # Zephyr: a west workspace manifest or an application (prj.conf + CMake)
+        if self.parser.file_exists("west.yml") or (
+            self.parser.file_exists("prj.conf")
+            and self.parser.file_exists("CMakeLists.txt")
+        ):
+            self.frameworks.append("zephyr")
+
+        # ESP-IDF: sdkconfig lives next to the IDF CMake project
+        if self.parser.file_exists("sdkconfig", "sdkconfig.defaults"):
+            self.frameworks.append("esp-idf")

@@ -286,6 +286,20 @@ FRAMEWORK_PATTERNS = {
         "command": "./gradlew connectedAndroidTest",
         "coverage_command": None,
     },
+    # Embedded: PlatformIO (host-side native env preferred, no hardware)
+    "pio_test": {
+        "config_files": ["platformio.ini"],
+        "type": "all",
+        "command": "pio test -e native",
+        "coverage_command": None,
+    },
+    # Embedded: Zephyr twister runs the suite on QEMU boards (emulation)
+    "twister": {
+        "config_files": ["west.yml", "prj.conf"],
+        "type": "all",
+        "command": "west twister -p qemu_x86 -T tests",
+        "coverage_command": None,
+    },
 }
 
 
@@ -404,6 +418,7 @@ class TestDiscovery:
         self._discover_dart_frameworks(project_dir, result)
         self._discover_zig_frameworks(project_dir, result)
         self._discover_haskell_frameworks(project_dir, result)
+        self._discover_embedded_frameworks(project_dir, result)
 
         # Find test directories
         result.test_directories = self._find_test_directories(project_dir)
@@ -1013,6 +1028,51 @@ class TestDiscovery:
                     type="all",
                     command="cabal test",
                     config_file=None,
+                )
+            )
+
+    def _discover_embedded_frameworks(
+        self, project_dir: Path, result: TestDiscoveryResult
+    ) -> None:
+        """Discover embedded test setups that run without hardware.
+
+        Only emulation/host-side runners are emitted: a QA agent cannot
+        flash a physical board, so anything requiring one is left out.
+        """
+        pio_ini = project_dir / "platformio.ini"
+        if pio_ini.exists():
+            try:
+                content = pio_ini.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                content = ""
+            # Prefer the host-side native environment when the project
+            # defines one; a bare `pio test` would target hardware envs
+            command = "pio test -e native" if "[env:native]" in content else "pio test"
+            result.frameworks.append(
+                TestFramework(
+                    name="pio_test",
+                    type="all",
+                    command=command,
+                    config_file="platformio.ini",
+                )
+            )
+
+        # Zephyr: prj.conf marks an application, west.yml a workspace;
+        # twister runs the test suite on emulated QEMU boards
+        if (project_dir / "west.yml").exists() or (
+            (project_dir / "prj.conf").exists()
+            and (project_dir / "CMakeLists.txt").exists()
+        ):
+            result.frameworks.append(
+                TestFramework(
+                    name="twister",
+                    type="all",
+                    command="west twister -p qemu_x86 -T tests",
+                    config_file=(
+                        "west.yml"
+                        if (project_dir / "west.yml").exists()
+                        else "prj.conf"
+                    ),
                 )
             )
 

@@ -126,7 +126,7 @@ class TestLanguageDetection:
 
     def test_detects_java_from_gradle_kts(self, temp_dir: Path):
         """Detects JVM/Gradle projects using Kotlin-DSL build files."""
-        (temp_dir / "build.gradle.kts").write_text("plugins { kotlin(\"jvm\") }")
+        (temp_dir / "build.gradle.kts").write_text('plugins { kotlin("jvm") }')
         (temp_dir / "settings.gradle.kts").write_text('rootProject.name = "test"')
 
         analyzer = ProjectAnalyzer(temp_dir)
@@ -136,7 +136,7 @@ class TestLanguageDetection:
 
     def test_kotlin_gradle_project_allows_gradle(self, temp_dir: Path):
         """Kotlin-only Gradle project gets gradle in stack commands."""
-        (temp_dir / "build.gradle.kts").write_text("plugins { kotlin(\"jvm\") }")
+        (temp_dir / "build.gradle.kts").write_text('plugins { kotlin("jvm") }')
         src = temp_dir / "src" / "main" / "kotlin"
         src.mkdir(parents=True)
         (src / "Main.kt").write_text("fun main() {}")
@@ -152,7 +152,7 @@ class TestLanguageDetection:
     def test_detects_haskell(self, temp_dir: Path):
         """Detects Haskell projects."""
         (temp_dir / "stack.yaml").write_text("resolver: lts-22.0")
-        (temp_dir / "Main.hs").write_text("main = putStrLn \"hello\"")
+        (temp_dir / "Main.hs").write_text('main = putStrLn "hello"')
 
         analyzer = ProjectAnalyzer(temp_dir)
         analyzer._detect_languages()
@@ -171,7 +171,7 @@ class TestLanguageDetection:
     def test_detects_perl(self, temp_dir: Path):
         """Detects Perl projects."""
         (temp_dir / "cpanfile").write_text("requires 'Mojolicious';")
-        (temp_dir / "app.pl").write_text("print \"hello\\n\";")
+        (temp_dir / "app.pl").write_text('print "hello\\n";')
 
         analyzer = ProjectAnalyzer(temp_dir)
         analyzer._detect_languages()
@@ -409,6 +409,34 @@ dependencies = ["flask>=2.0"]
         analyzer._detect_frameworks()
 
         assert "vapor" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_platformio(self, temp_dir: Path):
+        """Detects PlatformIO from platformio.ini."""
+        (temp_dir / "platformio.ini").write_text("[env:native]\nplatform = native")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "platformio" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_zephyr(self, temp_dir: Path):
+        """Detects Zephyr from prj.conf + CMakeLists.txt."""
+        (temp_dir / "prj.conf").write_text("CONFIG_GPIO=y")
+        (temp_dir / "CMakeLists.txt").write_text("find_package(Zephyr REQUIRED)")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "zephyr" in analyzer.profile.detected_stack.frameworks
+
+    def test_detects_esp_idf(self, temp_dir: Path):
+        """Detects ESP-IDF from sdkconfig."""
+        (temp_dir / "sdkconfig").write_text("CONFIG_IDF_TARGET=esp32")
+
+        analyzer = ProjectAnalyzer(temp_dir)
+        analyzer._detect_frameworks()
+
+        assert "esp-idf" in analyzer.profile.detected_stack.frameworks
 
 
 class TestDatabaseDetection:
