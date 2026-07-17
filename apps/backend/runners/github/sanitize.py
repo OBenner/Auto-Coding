@@ -72,10 +72,15 @@ class ContentSanitizer:
         )
     """
 
-    # Patterns for dangerous content
+    # Patterns for dangerous content.
+    #
+    # The end tags allow trailing junk ("</script foo>"): HTML treats anything
+    # up to the next ">" as part of the end tag, so a stricter "</script\s*>"
+    # fails to match and leaves the *whole* element — payload included — in the
+    # content. The "\b" on the open tag keeps "<scriptx>" from matching.
     HTML_COMMENT_PATTERN = re.compile(r"<!--[\s\S]*?-->", re.MULTILINE)
-    SCRIPT_TAG_PATTERN = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
-    STYLE_TAG_PATTERN = re.compile(r"<style[\s\S]*?</style>", re.IGNORECASE)
+    SCRIPT_TAG_PATTERN = re.compile(r"<script\b[\s\S]*?</script[^>]*>", re.IGNORECASE)
+    STYLE_TAG_PATTERN = re.compile(r"<style\b[\s\S]*?</style[^>]*>", re.IGNORECASE)
 
     # Patterns that look like prompt injection attempts
     INJECTION_PATTERNS = [
