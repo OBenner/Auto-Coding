@@ -16,14 +16,14 @@ import type {
 
 /** `## [1.2.3] …`, `## v1.2.3 …`, `## Unreleased` — suffix parsed separately. */
 const RELEASE_HEADING =
-  /^##\s+\[?(?<version>unreleased|v?\d+\.\d+(?:\.\d+)?[^\]\s]*)\]?(?<rest>.*)$/i;
+  /^##\s+\[?(?<version>unreleased|v?\d+\.\d+[^\]\s]*)\]?(?<rest>.*)$/i;
 
-const SECTION_HEADING = /^###\s+(?<title>.+?)\s*$/;
+const SECTION_HEADING = /^###\s+(?<title>.+)$/;
 
-const ENTRY_LINE = /^[-*]\s+(?<text>.+)$/;
+const ENTRY_LINE = /^[-*]\s+(?<text>\S.*)$/;
 
 /** Trailing short-sha reference: "… fix the thing (a4f8e92)". */
-const TRAILING_SHA = /\s*\((?<sha>[0-9a-f]{7,40})\)\s*$/i;
+const TRAILING_SHA = /\((?<sha>[0-9a-f]{7,40})\)$/i;
 
 /** Calendar dates only — anything else is a release name, not a date. */
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -49,8 +49,10 @@ export function sectionKindFromTitle(title: string): UiReleaseSectionKind {
 export function stripInlineMarkdown(text: string): string {
   return text
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(\*|_)([^*_]+)\1/g, '$2')
+    .replace(/\*\*([^*]*)\*\*/g, '$1')
+    .replace(/__([^_]*)__/g, '$1')
+    .replace(/\*([^*]*)\*/g, '$1')
+    .replace(/_([^_]*)_/g, '$1')
     .replace(/`([^`]*)`/g, '$1')
     .trim();
 }
@@ -171,11 +173,10 @@ export function parseChangelogMarkdown(
         section = { kind: 'other', title: '', entries: [] };
         release.sections.push(section);
       }
-      const shaMatch = TRAILING_SHA.exec(entryMatch.groups.text);
+      const entryText = entryMatch.groups.text.trimEnd();
+      const shaMatch = TRAILING_SHA.exec(entryText);
       section.entries.push({
-        text: stripInlineMarkdown(
-          entryMatch.groups.text.replace(TRAILING_SHA, ''),
-        ),
+        text: stripInlineMarkdown(entryText.replace(TRAILING_SHA, '')),
         sha: shaMatch?.groups?.sha,
       });
     }

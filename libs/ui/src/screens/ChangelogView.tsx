@@ -107,8 +107,8 @@ function groupByYear(releases: UiRelease[]): YearGroup[] {
   const groups: YearGroup[] = [];
   for (const release of releases) {
     const year = release.yearLabel ?? '';
-    const last = groups[groups.length - 1];
-    if (last != null && last.year === year) {
+    const last = groups.at(-1);
+    if (last?.year === year) {
       last.releases.push(release);
     } else {
       groups.push({ year, releases: [release] });
