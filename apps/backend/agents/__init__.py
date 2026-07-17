@@ -13,10 +13,38 @@ This module provides:
 - Utility functions for git and plan management
 
 Uses lazy imports via __getattr__ to avoid circular dependencies.
-Explicit re-exports below satisfy CodeQL static analysis.
+The TYPE_CHECKING block below re-declares every lazy export so that static
+analysers (CodeQL, mypy, IDEs) can resolve the names in __all__; it is never
+executed at runtime, so the lazy loading in __getattr__ still does the work.
 """
 
 from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - static analysis only
+    from .code_reviewer import run_code_review_session
+    from .coder import run_autonomous_agent
+    from .documentation_generator import run_documentation_generator_session
+    from .memory_manager import (
+        debug_memory_system_status,
+        get_graphiti_context,
+        save_session_memory,
+        save_session_to_graphiti,
+    )
+    from .migration_assistant import run_migration_assistant
+    from .performance_profiler import run_performance_profiler
+    from .planner import run_followup_planner
+    from .session import post_session_processing, run_agent_session
+    from .utils import (
+        find_phase_for_subtask,
+        find_subtask_in_plan,
+        get_commit_count,
+        get_latest_commit,
+        get_workspace_project_dirs,
+        load_implementation_plan,
+        load_workspace_context,
+        sync_spec_to_source,
+    )
 
 __all__ = [
     # Main API

@@ -1,0 +1,30 @@
+name: "Auto Code CodeQL config"
+
+# Scope CodeQL to product code. Test suites, build scripts, and the static
+# marketing site are excluded: the quality queries (unused imports, unused
+# locals, use-of-exit, ...) fire heavily there and drown out real security
+# findings in apps/ and libs/. Security regressions in those trees are not
+# shipped to users, and the test suites are reviewed on every PR anyway.
+paths-ignore:
+  # Test suites and fixtures
+  - tests
+  - '**/__tests__'
+  - '**/__mocks__'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/*.spec.tsx'
+  - '**/*.stories.ts'
+  - '**/*.stories.tsx'
+  - '**/conftest.py'
+  - '**/test_*.py'
+  # Build / release / packaging tooling
+  - scripts
+  - apps/frontend/scripts
+  # Static marketing site (not part of the shipped app)
+  - site
+  # Vendored / generated
+  - '**/node_modules'
+  - '**/dist'
+  - '**/build'
+  - '**/.venv'
