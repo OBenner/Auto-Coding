@@ -627,6 +627,61 @@ class TestScriptingTailFrameworks:
         assert cabal.command == "cabal test"
 
 
+class TestEmbeddedFrameworks:
+    """Tests for embedded (PlatformIO/Zephyr) test detection."""
+
+    def test_platformio_with_native_env(self, discovery, temp_dir):
+        """PlatformIO project with a native env prefers host-side tests."""
+        (temp_dir / "platformio.ini").write_text(
+            "[env:native]\nplatform = native\n\n[env:uno]\nplatform = atmelavr\n"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        pio = next(f for f in result.frameworks if f.name == "pio_test")
+        assert pio.command == "pio test -e native"
+
+    def test_platformio_without_native_env(self, discovery, temp_dir):
+        """PlatformIO project without native env falls back to pio test."""
+        (temp_dir / "platformio.ini").write_text("[env:uno]\nplatform = atmelavr\n")
+
+        result = discovery.discover(temp_dir)
+
+        pio = next(f for f in result.frameworks if f.name == "pio_test")
+        assert pio.command == "pio test"
+
+    def test_zephyr_workspace(self, discovery, temp_dir):
+        """Zephyr west workspace gets a twister QEMU run."""
+        (temp_dir / "west.yml").write_text("manifest:\n  projects: []\n")
+
+        result = discovery.discover(temp_dir)
+
+        twister = next(f for f in result.frameworks if f.name == "twister")
+        assert "qemu_x86" in twister.command
+        assert twister.config_file == "west.yml"
+
+    def test_zephyr_application(self, discovery, temp_dir):
+        """Zephyr app (prj.conf + CMake) gets a twister QEMU run."""
+        (temp_dir / "prj.conf").write_text("CONFIG_GPIO=y\n")
+        (temp_dir / "CMakeLists.txt").write_text(
+            "find_package(Zephyr REQUIRED)\nproject(app)\n"
+        )
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "twister" in framework_names
+
+    def test_prj_conf_without_cmake_not_zephyr(self, discovery, temp_dir):
+        """A stray prj.conf without CMake does not trigger twister."""
+        (temp_dir / "prj.conf").write_text("CONFIG_GPIO=y\n")
+
+        result = discovery.discover(temp_dir)
+
+        framework_names = [f.name for f in result.frameworks]
+        assert "twister" not in framework_names
+
+
 class TestTargetedCommands:
     """Tests for targeted (subset) test command templates."""
 
