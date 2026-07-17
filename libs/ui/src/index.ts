@@ -73,4 +73,4 @@ export { useBoardFilter, FILTER_IDS } from './client/useBoardFilter';
 export type { UseBoardFilterResult, FilterId } from './client/useBoardFilter';
 // Changelog browser (U5 B1 pilot)
 export { ChangelogView } from './screens/ChangelogView';
-export type { ChangelogViewProps } from './screens/ChangelogView';
+export type { ChangelogViewProps, ChangelogViewStateLabels } from './screens/ChangelogView';

@@ -12,6 +12,11 @@
       "version": "Version",
       "released": "Publiée",
       "releases": "Versions"
+    },
+    "states": {
+      "loading": "Chargement des versions…",
+      "retry": "Réessayer",
+      "empty": "Aucune version pour le moment."
     }
   }
 }

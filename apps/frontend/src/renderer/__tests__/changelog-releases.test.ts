@@ -134,6 +134,35 @@ describe('parseChangelogMarkdown', () => {
     expect(new Set(ids).size).toBe(2);
   });
 
+  it('classifies duplicate versions against the next distinct version', () => {
+    const duplicated = parseChangelogMarkdown(
+      [
+        '## [3.0.0] - 2026-03-01',
+        '- keep-a-changelog block',
+        '## 3.0.0 - The big one',
+        '- generator block',
+        '## [2.9.0] - 2026-02-01',
+        '- previous minor',
+      ].join('\n'),
+      'en-US',
+    );
+    // Both 3.0.0 blocks compare against 2.9.0 — not against each other.
+    expect(duplicated.map((release) => release.type)).toEqual([
+      'major',
+      'major',
+      'minor',
+    ]);
+  });
+
+  it('rejects impossible calendar dates instead of rolling them forward', () => {
+    const impossible = parseChangelogMarkdown(
+      '## [1.0.1] - 2026-02-31\n- entry\n',
+      'en-US',
+    );
+    expect(impossible[0].dateLabel).toBeUndefined();
+    expect(impossible[0].yearLabel).toBeUndefined();
+  });
+
   it('parses loose heading variants and entries without section headings', () => {
     const loose = parseChangelogMarkdown(
       `## v1.2.0 (2026-01-05)\n- did a thing\n- did another (deadbeef)\n`,

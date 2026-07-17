@@ -31,6 +31,12 @@ const SECTION_GLYPHS: Record<UiReleaseSectionKind, string> = {
   other: '·',
 };
 
+export interface ChangelogViewStateLabels {
+  loading?: string;
+  retry?: string;
+  empty?: string;
+}
+
 export interface ChangelogViewProps {
   releases: UiRelease[] | null;
   loading?: boolean;
@@ -38,6 +44,8 @@ export interface ChangelogViewProps {
   onRetry?: () => void;
   /** Localized release-type badge labels; falls back to English. */
   typeLabels?: Partial<Record<UiReleaseType, string>>;
+  /** Localized loading/retry/empty state labels; falls back to English. */
+  stateLabels?: ChangelogViewStateLabels;
   /** Right-rail meta cards (latest release, cadence, …), when available. */
   metaSections?: UiMetaSection[];
 }
@@ -55,11 +63,14 @@ export function ChangelogView({
   error = null,
   onRetry,
   typeLabels,
+  stateLabels,
   metaSections,
 }: Readonly<ChangelogViewProps>) {
   return (
     <section className="ac-changelog">
-      {loading && <p className="ac-changelog__state">Loading…</p>}
+      {loading && (
+        <p className="ac-changelog__state">{stateLabels?.loading ?? 'Loading…'}</p>
+      )}
 
       {!loading && error != null && (
         <p className="ac-changelog__state ac-changelog__state--error" role="alert">
@@ -70,18 +81,21 @@ export function ChangelogView({
               className="ac-changelog__retry"
               onClick={onRetry}
             >
-              Retry
+              {stateLabels?.retry ?? 'Retry'}
             </button>
           )}
         </p>
       )}
 
       {!loading && error == null && (releases == null || releases.length === 0) && (
-        <p className="ac-changelog__state">No releases yet.</p>
+        <p className="ac-changelog__state">
+          {stateLabels?.empty ?? 'No releases yet.'}
+        </p>
       )}
 
       {!loading && error == null && releases != null && releases.length > 0 && (
         <ChangelogBody
+          key={releases[0].id}
           releases={releases}
           typeLabels={typeLabels}
           metaSections={metaSections}

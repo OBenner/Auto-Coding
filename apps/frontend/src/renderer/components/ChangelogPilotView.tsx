@@ -43,10 +43,12 @@ export function ChangelogPilotView({
       .then((result) => {
         if (!active) return;
         if (!result.success) {
+          // Log the raw IPC error; the screen shows only localized text.
+          console.error('[ChangelogPilotView] Failed to read changelog:', result.error);
           setState({
             releases: null,
             loading: false,
-            error: new Error(result.error ?? t('changelog:pilot.error')),
+            error: new Error(t('changelog:pilot.error')),
           });
           return;
         }
@@ -59,10 +61,11 @@ export function ChangelogPilotView({
       })
       .catch((err: unknown) => {
         if (!active) return;
+        console.error('[ChangelogPilotView] Failed to read changelog:', err);
         setState({
           releases: null,
           loading: false,
-          error: err instanceof Error ? err : new Error(String(err)),
+          error: new Error(t('changelog:pilot.error')),
         });
       });
     return () => {
@@ -71,6 +74,15 @@ export function ChangelogPilotView({
   }, [projectId, reloadKey, i18n.language, t]);
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
+
+  const stateLabels = useMemo(
+    () => ({
+      loading: t('changelog:pilot.states.loading'),
+      retry: t('changelog:pilot.states.retry'),
+      empty: t('changelog:pilot.states.empty'),
+    }),
+    [t],
+  );
 
   const typeLabels = useMemo<Partial<Record<UiReleaseType, string>>>(
     () => ({
@@ -117,6 +129,7 @@ export function ChangelogPilotView({
         error={state.error}
         onRetry={reload}
         typeLabels={typeLabels}
+        stateLabels={stateLabels}
         metaSections={metaSections}
       />
     </div>

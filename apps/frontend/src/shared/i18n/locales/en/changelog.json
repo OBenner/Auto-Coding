@@ -12,6 +12,11 @@
       "version": "Version",
       "released": "Released",
       "releases": "Releases"
+    },
+    "states": {
+      "loading": "Loading releases…",
+      "retry": "Retry",
+      "empty": "No releases yet."
     }
   }
 }

@@ -123,9 +123,18 @@ interface DateLabels {
  * so local-timezone formatting would shift them a day west of UTC.
  */
 function dateLabelsOf(dateRaw: string | undefined, locale?: string): DateLabels {
-  if (dateRaw == null || !ISO_DATE.test(dateRaw)) return {};
-  const parsed = new Date(dateRaw);
-  if (Number.isNaN(parsed.getTime())) return {};
+  const match = dateRaw != null ? ISO_DATE.exec(dateRaw) : null;
+  if (match == null) return {};
+  const parsed = new Date(dateRaw as string);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    // Date() rolls impossible dates forward (2026-02-31 -> Mar 3) — reject.
+    parsed.getUTCFullYear() !== Number(match[1]) ||
+    parsed.getUTCMonth() + 1 !== Number(match[2]) ||
+    parsed.getUTCDate() !== Number(match[3])
+  ) {
+    return {};
+  }
   return {
     dateLabel: parsed.toLocaleDateString(locale, {
       month: 'short',
@@ -182,16 +191,23 @@ export function parseChangelogMarkdown(
     }
   }
 
-  return raw
-    .filter((item) => item.sections.some((s) => s.entries.length > 0))
-    .map((item, index, all) => ({
-      // CHANGELOG files can repeat a version (e.g. a keep-a-changelog block
-      // and a generator block for the same release) — qualify by position.
-      id: `${item.version}#${index}`,
-      version: item.version,
-      name: item.name,
-      type: releaseTypeOf(item.version, all[index + 1]?.version),
-      ...dateLabelsOf(item.dateRaw, locale),
-      sections: item.sections.filter((s) => s.entries.length > 0),
-    }));
+  const withEntries = raw.filter((item) =>
+    item.sections.some((s) => s.entries.length > 0),
+  );
+  return withEntries.map((item, index) => ({
+    // CHANGELOG files can repeat a version (e.g. a keep-a-changelog block
+    // and a generator block for the same release) — qualify by position.
+    id: `${item.version}#${index}`,
+    version: item.version,
+    name: item.name,
+    // Compare against the next semantically different version so duplicate
+    // blocks of one release don't misclassify each other as patches.
+    type: releaseTypeOf(
+      item.version,
+      withEntries.slice(index + 1).find((r) => r.version !== item.version)
+        ?.version,
+    ),
+    ...dateLabelsOf(item.dateRaw, locale),
+    sections: item.sections.filter((s) => s.entries.length > 0),
+  }));
 }
