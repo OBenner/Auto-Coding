@@ -51,6 +51,11 @@ TOOL_CANCEL_TASK = "mcp__auto-claude__cancel_task"
 # CLI E2E harness (pseudo-terminal runner for terminal apps)
 TOOL_RUN_CLI_SESSION = "mcp__auto-claude__run_cli_session"
 
+# Android QA harness (adb-driven; registered for Android projects only)
+TOOL_ANDROID_SCREENSHOT = "mcp__auto-claude__android_screenshot"
+TOOL_ANDROID_INPUT = "mcp__auto-claude__android_input"
+TOOL_ANDROID_LOGCAT = "mcp__auto-claude__android_logcat"
+
 # =============================================================================
 # External MCP Tools
 # =============================================================================
@@ -286,6 +291,9 @@ AGENT_CONFIGS = {
             TOOL_GET_SESSION_CONTEXT,
             TOOL_SEARCH_TEAM_DOCS,  # Verify against team standards
             TOOL_RUN_CLI_SESSION,  # E2E-verify terminal apps
+            TOOL_ANDROID_SCREENSHOT,  # Android E2E (registered only for Android projects)
+            TOOL_ANDROID_INPUT,
+            TOOL_ANDROID_LOGCAT,
         ],
         "thinking_default": "high",
     },
@@ -299,6 +307,9 @@ AGENT_CONFIGS = {
             TOOL_UPDATE_QA_STATUS,
             TOOL_RECORD_GOTCHA,
             TOOL_RUN_CLI_SESSION,  # Verify CLI fixes end-to-end
+            TOOL_ANDROID_SCREENSHOT,  # Android E2E (registered only for Android projects)
+            TOOL_ANDROID_INPUT,
+            TOOL_ANDROID_LOGCAT,
         ],
         "thinking_default": "medium",
     },

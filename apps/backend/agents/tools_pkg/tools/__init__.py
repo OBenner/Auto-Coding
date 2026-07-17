@@ -5,6 +5,7 @@ Auto-Code MCP Tools
 Individual tool implementations organized by functionality.
 """
 
+from .android_harness import create_android_tools
 from .background_task import create_background_task_tools
 from .cli_harness import create_cli_harness_tools
 from .debugging import create_debugging_tools
@@ -21,6 +22,7 @@ __all__ = [
     "create_memory_tools",
     "create_qa_tools",
     "create_statistics_tools",
+    "create_android_tools",
     "create_background_task_tools",
     "create_cli_harness_tools",
     "create_debugging_tools",
