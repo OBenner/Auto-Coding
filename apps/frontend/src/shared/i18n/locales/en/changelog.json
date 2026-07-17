@@ -1,0 +1,17 @@
+{
+  "pilot": {
+    "error": "Failed to read CHANGELOG.md",
+    "types": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "draft": "Draft"
+    },
+    "meta": {
+      "latestTitle": "Latest release",
+      "version": "Version",
+      "released": "Released",
+      "releases": "Releases"
+    }
+  }
+}

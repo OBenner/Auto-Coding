@@ -70,6 +70,7 @@ import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
 import { useTaskStore, loadTasks } from './stores/task-store';
 import { KanbanPilotView } from './components/KanbanPilotView';
+import { ChangelogPilotView } from './components/ChangelogPilotView';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
@@ -1100,6 +1101,9 @@ export function App() {
                 )}
                 {activeView === 'changelog' && (activeProjectId || selectedProjectId) && (
                   <Changelog />
+                )}
+                {activeView === 'changelog-next' && (activeProjectId || selectedProjectId) && (
+                  <ChangelogPilotView projectId={(activeProjectId || selectedProjectId)!} />
                 )}
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />

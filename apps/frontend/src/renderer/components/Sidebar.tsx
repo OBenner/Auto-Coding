@@ -71,7 +71,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
+export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -96,6 +96,7 @@ const baseNavItems: NavItem[] = [
   { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I' },
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
+  { id: 'changelog-next', labelKey: 'navigation:items.changelogNext', icon: FileText },
   { id: 'scheduler', labelKey: 'navigation:items.scheduler', icon: Calendar, shortcut: 'S' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
   { id: 'webhooks', labelKey: 'navigation:items.webhooks', icon: Webhook },

@@ -29,7 +29,8 @@
     "agentInspector": "Agent Inspector",
     "feedback": "Feedback",
     "modelUsage": "Model Usage",
-    "kanbanNext": "Kanban (New UI)"
+    "kanbanNext": "Kanban (New UI)",
+    "changelogNext": "Changelog (New UI)"
   },
   "actions": {
     "settings": "Settings",

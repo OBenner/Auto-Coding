@@ -21,6 +21,8 @@ import enCodeReview from './locales/en/codeReview.json';
 import enQuality from './locales/en/quality.json';
 import enAgentInspector from './locales/en/agent-inspector.json';
 import enTimeline from './locales/en/timeline.json';
+import enKanban from './locales/en/kanban.json';
+import enChangelog from './locales/en/changelog.json';
 
 // Import French translation resources
 import frCommon from './locales/fr/common.json';
@@ -42,6 +44,8 @@ import frCodeReview from './locales/fr/codeReview.json';
 import frQuality from './locales/fr/quality.json';
 import frAgentInspector from './locales/fr/agent-inspector.json';
 import frTimeline from './locales/fr/timeline.json';
+import frKanban from './locales/fr/kanban.json';
+import frChangelog from './locales/fr/changelog.json';
 
 export const defaultNS = 'common';
 
@@ -65,7 +69,9 @@ export const resources = {
     codeReview: enCodeReview,
     quality: enQuality,
     'agent-inspector': enAgentInspector,
-    timeline: enTimeline
+    timeline: enTimeline,
+    kanban: enKanban,
+    changelog: enChangelog
   },
   fr: {
     common: frCommon,
@@ -86,7 +92,9 @@ export const resources = {
     codeReview: frCodeReview,
     quality: frQuality,
     'agent-inspector': frAgentInspector,
-    timeline: frTimeline
+    timeline: frTimeline,
+    kanban: frKanban,
+    changelog: frChangelog
   }
 } as const;
 
@@ -97,7 +105,7 @@ i18n
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality', 'agent-inspector', 'timeline'],
+    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality', 'agent-inspector', 'timeline', 'kanban', 'changelog'],
     interpolation: {
       escapeValue: false // React already escapes values
     },

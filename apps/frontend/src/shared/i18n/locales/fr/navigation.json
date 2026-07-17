@@ -29,7 +29,8 @@
     "agentInspector": "Inspecteur d'Agent",
     "feedback": "Retour d'information",
     "modelUsage": "Utilisation des Modèles",
-    "kanbanNext": "Kanban (nouvelle interface)"
+    "kanbanNext": "Kanban (nouvelle interface)",
+    "changelogNext": "Journal des modifications (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",
