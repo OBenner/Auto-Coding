@@ -15,10 +15,12 @@ import type {
 } from '@auto-code/ui';
 
 /**
- * `## [token] …` — the token is validated separately with VERSION_SHAPE so
- * the line regex stays free of overlapping quantifiers (linear-time).
+ * `## [token] …` — the token is validated separately with VERSION_SHAPE, and
+ * `rest` must start with a character the token class excludes (`]`, `[`, or
+ * whitespace), so adjacent quantifiers never overlap (linear-time, S8786).
  */
-const RELEASE_HEADING = /^##\s+\[?(?<version>[^\][\s]+)\]?(?<rest>.*)$/i;
+const RELEASE_HEADING =
+  /^##\s+\[?(?<version>[^\][\s]+)(?<rest>|[\][\s].*)$/i;
 
 /** `Unreleased` or a semver-ish `v?MAJOR.MINOR…` token. */
 const VERSION_SHAPE = /^(?:unreleased$|v?\d+\.\d+)/i;
@@ -72,7 +74,8 @@ interface HeadingSuffix {
  * release date; anything else non-empty is the release name, verbatim.
  */
 function parseHeadingSuffix(rest: string): HeadingSuffix {
-  let text = rest.trim();
+  // The heading regex leaves a closing `]` on the suffix side.
+  let text = rest.replace(/^\]/, '').trim();
   // Version-link tail from generators: `[1.2.3](https://…/compare/…)`.
   text = text.replace(/^\((?:https?:\/\/)[^)]*\)\s*/, '');
   // Leading `-` / `–` / `—` separator.
