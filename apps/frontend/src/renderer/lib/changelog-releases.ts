@@ -20,7 +20,7 @@ import type {
  * whitespace), so adjacent quantifiers never overlap (linear-time, S8786).
  */
 const RELEASE_HEADING =
-  /^##\s+\[?(?<version>[^\][\s]+)(?<rest>|[\][\s].*)$/i;
+  /^##\s+\[?(?<version>[^\][\s]+)(?<rest>(?:[\][\s].*)?)$/i;
 
 /** `Unreleased` or a semver-ish `v?MAJOR.MINOR…` token. */
 const VERSION_SHAPE = /^(?:unreleased$|v?\d+\.\d+)/i;
