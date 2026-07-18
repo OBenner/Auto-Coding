@@ -14,11 +14,16 @@ import type {
   UiReleaseType,
 } from '@auto-code/ui';
 
-/** `## [1.2.3] …`, `## v1.2.3 …`, `## Unreleased` — suffix parsed separately. */
-const RELEASE_HEADING =
-  /^##\s+\[?(?<version>unreleased|v?\d+\.\d+[^\]\s]*)\]?(?<rest>.*)$/i;
+/**
+ * `## [token] …` — the token is validated separately with VERSION_SHAPE so
+ * the line regex stays free of overlapping quantifiers (linear-time).
+ */
+const RELEASE_HEADING = /^##\s+\[?(?<version>[^\][\s]+)\]?(?<rest>.*)$/i;
 
-const SECTION_HEADING = /^###\s+(?<title>.+)$/;
+/** `Unreleased` or a semver-ish `v?MAJOR.MINOR…` token. */
+const VERSION_SHAPE = /^(?:unreleased$|v?\d+\.\d+)/i;
+
+const SECTION_HEADING = /^###\s+(?<title>\S.*)$/;
 
 const ENTRY_LINE = /^[-*]\s+(?<text>\S.*)$/;
 
@@ -48,7 +53,7 @@ export function sectionKindFromTitle(title: string): UiReleaseSectionKind {
  */
 export function stripInlineMarkdown(text: string): string {
   return text
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/!?\[([^\][]*)\]\(([^()]*)\)/g, '$1')
     .replace(/\*\*([^*]*)\*\*/g, '$1')
     .replace(/__([^_]*)__/g, '$1')
     .replace(/\*([^*]*)\*/g, '$1')
@@ -155,7 +160,10 @@ export function parseChangelogMarkdown(
 
   for (const line of content.split(/\r?\n/)) {
     const releaseMatch = RELEASE_HEADING.exec(line);
-    if (releaseMatch?.groups != null) {
+    if (
+      releaseMatch?.groups != null &&
+      VERSION_SHAPE.test(releaseMatch.groups.version)
+    ) {
       release = {
         version: releaseMatch.groups.version,
         ...parseHeadingSuffix(releaseMatch.groups.rest),
