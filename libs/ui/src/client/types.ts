@@ -84,3 +84,48 @@ export interface CreateTaskInput {
   name: string;
   description: string;
 }
+
+/** Semver bump class of a release; drives the timeline dot + badge color. */
+export type UiReleaseType = 'major' | 'minor' | 'patch' | 'draft';
+
+/** Canonical section kinds; drive the section icon. Unknown kinds -> 'other'. */
+export type UiReleaseSectionKind =
+  | 'features'
+  | 'fixes'
+  | 'breaking'
+  | 'docs'
+  | 'other';
+
+export interface UiReleaseEntry {
+  text: string;
+  /** Short commit sha shown after the entry, when known. */
+  sha?: string;
+}
+
+export interface UiReleaseSection {
+  kind: UiReleaseSectionKind;
+  /** Display title, verbatim from the source (e.g. "Added", "Fixes"). */
+  title: string;
+  entries: UiReleaseEntry[];
+}
+
+/** One release in the changelog feed. Adapters own all label formatting. */
+export interface UiRelease {
+  /**
+   * Unique key for React identity and selection. Version alone is not
+   * enough — real CHANGELOG files repeat versions across format blocks.
+   */
+  id: string;
+  /** Display version including any prefix (e.g. "v2.9.0", "Unreleased"). */
+  version: string;
+  /** Optional release name shown after the version. */
+  name?: string;
+  type: UiReleaseType;
+  /** Short date label for the timeline rail (e.g. "May 22"). */
+  dateLabel?: string;
+  /** Year group header in the timeline rail (e.g. "2026"). */
+  yearLabel?: string;
+  /** Extra meta strings shown dot-separated in the release head. */
+  meta?: readonly string[];
+  sections: UiReleaseSection[];
+}

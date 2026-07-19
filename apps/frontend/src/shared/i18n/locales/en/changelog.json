@@ -1,0 +1,22 @@
+{
+  "pilot": {
+    "error": "Failed to read CHANGELOG.md",
+    "types": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "draft": "Draft"
+    },
+    "meta": {
+      "latestTitle": "Latest release",
+      "version": "Version",
+      "released": "Released",
+      "releases": "Releases"
+    },
+    "states": {
+      "loading": "Loading releases…",
+      "retry": "Retry",
+      "empty": "No releases yet."
+    }
+  }
+}

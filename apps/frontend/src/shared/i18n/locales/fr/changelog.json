@@ -1,0 +1,22 @@
+{
+  "pilot": {
+    "error": "Échec de la lecture de CHANGELOG.md",
+    "types": {
+      "major": "Majeure",
+      "minor": "Mineure",
+      "patch": "Correctif",
+      "draft": "Brouillon"
+    },
+    "meta": {
+      "latestTitle": "Dernière version",
+      "version": "Version",
+      "released": "Publiée",
+      "releases": "Versions"
+    },
+    "states": {
+      "loading": "Chargement des versions…",
+      "retry": "Réessayer",
+      "empty": "Aucune version pour le moment."
+    }
+  }
+}

@@ -37,6 +37,11 @@ export type {
   UiSubtaskStatus,
   UiMetaRow,
   UiMetaSection,
+  UiRelease,
+  UiReleaseEntry,
+  UiReleaseSection,
+  UiReleaseSectionKind,
+  UiReleaseType,
   CreateTaskInput,
   TaskStatus,
   BadgeTone,
@@ -66,3 +71,6 @@ export { filterUiTasks } from './client/filtering';
 export type { UiTaskFilter } from './client/filtering';
 export { useBoardFilter, FILTER_IDS } from './client/useBoardFilter';
 export type { UseBoardFilterResult, FilterId } from './client/useBoardFilter';
+// Changelog browser (U5 B1 pilot)
+export { ChangelogView } from './screens/ChangelogView';
+export type { ChangelogViewProps, ChangelogViewStateLabels } from './screens/ChangelogView';
