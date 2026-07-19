@@ -6,5 +6,21 @@
       "creatingTask": "Création de la tâche à partir de l'investigation...",
       "complete": "Investigation terminée !"
     }
+  },
+  "prsPilot": {
+    "error": "Échec du chargement des pull requests. Vérifiez la connexion GitHub dans les Réglages.",
+    "searchPlaceholder": "Rechercher titre, branche, auteur…",
+    "searchLabel": "Rechercher des pull requests par numéro, titre, auteur ou branche",
+    "rowMeta": "{{files}} fichiers · ouverte il y a {{age}}",
+    "states": {
+      "loading": "Chargement des pull requests…",
+      "retry": "Réessayer",
+      "empty": "Aucune pull request ouverte."
+    },
+    "stats": {
+      "open": "PRs ouvertes",
+      "authors": "auteurs",
+      "lines": "lignes modifiées"
+    }
   }
 }

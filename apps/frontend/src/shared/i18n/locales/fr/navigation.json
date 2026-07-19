@@ -30,7 +30,8 @@
     "feedback": "Retour d'information",
     "modelUsage": "Utilisation des Modèles",
     "kanbanNext": "Kanban (nouvelle interface)",
-    "changelogNext": "Journal des modifications (nouvelle interface)"
+    "changelogNext": "Journal des modifications (nouvelle interface)",
+    "githubPRsNext": "PRs GitHub (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",

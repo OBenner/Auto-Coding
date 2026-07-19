@@ -71,7 +71,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
+export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'github-prs-next' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -116,7 +116,8 @@ const baseNavItems: NavItem[] = [
 // GitHub nav items shown when GitHub is enabled
 const githubNavItems: NavItem[] = [
   { id: 'github-issues', labelKey: 'navigation:items.githubIssues', icon: Github, shortcut: 'G' },
-  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'H' }
+  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'H' },
+  { id: 'github-prs-next', labelKey: 'navigation:items.githubPRsNext', icon: GitPullRequest }
 ];
 
 // GitLab nav items shown when GitLab is enabled
