@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { PullRequestList } from './PullRequestList';
 import type { UiPullRequest } from '../client/types';
@@ -136,20 +137,24 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+function InteractivePullRequestList(
+  args: Readonly<React.ComponentProps<typeof PullRequestList>>,
+) {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  return (
+    <PullRequestList
+      {...args}
+      searchValue={query}
+      onSearchChange={setQuery}
+      activeFilterId={filter}
+      onSelectFilter={setFilter}
+    />
+  );
+}
+
 export const OpenPRs: Story = {
-  render: (args) => {
-    const [query, setQuery] = useState('');
-    const [filter, setFilter] = useState('all');
-    return (
-      <PullRequestList
-        {...args}
-        searchValue={query}
-        onSearchChange={setQuery}
-        activeFilterId={filter}
-        onSelectFilter={setFilter}
-      />
-    );
-  },
+  render: (args) => <InteractivePullRequestList {...args} />,
 };
 
 export const NoToolbar: Story = {

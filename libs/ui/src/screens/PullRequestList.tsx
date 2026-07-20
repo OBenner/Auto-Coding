@@ -252,7 +252,7 @@ function PullRequestRow({
               <code className="ac-prs__branch">{pullRequest.headBranch}</code>
               {pullRequest.baseBranch != null && (
                 <>
-                  →
+                  {' → '}
                   <code className="ac-prs__branch">{pullRequest.baseBranch}</code>
                 </>
               )}
@@ -262,7 +262,10 @@ function PullRequestRow({
             <span className="ac-prs__diff">
               {pullRequest.additions != null && (
                 <span className="ac-prs__plus">+{pullRequest.additions}</span>
-              )}{' '}
+              )}
+              {pullRequest.additions != null && pullRequest.deletions != null
+                ? ' '
+                : null}
               {pullRequest.deletions != null && (
                 <span className="ac-prs__minus">−{pullRequest.deletions}</span>
               )}

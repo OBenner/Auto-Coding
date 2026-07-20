@@ -167,10 +167,11 @@
   color: var(--muted);
   background: var(--rail);
 }
-/* No purple token exists in the sheet — mockup hardcodes the merged pair;
-   the dark values are a matched hand-pick. */
+/* No purple token exists in the sheet — the mockup hardcodes this pair;
+   the fg is darkened from the mockup's #ad57c2 to meet WCAG AA (5.5:1),
+   and the dark values are a matched hand-pick. */
 .ac-prs__tile--merged {
-  color: #ad57c2;
+  color: #8a3aa3;
   background: #f6e7fb;
 }
 [data-theme='dark'] .ac-prs__tile--merged {
