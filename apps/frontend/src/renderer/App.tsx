@@ -71,6 +71,7 @@ import { useProjectStore, loadProjects, addProject, initializeProject, removePro
 import { useTaskStore, loadTasks } from './stores/task-store';
 import { KanbanPilotView } from './components/KanbanPilotView';
 import { ChangelogPilotView } from './components/ChangelogPilotView';
+import { GitHubPRsPilotView } from './components/GitHubPRsPilotView';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
@@ -1104,6 +1105,9 @@ export function App() {
                 )}
                 {activeView === 'changelog-next' && (activeProjectId || selectedProjectId) && (
                   <ChangelogPilotView projectId={(activeProjectId || selectedProjectId)!} />
+                )}
+                {activeView === 'github-prs-next' && (activeProjectId || selectedProjectId) && (
+                  <GitHubPRsPilotView projectId={(activeProjectId || selectedProjectId)!} />
                 )}
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />

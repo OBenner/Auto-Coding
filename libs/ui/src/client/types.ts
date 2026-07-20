@@ -129,3 +129,50 @@ export interface UiRelease {
   meta?: readonly string[];
   sections: UiReleaseSection[];
 }
+
+/** Lifecycle tile of a PR row; drives the state glyph + colors. */
+export type UiPullRequestState = 'open' | 'draft' | 'merged' | 'conflict';
+
+export type UiPrCheckStatus = 'good' | 'bad' | 'warn' | 'run' | 'skip';
+
+/** One CI check square; label doubles as tooltip and accessible name. */
+export interface UiPrCheck {
+  label: string;
+  status: UiPrCheckStatus;
+}
+
+export interface UiPrReviewer {
+  /** Short initials shown in the avatar circle (e.g. "OM"). */
+  initials: string;
+  name?: string;
+  status?: 'good' | 'warn' | 'bad';
+}
+
+/** One pull request row. Adapters own all label formatting. */
+export interface UiPullRequest {
+  /** Unique key for React identity (e.g. "repo#264"). */
+  id: string;
+  number: number;
+  title: string;
+  state: UiPullRequestState;
+  author?: string;
+  headBranch?: string;
+  baseBranch?: string;
+  additions?: number;
+  deletions?: number;
+  /** Pre-localized trailing meta (e.g. "14 files · opened 22 min ago"). */
+  metaText?: string;
+  checks?: UiPrCheck[];
+  reviewers?: UiPrReviewer[];
+  badge?: UiTaskBadge;
+  /** Right-column relative time (e.g. "22m"). */
+  timeLabel?: string;
+}
+
+/** Summary tile above the PR toolbar. */
+export interface UiPrStat {
+  value: string;
+  label: string;
+  sub?: string;
+  tone?: 'good' | 'warn' | 'bad';
+}

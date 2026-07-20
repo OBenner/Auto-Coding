@@ -42,6 +42,12 @@ export type {
   UiReleaseSection,
   UiReleaseSectionKind,
   UiReleaseType,
+  UiPullRequest,
+  UiPullRequestState,
+  UiPrCheck,
+  UiPrCheckStatus,
+  UiPrReviewer,
+  UiPrStat,
   CreateTaskInput,
   TaskStatus,
   BadgeTone,
@@ -74,3 +80,10 @@ export type { UseBoardFilterResult, FilterId } from './client/useBoardFilter';
 // Changelog browser (U5 B1 pilot)
 export { ChangelogView } from './screens/ChangelogView';
 export type { ChangelogViewProps, ChangelogViewStateLabels } from './screens/ChangelogView';
+// GitHub PRs list (U5 B1)
+export { PullRequestList } from './screens/PullRequestList';
+export type {
+  PullRequestListProps,
+  PullRequestFilter,
+  PullRequestListStateLabels,
+} from './screens/PullRequestList';

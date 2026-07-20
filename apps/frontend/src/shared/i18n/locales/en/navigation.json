@@ -30,7 +30,8 @@
     "feedback": "Feedback",
     "modelUsage": "Model Usage",
     "kanbanNext": "Kanban (New UI)",
-    "changelogNext": "Changelog (New UI)"
+    "changelogNext": "Changelog (New UI)",
+    "githubPRsNext": "GitHub PRs (New UI)"
   },
   "actions": {
     "settings": "Settings",
