@@ -11,7 +11,6 @@
     "error": "Failed to load pull requests. Check the GitHub connection in Settings.",
     "searchPlaceholder": "Search title, branch, author…",
     "searchLabel": "Search pull requests by number, title, author, or branch",
-    "rowMeta": "{{files}} files · opened {{age}} ago",
     "states": {
       "loading": "Loading pull requests…",
       "retry": "Retry",
@@ -21,6 +20,13 @@
       "open": "open PRs",
       "authors": "authors",
       "lines": "lines changed"
+    },
+    "rowMeta_one": "{{count}} file · opened {{age}} ago",
+    "rowMeta_other": "{{count}} files · opened {{age}} ago",
+    "age": {
+      "minute": "m",
+      "hour": "h",
+      "day": "d"
     }
   }
 }

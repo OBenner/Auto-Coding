@@ -16,16 +16,28 @@ export function initialsOf(login: string): string {
   return login.slice(0, 2).toUpperCase();
 }
 
+export interface AgeUnits {
+  minute: string;
+  hour: string;
+  day: string;
+}
+
+const DEFAULT_AGE_UNITS: AgeUnits = { minute: 'm', hour: 'h', day: 'd' };
+
 /** Compact relative age: "22m", "4h", "2d"; "<1m" under a minute. */
-export function relativeAge(iso: string, now: Date = new Date()): string {
+export function relativeAge(
+  iso: string,
+  now: Date = new Date(),
+  units: AgeUnits = DEFAULT_AGE_UNITS,
+): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const minutes = Math.floor((now.getTime() - then) / 60_000);
-  if (minutes < 1) return '<1m';
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 1) return `<1${units.minute}`;
+  if (minutes < 60) return `${minutes}${units.minute}`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  if (hours < 24) return `${hours}${units.hour}`;
+  return `${Math.floor(hours / 24)}${units.day}`;
 }
 
 /**
@@ -33,7 +45,11 @@ export function relativeAge(iso: string, now: Date = new Date()): string {
  * PRs today, so the state tile is always "open"; draft/merged/conflict land
  * with the detail flow in part 2. `metaText` is left for the caller (i18n).
  */
-export function mapPRToUi(pr: PRData, now: Date = new Date()): UiPullRequest {
+export function mapPRToUi(
+  pr: PRData,
+  now: Date = new Date(),
+  ageUnits?: AgeUnits,
+): UiPullRequest {
   return {
     id: `pr#${pr.number}`,
     number: pr.number,
@@ -51,7 +67,7 @@ export function mapPRToUi(pr: PRData, now: Date = new Date()): UiPullRequest {
             name: assignee.login,
           }))
         : undefined,
-    timeLabel: relativeAge(pr.updatedAt, now),
+    timeLabel: relativeAge(pr.updatedAt, now, ageUnits),
   };
 }
 

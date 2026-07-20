@@ -24,6 +24,21 @@ const CHECK_GLYPHS: Record<UiPrCheckStatus, string> = {
   skip: '·',
 };
 
+const STATE_LABELS: Record<UiPullRequestState, string> = {
+  open: 'Open',
+  draft: 'Draft',
+  merged: 'Merged',
+  conflict: 'Conflict',
+};
+
+const CHECK_STATUS_LABELS: Record<UiPrCheckStatus, string> = {
+  good: 'passed',
+  bad: 'failed',
+  warn: 'warning',
+  run: 'running',
+  skip: 'skipped',
+};
+
 export interface PullRequestFilter {
   id: string;
   label: string;
@@ -56,6 +71,10 @@ export interface PullRequestListProps {
   onSelectPullRequest?: (pullRequest: UiPullRequest) => void;
   /** Localized loading/retry/empty state labels; falls back to English. */
   stateLabels?: PullRequestListStateLabels;
+  /** Localized PR-state tile labels (accessible names); falls back to English. */
+  prStateLabels?: Partial<Record<UiPullRequestState, string>>;
+  /** Localized check-status words for accessible names; falls back to English. */
+  checkStatusLabels?: Partial<Record<UiPrCheckStatus, string>>;
 }
 
 /**
@@ -81,6 +100,8 @@ export function PullRequestList({
   filtersLabel,
   onSelectPullRequest,
   stateLabels,
+  prStateLabels,
+  checkStatusLabels,
 }: Readonly<PullRequestListProps>) {
   const hasToolbar =
     onSearchChange != null || (filters != null && filters.length > 0);
@@ -172,6 +193,8 @@ export function PullRequestList({
               key={pullRequest.id}
               pullRequest={pullRequest}
               onSelect={onSelectPullRequest}
+              prStateLabels={prStateLabels}
+              checkStatusLabels={checkStatusLabels}
             />
           ))}
         </div>
@@ -183,9 +206,13 @@ export function PullRequestList({
 function PullRequestRow({
   pullRequest,
   onSelect,
+  prStateLabels,
+  checkStatusLabels,
 }: Readonly<{
   pullRequest: UiPullRequest;
   onSelect?: (pullRequest: UiPullRequest) => void;
+  prStateLabels?: Partial<Record<UiPullRequestState, string>>;
+  checkStatusLabels?: Partial<Record<UiPrCheckStatus, string>>;
 }>) {
   const interactive = onSelect != null;
   return (
@@ -206,7 +233,8 @@ function PullRequestRow({
         : {})}
     >
       <span
-        aria-hidden="true"
+        role="img"
+        aria-label={prStateLabels?.[pullRequest.state] ?? STATE_LABELS[pullRequest.state]}
         className={`ac-prs__tile ac-prs__tile--${pullRequest.state}`}
       >
         {STATE_GLYPHS[pullRequest.state]}
@@ -250,8 +278,8 @@ function PullRequestRow({
             <span
               key={check.label}
               className={`ac-prs__check ac-prs__check--${check.status}`}
-              title={check.label}
-              aria-label={check.label}
+              title={`${check.label}: ${checkStatusLabels?.[check.status] ?? CHECK_STATUS_LABELS[check.status]}`}
+              aria-label={`${check.label}: ${checkStatusLabels?.[check.status] ?? CHECK_STATUS_LABELS[check.status]}`}
             >
               {CHECK_GLYPHS[check.status]}
             </span>

@@ -55,6 +55,12 @@ describe('relativeAge', () => {
   it('returns an empty string for unparseable input', () => {
     expect(relativeAge('not a date', NOW)).toBe('');
   });
+
+  it('renders localized unit suffixes when provided', () => {
+    const fr = { minute: 'min', hour: 'h', day: 'j' };
+    expect(relativeAge('2026-07-19T11:38:00Z', NOW, fr)).toBe('22min');
+    expect(relativeAge('2026-07-17T12:00:00Z', NOW, fr)).toBe('2j');
+  });
 });
 
 describe('mapPRToUi', () => {

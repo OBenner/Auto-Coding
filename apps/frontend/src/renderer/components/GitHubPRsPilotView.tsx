@@ -44,10 +44,26 @@ export function GitHubPRsPilotView({
   useEffect(() => {
     let active = true;
     setState({ prs: null, loading: true, error: null });
-    window.electronAPI.github
-      .listPRs(projectId)
-      .then((result) => {
+    // The list handler folds every failure into an empty list, so a real
+    // "not connected" state must come from the explicit connection check.
+    Promise.all([
+      window.electronAPI.github.checkGitHubConnection(projectId),
+      window.electronAPI.github.listPRs(projectId),
+    ])
+      .then(([connection, result]) => {
         if (!active) return;
+        if (!connection.success || connection.data?.connected !== true) {
+          console.error(
+            '[GitHubPRsPilotView] GitHub is not connected:',
+            connection.success ? connection.data : connection.error,
+          );
+          setState({
+            prs: null,
+            loading: false,
+            error: new Error(t('github:prsPilot.error')),
+          });
+          return;
+        }
         setState({
           prs: result.prs ?? [],
           loading: false,
@@ -71,17 +87,26 @@ export function GitHubPRsPilotView({
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
+  const ageUnits = useMemo(
+    () => ({
+      minute: t('github:prsPilot.age.minute'),
+      hour: t('github:prsPilot.age.hour'),
+      day: t('github:prsPilot.age.day'),
+    }),
+    [t],
+  );
+
   const pullRequests = useMemo<UiPullRequest[] | null>(() => {
     if (state.prs == null) return null;
     const now = new Date();
     return state.prs.map((pr) => ({
-      ...mapPRToUi(pr, now),
+      ...mapPRToUi(pr, now, ageUnits),
       metaText: t('github:prsPilot.rowMeta', {
-        files: pr.changedFiles,
-        age: relativeAge(pr.createdAt, now),
+        count: pr.changedFiles,
+        age: relativeAge(pr.createdAt, now, ageUnits),
       }),
     }));
-  }, [state.prs, t]);
+  }, [state.prs, t, ageUnits]);
 
   const visible = useMemo(
     () => (pullRequests == null ? null : filterPullRequests(pullRequests, query)),

@@ -11,7 +11,6 @@
     "error": "Échec du chargement des pull requests. Vérifiez la connexion GitHub dans les Réglages.",
     "searchPlaceholder": "Rechercher titre, branche, auteur…",
     "searchLabel": "Rechercher des pull requests par numéro, titre, auteur ou branche",
-    "rowMeta": "{{files}} fichiers · ouverte il y a {{age}}",
     "states": {
       "loading": "Chargement des pull requests…",
       "retry": "Réessayer",
@@ -21,6 +20,13 @@
       "open": "PRs ouvertes",
       "authors": "auteurs",
       "lines": "lignes modifiées"
+    },
+    "rowMeta_one": "{{count}} fichier · ouverte il y a {{age}}",
+    "rowMeta_other": "{{count}} fichiers · ouverte il y a {{age}}",
+    "age": {
+      "minute": "min",
+      "hour": "h",
+      "day": "j"
     }
   }
 }
