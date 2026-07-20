@@ -44,6 +44,11 @@ export type {
   UiReleaseType,
   UiPullRequest,
   UiPullRequestState,
+  UiIssue,
+  UiIssueState,
+  UiIssueLabel,
+  UiIssueLabelTone,
+  UiIssueAssignee,
   UiPrCheck,
   UiPrCheckStatus,
   UiPrReviewer,
@@ -87,3 +92,10 @@ export type {
   PullRequestFilter,
   PullRequestListStateLabels,
 } from './screens/PullRequestList';
+// GitHub Issues list (U5 B1)
+export { IssueList } from './screens/IssueList';
+export type {
+  IssueListProps,
+  IssueListFilter,
+  IssueListStateLabels,
+} from './screens/IssueList';

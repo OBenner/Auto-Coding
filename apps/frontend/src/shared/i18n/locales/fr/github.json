@@ -28,5 +28,33 @@
       "hour": "h",
       "day": "j"
     }
+  },
+  "issuesPilot": {
+    "error": "Échec du chargement des issues. Vérifiez la connexion GitHub dans les Réglages.",
+    "searchPlaceholder": "Rechercher titre, auteur, étiquette…",
+    "searchLabel": "Rechercher des issues par numéro, titre, auteur ou étiquette",
+    "filtersLabel": "Filtrer les issues par état",
+    "filters": {
+      "open": "Ouvertes",
+      "closed": "Fermées",
+      "all": "Toutes"
+    },
+    "rowMeta": "ouverte il y a {{age}} par {{author}}",
+    "commentsLabel": "commentaires",
+    "issueStates": {
+      "open": "Ouverte",
+      "closed": "Fermée",
+      "draft": "Brouillon"
+    },
+    "states": {
+      "loading": "Chargement des issues…",
+      "retry": "Réessayer",
+      "empty": "Aucune issue."
+    },
+    "meta": {
+      "title": "Dépôt connecté",
+      "repository": "Dépôt",
+      "openIssues": "Issues ouvertes"
+    }
   }
 }
