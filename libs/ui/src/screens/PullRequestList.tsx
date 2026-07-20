@@ -292,9 +292,9 @@ function PullRequestRow({
 
       {pullRequest.reviewers != null && pullRequest.reviewers.length > 0 && (
         <div className="ac-prs__reviews">
-          {pullRequest.reviewers.map((reviewer) => (
+          {pullRequest.reviewers.map((reviewer, index) => (
             <span
-              key={reviewer.initials}
+              key={reviewer.name ?? `${reviewer.initials}#${index}`}
               className="ac-prs__avatar"
               title={reviewer.name ?? reviewer.initials}
             >
