@@ -209,6 +209,8 @@ export interface UiIssue {
   state: UiIssueState;
   /** Mono repo slug shown first in the meta line (e.g. "o/auto-coding"). */
   repo?: string;
+  /** Issue author login; rendered inside metaText, kept for filtering. */
+  author?: string;
   /** Pre-localized meta text (e.g. "opened 14m ago by nikitos"). */
   metaText?: string;
   labels?: UiIssueLabel[];

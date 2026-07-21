@@ -43,6 +43,7 @@ export function mapIssueToUi(issue: GitHubIssue): UiIssue {
     title: issue.title,
     state: issue.state === 'closed' ? 'closed' : 'open',
     repo: issue.repoFullName || undefined,
+    author: issue.author.login,
     labels: mapIssueLabels(issue.labels),
     assignees:
       issue.assignees.length > 0
@@ -67,6 +68,7 @@ export function filterIssues(
       `#${issue.number}`,
       issue.title,
       issue.repo,
+      issue.author,
       ...(issue.labels ?? []).map((label) => label.text),
       ...(issue.assignees ?? []).map((assignee) => assignee.name),
     ]

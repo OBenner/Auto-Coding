@@ -54,7 +54,8 @@
     "meta": {
       "title": "Dépôt connecté",
       "repository": "Dépôt",
-      "openIssues": "Issues ouvertes"
+      "loaded": "Chargées",
+      "lastSynced": "Dernière synchro"
     }
   }
 }

@@ -57,6 +57,7 @@ describe('mapIssueToUi', () => {
       title: 'QA fixer should accept screenshot evidence',
       state: 'open',
       repo: 'obenner/auto-coding',
+      author: 'nikitos',
       labels: [
         { text: 'bug', tone: 'bug' },
         { text: 'area: qa-fixer', tone: 'area' },
@@ -96,8 +97,17 @@ describe('filterIssues', () => {
     expect(filterIssues(issues, '#412').map((issue) => issue.number)).toEqual([412]);
     expect(filterIssues(issues, 'DARK MODE').map((issue) => issue.number)).toEqual([411]);
     expect(filterIssues(issues, 'qa-fixer').map((issue) => issue.number)).toEqual([412]);
-    expect(filterIssues(issues, 'nikitos').map((issue) => issue.number)).toEqual([412]);
     expect(filterIssues(issues, 'zzz')).toEqual([]);
+  });
+
+  it('matches the issue author, as the search label promises', () => {
+    const authored = [
+      mapIssueToUi(makeIssue({ number: 500, author: { login: 'scout-agent' } })),
+      mapIssueToUi(makeIssue({ number: 501, author: { login: 'om' } })),
+    ];
+    expect(filterIssues(authored, 'scout').map((issue) => issue.number)).toEqual([
+      500,
+    ]);
   });
 
   it('returns everything for a blank query', () => {

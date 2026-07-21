@@ -144,18 +144,28 @@ export function GitHubIssuesPilotView({
             },
           ]
         : []),
-      ...(state.sync.issueCount != null
+      // GitHubSyncStatus.issueCount comes from a per_page=1 probe (always
+      // 0 or 1), so report what this page actually loaded instead.
+      ...(state.issues != null
         ? [
             {
-              label: t('github:issuesPilot.meta.openIssues'),
-              value: String(state.sync.issueCount),
+              label: t('github:issuesPilot.meta.loaded'),
+              value: String(state.issues.length),
+            },
+          ]
+        : []),
+      ...(state.sync.lastSyncedAt != null
+        ? [
+            {
+              label: t('github:issuesPilot.meta.lastSynced'),
+              value: new Date(state.sync.lastSyncedAt).toLocaleString(),
             },
           ]
         : []),
     ];
     if (rows.length === 0) return undefined;
     return [{ title: t('github:issuesPilot.meta.title'), rows }];
-  }, [state.sync, t]);
+  }, [state.sync, state.issues, t]);
 
   const stateLabels = useMemo(
     () => ({

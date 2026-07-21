@@ -54,7 +54,8 @@
     "meta": {
       "title": "Connected repository",
       "repository": "Repository",
-      "openIssues": "Open issues"
+      "loaded": "Loaded",
+      "lastSynced": "Last synced"
     }
   }
 }
