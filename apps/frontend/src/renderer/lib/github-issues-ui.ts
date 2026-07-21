@@ -63,16 +63,15 @@ export function filterIssues(
 ): UiIssue[] {
   const needle = query.trim().toLowerCase();
   if (needle === '') return [...issues];
-  return issues.filter((issue) =>
-    [
-      `#${issue.number}`,
-      issue.title,
-      issue.repo,
-      issue.author,
-      ...(issue.labels ?? []).map((label) => label.text),
-      ...(issue.assignees ?? []).map((assignee) => assignee.name),
-    ]
-      .filter((field): field is string => field != null)
-      .some((field) => field.toLowerCase().includes(needle)),
+  const matches = (field?: string) =>
+    field != null && field.toLowerCase().includes(needle);
+  return issues.filter(
+    (issue) =>
+      matches(`#${issue.number}`) ||
+      matches(issue.title) ||
+      matches(issue.repo) ||
+      matches(issue.author) ||
+      (issue.labels ?? []).some((label) => matches(label.text)) ||
+      (issue.assignees ?? []).some((assignee) => matches(assignee.name)),
   );
 }
