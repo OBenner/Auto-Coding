@@ -63,9 +63,9 @@ export function PatternsPilotView({
 
   const confidenceLabels = useMemo(
     () => ({
-      high: t('patternsPilot.confidence.high'),
-      medium: t('patternsPilot.confidence.medium'),
-      low: t('patternsPilot.confidence.low'),
+      high: t('patterns:patternsPilot.confidence.high'),
+      medium: t('patterns:patternsPilot.confidence.medium'),
+      low: t('patterns:patternsPilot.confidence.low'),
     }),
     [t],
   );
@@ -111,7 +111,7 @@ export function PatternsPilotView({
           patterns: null,
           specCount: 0,
           loading: false,
-          error: new Error(t('patternsPilot.error')),
+          error: new Error(t('patterns:patternsPilot.error')),
         });
       });
     return () => {
@@ -131,14 +131,14 @@ export function PatternsPilotView({
     if (state.patterns == null) return undefined;
     return [
       {
-        title: t('patternsPilot.meta.title'),
+        title: t('patterns:patternsPilot.meta.title'),
         rows: [
           {
-            label: t('patternsPilot.meta.total'),
+            label: t('patterns:patternsPilot.meta.total'),
             value: String(state.patterns.length),
           },
           {
-            label: t('patternsPilot.meta.specs'),
+            label: t('patterns:patternsPilot.meta.specs'),
             value: String(state.specCount),
           },
         ],
@@ -148,19 +148,19 @@ export function PatternsPilotView({
 
   const stateLabels = useMemo(
     () => ({
-      loading: t('patternsPilot.states.loading'),
-      retry: t('patternsPilot.states.retry'),
-      empty: t('patternsPilot.states.empty'),
+      loading: t('patterns:patternsPilot.states.loading'),
+      retry: t('patterns:patternsPilot.states.retry'),
+      empty: t('patterns:patternsPilot.states.empty'),
     }),
     [t],
   );
 
   const kindLabels = useMemo(
     () => ({
-      pattern: t('patternsPilot.kinds.pattern'),
-      gotcha: t('patternsPilot.kinds.gotcha'),
-      decision: t('patternsPilot.kinds.decision'),
-      rule: t('patternsPilot.kinds.rule'),
+      pattern: t('patterns:patternsPilot.kinds.pattern'),
+      gotcha: t('patterns:patternsPilot.kinds.gotcha'),
+      decision: t('patterns:patternsPilot.kinds.decision'),
+      rule: t('patterns:patternsPilot.kinds.rule'),
     }),
     [t],
   );
@@ -174,8 +174,8 @@ export function PatternsPilotView({
         onRetry={reload}
         searchValue={query}
         onSearchChange={setQuery}
-        searchPlaceholder={t('patternsPilot.searchPlaceholder')}
-        searchLabel={t('patternsPilot.searchLabel')}
+        searchPlaceholder={t('patterns:patternsPilot.searchPlaceholder')}
+        searchLabel={t('patterns:patternsPilot.searchLabel')}
         stateLabels={stateLabels}
         kindLabels={kindLabels}
         metaSections={metaSections}

@@ -129,7 +129,9 @@ export function PatternLibrary({
       )}
 
       {loading && (
-        <p className="ac-patterns__state">{stateLabels?.loading ?? 'Loading…'}</p>
+        <p className="ac-patterns__state" aria-live="polite">
+          {stateLabels?.loading ?? 'Loading…'}
+        </p>
       )}
 
       {!loading && error != null && (
@@ -150,7 +152,7 @@ export function PatternLibrary({
       {!loading &&
         error == null &&
         (patterns == null || patterns.length === 0) && (
-          <p className="ac-patterns__state">
+          <p className="ac-patterns__state" aria-live="polite">
             {stateLabels?.empty ?? 'No patterns yet.'}
           </p>
         )}
