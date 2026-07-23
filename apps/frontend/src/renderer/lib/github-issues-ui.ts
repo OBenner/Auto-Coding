@@ -64,7 +64,7 @@ export function filterIssues(
   const needle = query.trim().toLowerCase();
   if (needle === '') return [...issues];
   const matches = (field?: string) =>
-    field != null && field.toLowerCase().includes(needle);
+    field?.toLowerCase().includes(needle) ?? false;
   return issues.filter(
     (issue) =>
       matches(`#${issue.number}`) ||

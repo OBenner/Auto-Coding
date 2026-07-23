@@ -55,7 +55,7 @@ const ISSUES: UiIssue[] = [
   {
     id: 'issue#407',
     number: 407,
-    title: 'Document the new sidebar collapse behaviour (⌘\\) in the keyboard cheatsheet',
+    title: String.raw`Document the new sidebar collapse behaviour (⌘\) in the keyboard cheatsheet`,
     state: 'open',
     repo: 'obenner/auto-coding',
     metaText: 'opened 2d ago by OM',
