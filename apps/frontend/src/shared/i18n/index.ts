@@ -23,6 +23,7 @@ import enAgentInspector from './locales/en/agent-inspector.json';
 import enTimeline from './locales/en/timeline.json';
 import enKanban from './locales/en/kanban.json';
 import enChangelog from './locales/en/changelog.json';
+import enPatterns from './locales/en/patterns.json';
 
 // Import French translation resources
 import frCommon from './locales/fr/common.json';
@@ -46,6 +47,7 @@ import frAgentInspector from './locales/fr/agent-inspector.json';
 import frTimeline from './locales/fr/timeline.json';
 import frKanban from './locales/fr/kanban.json';
 import frChangelog from './locales/fr/changelog.json';
+import frPatterns from './locales/fr/patterns.json';
 
 export const defaultNS = 'common';
 
@@ -71,7 +73,8 @@ export const resources = {
     'agent-inspector': enAgentInspector,
     timeline: enTimeline,
     kanban: enKanban,
-    changelog: enChangelog
+    changelog: enChangelog,
+    patterns: enPatterns
   },
   fr: {
     common: frCommon,
@@ -94,7 +97,8 @@ export const resources = {
     'agent-inspector': frAgentInspector,
     timeline: frTimeline,
     kanban: frKanban,
-    changelog: frChangelog
+    changelog: frChangelog,
+    patterns: frPatterns
   }
 } as const;
 
@@ -105,7 +109,7 @@ i18n
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality', 'agent-inspector', 'timeline', 'kanban', 'changelog'],
+    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality', 'agent-inspector', 'timeline', 'kanban', 'changelog', 'patterns'],
     interpolation: {
       escapeValue: false // React already escapes values
     },

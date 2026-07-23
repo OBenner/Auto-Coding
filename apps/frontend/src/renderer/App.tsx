@@ -73,6 +73,7 @@ import { KanbanPilotView } from './components/KanbanPilotView';
 import { ChangelogPilotView } from './components/ChangelogPilotView';
 import { GitHubPRsPilotView } from './components/GitHubPRsPilotView';
 import { GitHubIssuesPilotView } from './components/GitHubIssuesPilotView';
+import { PatternsPilotView } from './components/PatternsPilotView';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
@@ -1118,6 +1119,9 @@ export function App() {
                 )}
                 {activeView === 'patterns' && (activeProjectId || selectedProjectId) && (
                   <PatternsPage projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'patterns-next' && (activeProjectId || selectedProjectId) && (
+                  <PatternsPilotView projectId={(activeProjectId || selectedProjectId)!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'plugins' && selectedProject?.path && (

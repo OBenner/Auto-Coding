@@ -217,3 +217,37 @@ export interface UiIssue {
   assignees?: UiIssueAssignee[];
   commentsCount?: number;
 }
+
+/** Kind of a learned pattern; drives the card's type glyph + colors. */
+export type UiPatternKind = 'pattern' | 'gotcha' | 'decision' | 'rule';
+
+/** One pre-formatted fact in a pattern card footer (adapter owns wording). */
+export interface UiPatternFooterStat {
+  text: string;
+  /** 'bad' colors failures red; 'good' greens reuse wins. */
+  tone?: 'default' | 'bad' | 'good';
+}
+
+/** A code snippet shown inside a pattern card. Rendered as plain preformatted text. */
+export interface UiPatternSnippet {
+  code: string;
+  language?: string;
+}
+
+/** One learned pattern / gotcha / decision / rule. Adapters own all formatting. */
+export interface UiPattern {
+  /** Unique key for React identity (e.g. "001-auth#3"). */
+  id: string;
+  kind: UiPatternKind;
+  /** Short id prefix shown before the title (e.g. "D81", "R03"). */
+  code?: string;
+  title: string;
+  /** Language / domain chip (e.g. "tsx", "policy", "arch"). */
+  lang?: string;
+  /** Description; may be plain text. */
+  description?: string;
+  snippet?: UiPatternSnippet;
+  tags?: string[];
+  /** Dot-separated footer facts (confidence, reuse count, provenance, …). */
+  footer?: UiPatternFooterStat[];
+}
