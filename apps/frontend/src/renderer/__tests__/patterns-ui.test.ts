@@ -72,6 +72,11 @@ describe('aggregatePatterns', () => {
     expect(result[1].id).toBe('001#1');
   });
 
+  it('returns an empty list for no specs', () => {
+    expect(aggregatePatterns([])).toEqual([]);
+    expect(aggregatePatterns([{ specId: '001', patterns: [] }])).toEqual([]);
+  });
+
   it('is case- and whitespace-insensitive when deduping', () => {
     const result = aggregatePatterns([
       { specId: '001', patterns: [makePattern({ text: 'Same Rule' })] },

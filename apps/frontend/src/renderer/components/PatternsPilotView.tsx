@@ -44,6 +44,23 @@ export function PatternsPilotView({
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
 
+  // Subscribe reactively so patterns refetch when the project's tasks load
+  // after mount (reading getState() once would strand the empty state). The
+  // effect depends on a stable string key, not the fresh-per-render array,
+  // so unrelated task updates don't trigger a refetch.
+  const tasks = useTaskStore((store) => store.tasks);
+  const specKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tasks
+            .filter((task) => task.projectId === projectId)
+            .map((task) => task.specId),
+        ),
+      ).join('|'),
+    [tasks, projectId],
+  );
+
   const confidenceLabels = useMemo(
     () => ({
       high: t('patternsPilot.confidence.high'),
@@ -57,18 +74,9 @@ export function PatternsPilotView({
     let active = true;
     setState({ patterns: null, specCount: 0, loading: true, error: null });
 
-    // Patterns are stored per spec; collect the project's known specs from
-    // the task store and load each spec's patterns, tolerating per-spec
-    // failures (a spec may have none / an unreadable file).
-    const specIds = Array.from(
-      new Set(
-        useTaskStore
-          .getState()
-          .tasks.filter((task) => task.projectId === projectId)
-          .map((task) => task.specId),
-      ),
-    );
-
+    // Patterns are stored per spec; load each spec's patterns, tolerating
+    // per-spec failures (a spec may have none / an unreadable file).
+    const specIds = specKey === '' ? [] : specKey.split('|');
     Promise.all(
       specIds.map((specId) =>
         window.electronAPI.pattern
@@ -109,7 +117,7 @@ export function PatternsPilotView({
     return () => {
       active = false;
     };
-  }, [projectId, reloadKey, confidenceLabels, t]);
+  }, [projectId, specKey, reloadKey, confidenceLabels, t]);
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
