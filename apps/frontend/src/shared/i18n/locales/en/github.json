@@ -28,5 +28,34 @@
       "hour": "h",
       "day": "d"
     }
+  },
+  "issuesPilot": {
+    "error": "Failed to load issues. Check the GitHub connection in Settings.",
+    "searchPlaceholder": "Search title, author, label…",
+    "searchLabel": "Search issues by number, title, author, or label",
+    "filtersLabel": "Filter issues by state",
+    "filters": {
+      "open": "Open",
+      "closed": "Closed",
+      "all": "All"
+    },
+    "rowMeta": "opened {{age}} ago by {{author}}",
+    "commentsLabel": "comments",
+    "issueStates": {
+      "open": "Open",
+      "closed": "Closed",
+      "draft": "Draft"
+    },
+    "states": {
+      "loading": "Loading issues…",
+      "retry": "Retry",
+      "empty": "No issues."
+    },
+    "meta": {
+      "title": "Connected repository",
+      "repository": "Repository",
+      "loaded": "Loaded",
+      "lastSynced": "Last synced"
+    }
   }
 }

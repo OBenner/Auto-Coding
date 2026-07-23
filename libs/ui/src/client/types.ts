@@ -176,3 +176,44 @@ export interface UiPrStat {
   sub?: string;
   tone?: 'good' | 'warn' | 'bad';
 }
+
+/** Lifecycle of an issue row; drives the circular state pill. */
+export type UiIssueState = 'open' | 'closed' | 'draft';
+
+/** Semantic tone of a label pill; drives the pill colors. */
+export type UiIssueLabelTone =
+  | 'bug'
+  | 'feat'
+  | 'docs'
+  | 'good-first'
+  | 'help'
+  | 'area';
+
+export interface UiIssueLabel {
+  text: string;
+  tone: UiIssueLabelTone;
+}
+
+export interface UiIssueAssignee {
+  /** Short initials shown in the avatar circle (e.g. "OM"). */
+  initials: string;
+  name?: string;
+}
+
+/** One issue row. Adapters own all label formatting. */
+export interface UiIssue {
+  /** Unique key for React identity (e.g. "issue#412"). */
+  id: string;
+  number: number;
+  title: string;
+  state: UiIssueState;
+  /** Mono repo slug shown first in the meta line (e.g. "o/auto-coding"). */
+  repo?: string;
+  /** Issue author login; rendered inside metaText, kept for filtering. */
+  author?: string;
+  /** Pre-localized meta text (e.g. "opened 14m ago by nikitos"). */
+  metaText?: string;
+  labels?: UiIssueLabel[];
+  assignees?: UiIssueAssignee[];
+  commentsCount?: number;
+}

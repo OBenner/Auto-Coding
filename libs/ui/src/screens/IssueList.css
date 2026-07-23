@@ -1,0 +1,310 @@
+/* GitHub Issues list ported from .lazyweb/mockups/desktop-github-issues.html:
+   search + chip toolbar | issue rows beside an optional 320px meta rail. */
+
+.ac-issues {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Toolbar (same family as the PRs toolbar) --- */
+
+.ac-issues__toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 28px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.ac-issues__search {
+  min-height: 34px;
+}
+.ac-issues__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.ac-issues__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ac-issues__chip:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.ac-issues__chip--active {
+  color: var(--ink);
+  background: var(--panel);
+  border-color: var(--line-strong);
+  font-weight: 720;
+}
+.ac-issues__chip-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--quiet);
+}
+.ac-issues__chip--active .ac-issues__chip-count {
+  color: var(--blue);
+}
+
+/* --- States --- */
+
+.ac-issues__state {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 20px 28px;
+}
+.ac-issues__state--error {
+  color: var(--red);
+}
+.ac-issues__retry {
+  font-family: inherit;
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--blue);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+/* --- Two-column body --- */
+
+.ac-issues__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  overflow: hidden;
+}
+.ac-issues__body--no-rail {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ac-issues__list {
+  overflow-y: auto;
+}
+
+/* --- Issue rows --- */
+
+.ac-issues__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--line);
+}
+.ac-issues__row--link {
+  cursor: pointer;
+}
+.ac-issues__row--link:hover {
+  background: var(--soft);
+}
+.ac-issues__row--link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+.ac-issues__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.ac-issues__pill--open {
+  color: var(--green);
+  background: var(--green-soft);
+}
+/* Same non-tokenized purple family as the merged PR tile (WCAG AA fg). */
+.ac-issues__pill--closed {
+  color: #8a3aa3;
+  background: #f6e7fb;
+}
+[data-theme='dark'] .ac-issues__pill--closed {
+  color: #c98fd8;
+  background: #2c1f33;
+}
+.ac-issues__pill--draft {
+  color: var(--muted);
+  background: var(--rail);
+}
+
+.ac-issues__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+.ac-issues__num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--quiet);
+  margin-right: 8px;
+}
+.ac-issues__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ac-issues__repo {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--quiet);
+}
+
+.ac-issues__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ac-issues__label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 720;
+}
+.ac-issues__label--bug {
+  color: var(--red);
+  background: var(--red-soft);
+}
+.ac-issues__label--feat {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+/* Mockup-specified docs pair (no matching token); dark is a hand-pick. */
+.ac-issues__label--docs {
+  color: #1965a8;
+  background: #e2f5ff;
+}
+[data-theme='dark'] .ac-issues__label--docs {
+  color: #7cc0ee;
+  background: #12293a;
+}
+.ac-issues__label--good-first {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.ac-issues__label--help {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+.ac-issues__label--area {
+  color: var(--muted);
+  background: var(--rail);
+}
+
+.ac-issues__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ac-issues__assignees {
+  display: flex;
+}
+.ac-issues__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--rail);
+  border: 2px solid var(--panel);
+  font-size: 9px;
+  font-weight: 800;
+}
+.ac-issues__avatar + .ac-issues__avatar {
+  margin-left: -6px;
+}
+.ac-issues__comments {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--quiet);
+}
+
+/* --- Right meta rail (same card/kv family as the sibling screens) --- */
+
+.ac-issues__rail {
+  border-left: 1px solid var(--line);
+  background: var(--soft);
+  overflow-y: auto;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.ac-issues__card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.ac-issues__card h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 760;
+}
+.ac-issues__kv {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+.ac-issues__kv span {
+  color: var(--quiet);
+  font-weight: 720;
+}
+.ac-issues__kv strong {
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .ac-issues__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ac-issues__rail {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (max-width: 760px) {
+  .ac-issues__toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ac-issues__row {
+    padding: 12px 14px;
+  }
+}
