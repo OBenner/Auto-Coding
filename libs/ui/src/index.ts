@@ -49,6 +49,10 @@ export type {
   UiIssueLabel,
   UiIssueLabelTone,
   UiIssueAssignee,
+  UiPattern,
+  UiPatternKind,
+  UiPatternFooterStat,
+  UiPatternSnippet,
   UiPrCheck,
   UiPrCheckStatus,
   UiPrReviewer,
@@ -99,3 +103,10 @@ export type {
   IssueListFilter,
   IssueListStateLabels,
 } from './screens/IssueList';
+// Patterns library (U5 B1)
+export { PatternLibrary } from './screens/PatternLibrary';
+export type {
+  PatternLibraryProps,
+  PatternLibraryFilter,
+  PatternLibraryStateLabels,
+} from './screens/PatternLibrary';

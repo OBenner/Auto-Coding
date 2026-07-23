@@ -36,5 +36,31 @@
     "low": "Low confidence (<70%): Pattern used infrequently, verify before approving",
     "approved": "Approved patterns are marked as team standards (confidence: 100%)",
     "deprecated": "Deprecated patterns are marked to avoid (confidence: 0%)"
+  },
+  "patternsPilot": {
+    "error": "Failed to load patterns.",
+    "searchPlaceholder": "Search by name, category, description…",
+    "searchLabel": "Search patterns by name, category, or description",
+    "confidence": {
+      "high": "high confidence",
+      "medium": "medium confidence",
+      "low": "low confidence"
+    },
+    "kinds": {
+      "pattern": "Pattern",
+      "gotcha": "Gotcha",
+      "decision": "Decision",
+      "rule": "Rule"
+    },
+    "states": {
+      "loading": "Loading patterns…",
+      "retry": "Retry",
+      "empty": "No patterns learned yet."
+    },
+    "meta": {
+      "title": "Library",
+      "total": "Patterns",
+      "specs": "From specs"
+    }
   }
 }

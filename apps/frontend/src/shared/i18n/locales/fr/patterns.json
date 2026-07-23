@@ -36,5 +36,31 @@
     "low": "Confiance faible (<70%) : Modèle utilisé rarement, vérifier avant d'approuver",
     "approved": "Les modèles approuvés sont marqués comme standards d'équipe (confiance : 100%)",
     "deprecated": "Les modèles obsolètes sont marqués à éviter (confiance : 0%)"
+  },
+  "patternsPilot": {
+    "error": "Échec du chargement des patterns.",
+    "searchPlaceholder": "Rechercher par nom, catégorie, description…",
+    "searchLabel": "Rechercher des patterns par nom, catégorie ou description",
+    "confidence": {
+      "high": "confiance élevée",
+      "medium": "confiance moyenne",
+      "low": "confiance faible"
+    },
+    "kinds": {
+      "pattern": "Pattern",
+      "gotcha": "Piège",
+      "decision": "Décision",
+      "rule": "Règle"
+    },
+    "states": {
+      "loading": "Chargement des patterns…",
+      "retry": "Réessayer",
+      "empty": "Aucun pattern appris pour le moment."
+    },
+    "meta": {
+      "title": "Bibliothèque",
+      "total": "Patterns",
+      "specs": "Depuis les spécs"
+    }
   }
 }

@@ -32,7 +32,8 @@
     "kanbanNext": "Kanban (nouvelle interface)",
     "changelogNext": "Journal des modifications (nouvelle interface)",
     "githubPRsNext": "PRs GitHub (nouvelle interface)",
-    "githubIssuesNext": "Issues GitHub (nouvelle interface)"
+    "githubIssuesNext": "Issues GitHub (nouvelle interface)",
+    "patternsNext": "Patterns (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",
