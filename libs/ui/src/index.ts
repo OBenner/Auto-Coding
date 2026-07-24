@@ -16,7 +16,9 @@ export type {
 } from './primitives/LineChart';
 export { StatTile } from './primitives/StatTile';
 export type { StatTileProps, StatTileTone } from './primitives/StatTile';
-export { seriesToPoints, pointsToArea, CHART_TONE_VARS } from './primitives/charts';
+export { BarList } from './primitives/BarList';
+export type { BarListProps, BarListItem } from './primitives/BarList';
+export { seriesToPoints, pointsToArea, barPercent, CHART_TONE_VARS } from './primitives/charts';
 export type { ChartTone } from './primitives/charts';
 export { ThemeProvider, useTheme } from './theme/ThemeProvider';
 export type { Theme, ResolvedTheme, ThemeProviderProps } from './theme/ThemeProvider';

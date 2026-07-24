@@ -50,3 +50,12 @@ export function pointsToArea(
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+/**
+ * A value's share of `scale` as a 0–100 percent, clamped. Used by BarList to
+ * size each row's bar; negative values and a non-positive scale yield 0.
+ */
+export function barPercent(value: number, scale: number): number {
+  if (!Number.isFinite(value) || value <= 0 || scale <= 0) return 0;
+  return Math.min(100, (value / scale) * 100);
+}

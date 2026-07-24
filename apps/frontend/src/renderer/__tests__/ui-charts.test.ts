@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { pointsToArea, seriesToPoints } from '@auto-code/ui';
+import { barPercent, pointsToArea, seriesToPoints } from '@auto-code/ui';
 
 describe('seriesToPoints', () => {
   it('spreads points evenly across the width and inverts Y', () => {
@@ -48,5 +48,21 @@ describe('pointsToArea', () => {
 
   it('returns an empty string when there are no points', () => {
     expect(pointsToArea('', 100, 40)).toBe('');
+  });
+});
+
+describe('barPercent', () => {
+  it('returns the value share of the scale, clamped to 0-100', () => {
+    expect(barPercent(26, 26)).toBe(100);
+    expect(barPercent(13, 26)).toBe(50);
+    expect(barPercent(1, 26)).toBeCloseTo(3.85, 2);
+    expect(barPercent(40, 26)).toBe(100);
+  });
+
+  it('yields 0 for non-positive value or scale', () => {
+    expect(barPercent(0, 26)).toBe(0);
+    expect(barPercent(-5, 26)).toBe(0);
+    expect(barPercent(5, 0)).toBe(0);
+    expect(barPercent(Number.NaN, 26)).toBe(0);
   });
 });
