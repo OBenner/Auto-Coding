@@ -34,7 +34,8 @@
     "githubPRsNext": "PRs GitHub (nouvelle interface)",
     "githubIssuesNext": "Issues GitHub (nouvelle interface)",
     "patternsNext": "Patterns (nouvelle interface)",
-    "analyticsNext": "Analytique (nouvelle interface)"
+    "analyticsNext": "Analytique (nouvelle interface)",
+    "productivityNext": "Productivité (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",

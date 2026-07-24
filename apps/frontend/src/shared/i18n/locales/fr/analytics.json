@@ -105,5 +105,40 @@
       "approved": "Approuvées",
       "rejectionRate": "Taux de rejet"
     }
+  },
+  "productivityPilot": {
+    "error": "Échec du chargement des données de productivité.",
+    "states": {
+      "loading": "Chargement de la productivité…",
+      "retry": "Réessayer",
+      "empty": "Aucune donnée de productivité pour le moment."
+    },
+    "kpis": {
+      "specs": "spécs terminées",
+      "specsSub": "cette période",
+      "timeSaved": "temps gagné",
+      "timeSavedSub": "estimé",
+      "successRate": "taux de réussite",
+      "buildTime": "temps de build",
+      "buildTimeSub": "total"
+    },
+    "charts": {
+      "velocityTitle": "Spécs terminées",
+      "velocityAria": "Spécs terminées par jour sur la période",
+      "velocitySeries": "Terminées",
+      "timeSavedTitle": "Temps gagné",
+      "timeSavedAria": "Heures gagnées par jour sur la période",
+      "timeSavedSeries": "Heures gagnées"
+    },
+    "sections": {
+      "outcomesTitle": "Résultats",
+      "completed": "Terminées",
+      "inProgress": "En cours",
+      "failed": "Échouées",
+      "effortTitle": "Effort",
+      "subtasksPerSpec": "Sous-tâches / spéc",
+      "qaIterations": "Itérations QA",
+      "firstAttempt": "Taux au 1er essai"
+    }
   }
 }

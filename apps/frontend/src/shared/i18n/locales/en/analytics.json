@@ -105,5 +105,40 @@
       "approved": "Approved",
       "rejectionRate": "Rejection rate"
     }
+  },
+  "productivityPilot": {
+    "error": "Failed to load productivity data.",
+    "states": {
+      "loading": "Loading productivity…",
+      "retry": "Retry",
+      "empty": "No productivity data yet."
+    },
+    "kpis": {
+      "specs": "specs completed",
+      "specsSub": "this period",
+      "timeSaved": "time saved",
+      "timeSavedSub": "estimated",
+      "successRate": "success rate",
+      "buildTime": "build time",
+      "buildTimeSub": "total"
+    },
+    "charts": {
+      "velocityTitle": "Completed specs",
+      "velocityAria": "Completed specs per day over the period",
+      "velocitySeries": "Completed",
+      "timeSavedTitle": "Time saved",
+      "timeSavedAria": "Hours saved per day over the period",
+      "timeSavedSeries": "Hours saved"
+    },
+    "sections": {
+      "outcomesTitle": "Outcomes",
+      "completed": "Completed",
+      "inProgress": "In progress",
+      "failed": "Failed",
+      "effortTitle": "Effort",
+      "subtasksPerSpec": "Subtasks / spec",
+      "qaIterations": "QA iterations",
+      "firstAttempt": "First-attempt rate"
+    }
   }
 }
