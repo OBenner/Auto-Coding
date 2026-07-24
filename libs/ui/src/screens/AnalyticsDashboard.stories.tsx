@@ -67,6 +67,24 @@ type Story = StoryObj<typeof meta>;
 
 export const Dashboard: Story = {};
 
+export const WithBarList: Story = {
+  args: {
+    charts: undefined,
+    barLists: [
+      {
+        title: 'Top conflict files',
+        ariaLabel: 'Files by conflict occurrence count',
+        items: [
+          { label: '…/renderer/App.tsx', value: 6, tone: 'bad' },
+          { label: '…/shell/Sidebar.tsx', value: 4, tone: 'warn' },
+          { label: '…/i18n/index.ts', value: 3, tone: 'info' },
+          { label: '…/lib/analytics-ui.ts', value: 1, tone: 'neutral' },
+        ],
+      },
+    ],
+  },
+};
+
 export const NoRail: Story = {
   args: { sections: undefined },
 };

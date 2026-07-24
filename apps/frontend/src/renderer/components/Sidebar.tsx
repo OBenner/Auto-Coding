@@ -71,7 +71,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'github-issues-next' | 'gitlab-issues' | 'github-prs' | 'github-prs-next' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'analytics-next' | 'productivity' | 'productivity-next' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'patterns-next' | 'model-usage' | 'agent-inspector';
+export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'github-issues-next' | 'gitlab-issues' | 'github-prs' | 'github-prs-next' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'analytics-next' | 'productivity' | 'productivity-next' | 'merge-analytics' | 'merge-analytics-next' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'patterns-next' | 'model-usage' | 'agent-inspector';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -110,6 +110,7 @@ const baseNavItems: NavItem[] = [
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
   { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: Activity, shortcut: 'T' },
+  { id: 'merge-analytics-next', labelKey: 'navigation:items.mergeAnalyticsNext', icon: GitMerge },
   { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
   { id: 'agent-inspector', labelKey: 'navigation:items.agentInspector', icon: Brain },
   { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' },

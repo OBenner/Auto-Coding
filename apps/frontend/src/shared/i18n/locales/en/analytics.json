@@ -140,5 +140,35 @@
       "qaIterations": "QA iterations",
       "firstAttempt": "First-attempt rate"
     }
+  },
+  "mergePilot": {
+    "error": "Failed to load merge analytics.",
+    "states": {
+      "loading": "Loading merge analytics…",
+      "retry": "Retry",
+      "empty": "No merge analytics yet."
+    },
+    "kpis": {
+      "operations": "merge operations",
+      "operationsSub": "all time",
+      "successRate": "success rate",
+      "autoMerge": "auto-merged",
+      "conflicts": "conflicts",
+      "conflictsSub": "total resolved"
+    },
+    "conflicts": {
+      "title": "Top conflict files",
+      "aria": "Files by conflict occurrence count"
+    },
+    "sections": {
+      "outcomesTitle": "Outcomes",
+      "successful": "Successful",
+      "failed": "Failed",
+      "filesMerged": "Files merged",
+      "efficiencyTitle": "Efficiency",
+      "avgDuration": "Avg duration",
+      "aiCalls": "AI calls",
+      "tokens": "Tokens used"
+    }
   }
 }
