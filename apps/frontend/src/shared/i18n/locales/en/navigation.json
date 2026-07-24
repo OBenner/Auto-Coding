@@ -33,7 +33,8 @@
     "changelogNext": "Changelog (New UI)",
     "githubPRsNext": "GitHub PRs (New UI)",
     "githubIssuesNext": "GitHub Issues (New UI)",
-    "patternsNext": "Patterns (New UI)"
+    "patternsNext": "Patterns (New UI)",
+    "analyticsNext": "Analytics (New UI)"
   },
   "actions": {
     "settings": "Settings",

@@ -3,20 +3,17 @@
   "subtitle": "Track agent performance and success metrics",
   "loading": "Loading analytics data...",
   "lastUpdated": "Last updated",
-
   "views": {
     "overview": "Overview",
     "agents": "Agents",
     "trends": "Trends",
     "qa": "QA"
   },
-
   "errors": {
     "title": "Unable to Load Analytics",
     "loadFailed": "Failed to load analytics data",
     "noData": "No analytics data available"
   },
-
   "overview": {
     "totalSpecs": "Total Specs",
     "successRate": "Success Rate",
@@ -31,7 +28,6 @@
     "avgTime": "avg",
     "avgCost": "avg"
   },
-
   "agents": {
     "totalAttempts": "total attempts",
     "successful": "Successful",
@@ -41,7 +37,6 @@
     "errorPatterns": "Common Error Patterns",
     "noData": "No agent data available"
   },
-
   "trends": {
     "title": "Trends Over Time",
     "description": "Historical performance data over time",
@@ -54,7 +49,6 @@
     "timeSaved": "Time Saved (hours)",
     "successRate": "Success Rate (%)"
   },
-
   "specSummary": {
     "title": "Spec Overview",
     "specCount": "{{count}} spec",
@@ -68,7 +62,6 @@
     "avgQAIterations": "Avg QA Iterations",
     "workflowBreakdown": "Workflow Type Breakdown"
   },
-
   "qa": {
     "totalReviews": "Total Reviews",
     "approved": "Approved",
@@ -78,5 +71,39 @@
     "commonIssues": "Common QA Issues",
     "issuesDescription": "Most frequently identified issues during QA review",
     "noIssues": "No QA issues recorded"
+  },
+  "analyticsPilot": {
+    "error": "Failed to load analytics.",
+    "states": {
+      "loading": "Loading analytics…",
+      "retry": "Retry",
+      "empty": "No analytics yet."
+    },
+    "kpis": {
+      "specs": "specs shipped",
+      "successRate": "success rate",
+      "cost": "total cost",
+      "tokens": "tokens used",
+      "specsSub": "all time",
+      "tokensSub": "input + output"
+    },
+    "charts": {
+      "velocityTitle": "Spec velocity",
+      "velocityAria": "Tasks per day over the trend window",
+      "tasksSeries": "Tasks",
+      "rateTitle": "Success rate trend",
+      "rateAria": "Success rate over the trend window",
+      "rateSeries": "Success rate"
+    },
+    "sections": {
+      "outcomesTitle": "Outcomes",
+      "completed": "Completed",
+      "failed": "Failed",
+      "inProgress": "In progress",
+      "qaTitle": "QA",
+      "reviews": "Reviews",
+      "approved": "Approved",
+      "rejectionRate": "Rejection rate"
+    }
   }
 }
