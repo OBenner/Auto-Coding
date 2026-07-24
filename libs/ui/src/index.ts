@@ -7,6 +7,17 @@ export { Input } from './primitives/Input';
 export type { InputProps } from './primitives/Input';
 export { Kbd } from './primitives/Kbd';
 export type { KbdProps } from './primitives/Kbd';
+export { Sparkline } from './primitives/Sparkline';
+export type { SparklineProps } from './primitives/Sparkline';
+export { LineChart } from './primitives/LineChart';
+export type {
+  LineChartProps,
+  LineChartSeries,
+} from './primitives/LineChart';
+export { StatTile } from './primitives/StatTile';
+export type { StatTileProps, StatTileTone } from './primitives/StatTile';
+export { seriesToPoints, pointsToArea, CHART_TONE_VARS } from './primitives/charts';
+export type { ChartTone } from './primitives/charts';
 export { ThemeProvider, useTheme } from './theme/ThemeProvider';
 export type { Theme, ResolvedTheme, ThemeProviderProps } from './theme/ThemeProvider';
 export { AppShell } from './shell/AppShell';

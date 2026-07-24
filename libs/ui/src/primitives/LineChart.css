@@ -1,0 +1,28 @@
+.ac-linechart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.ac-linechart__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ac-linechart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ac-linechart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ac-linechart__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
