@@ -108,5 +108,39 @@
     "emptyTitle": "No data available",
     "emptySubtitle": "Run more tasks to see trends over time",
     "rangeLatest": "Range"
+  },
+  "modelUsagePilot": {
+    "error": "Failed to load model usage.",
+    "states": {
+      "loading": "Loading model usage…",
+      "retry": "Retry",
+      "empty": "No model usage yet."
+    },
+    "kpis": {
+      "calls": "AI calls",
+      "callsSub": "all time",
+      "tokens": "tokens",
+      "cost": "total cost",
+      "models": "models used",
+      "modelsSub": "distinct"
+    },
+    "charts": {
+      "tokensTitle": "Tokens over time",
+      "tokensAria": "Total tokens per day over the period",
+      "tokensSeries": "Tokens",
+      "costTitle": "Cost over time",
+      "costAria": "Total cost per day over the period",
+      "costSeries": "Cost"
+    },
+    "models": {
+      "title": "Tokens by model",
+      "aria": "Models ranked by total token usage"
+    },
+    "sections": {
+      "splitTitle": "Token split",
+      "inputTokens": "Input",
+      "outputTokens": "Output",
+      "providers": "Providers"
+    }
   }
 }
