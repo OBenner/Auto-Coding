@@ -96,8 +96,8 @@ export function LineChart({
           opacity="0.7"
         >
           {Array.from({ length: gridLines }, (_, i) => {
-            const y = PLOT_PADDING + (plotHeight * (i + 1)) / (gridLines + 1);
-            return <line key={i} x1="0" y1={round(y)} x2={width} y2={round(y)} />;
+            const y = round(PLOT_PADDING + (plotHeight * (i + 1)) / (gridLines + 1));
+            return <line key={y} x1="0" y1={y} x2={width} y2={y} />;
           })}
         </g>
 
