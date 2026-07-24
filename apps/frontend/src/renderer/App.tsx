@@ -77,6 +77,7 @@ import { PatternsPilotView } from './components/PatternsPilotView';
 import { AnalyticsPilotView } from './components/AnalyticsPilotView';
 import { ProductivityPilotView } from './components/ProductivityPilotView';
 import { MergeAnalyticsPilotView } from './components/MergeAnalyticsPilotView';
+import { ModelUsagePilotView } from './components/ModelUsagePilotView';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
@@ -1150,6 +1151,9 @@ export function App() {
                 )}
                 {activeView === 'model-usage' && (activeProjectId || selectedProjectId) && (
                   <ModelUsageDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'model-usage-next' && (activeProjectId || selectedProjectId) && (
+                  <ModelUsagePilotView projectId={(activeProjectId || selectedProjectId)!} />
                 )}
                 {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (
                   <MergeAnalyticsDashboard projectId={activeProjectId || selectedProjectId!} />

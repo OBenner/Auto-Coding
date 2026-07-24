@@ -108,5 +108,39 @@
     "emptyTitle": "Aucune donnée disponible",
     "emptySubtitle": "Exécutez plus de tâches pour voir les tendances",
     "rangeLatest": "Plage"
+  },
+  "modelUsagePilot": {
+    "error": "Échec du chargement de l'utilisation des modèles.",
+    "states": {
+      "loading": "Chargement de l'utilisation des modèles…",
+      "retry": "Réessayer",
+      "empty": "Aucune utilisation de modèle pour le moment."
+    },
+    "kpis": {
+      "calls": "appels IA",
+      "callsSub": "depuis le début",
+      "tokens": "tokens",
+      "cost": "coût total",
+      "models": "modèles utilisés",
+      "modelsSub": "distincts"
+    },
+    "charts": {
+      "tokensTitle": "Tokens au fil du temps",
+      "tokensAria": "Total de tokens par jour sur la période",
+      "tokensSeries": "Tokens",
+      "costTitle": "Coût au fil du temps",
+      "costAria": "Coût total par jour sur la période",
+      "costSeries": "Coût"
+    },
+    "models": {
+      "title": "Tokens par modèle",
+      "aria": "Modèles classés par utilisation totale de tokens"
+    },
+    "sections": {
+      "splitTitle": "Répartition des tokens",
+      "inputTokens": "Entrée",
+      "outputTokens": "Sortie",
+      "providers": "Fournisseurs"
+    }
   }
 }

@@ -36,7 +36,8 @@
     "patternsNext": "Patterns (nouvelle interface)",
     "analyticsNext": "Analytique (nouvelle interface)",
     "productivityNext": "Productivité (nouvelle interface)",
-    "mergeAnalyticsNext": "Analytique de fusion (nouvelle interface)"
+    "mergeAnalyticsNext": "Analytique de fusion (nouvelle interface)",
+    "modelUsageNext": "Utilisation des modèles (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",

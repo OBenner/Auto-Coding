@@ -36,7 +36,8 @@
     "patternsNext": "Patterns (New UI)",
     "analyticsNext": "Analytics (New UI)",
     "productivityNext": "Productivity (New UI)",
-    "mergeAnalyticsNext": "Merge Analytics (New UI)"
+    "mergeAnalyticsNext": "Merge Analytics (New UI)",
+    "modelUsageNext": "Model Usage (New UI)"
   },
   "actions": {
     "settings": "Settings",
