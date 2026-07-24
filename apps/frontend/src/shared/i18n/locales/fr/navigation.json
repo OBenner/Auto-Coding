@@ -33,7 +33,8 @@
     "changelogNext": "Journal des modifications (nouvelle interface)",
     "githubPRsNext": "PRs GitHub (nouvelle interface)",
     "githubIssuesNext": "Issues GitHub (nouvelle interface)",
-    "patternsNext": "Patterns (nouvelle interface)"
+    "patternsNext": "Patterns (nouvelle interface)",
+    "analyticsNext": "Analytique (nouvelle interface)"
   },
   "actions": {
     "settings": "Paramètres",

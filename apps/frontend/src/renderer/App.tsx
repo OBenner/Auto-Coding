@@ -74,6 +74,7 @@ import { ChangelogPilotView } from './components/ChangelogPilotView';
 import { GitHubPRsPilotView } from './components/GitHubPRsPilotView';
 import { GitHubIssuesPilotView } from './components/GitHubIssuesPilotView';
 import { PatternsPilotView } from './components/PatternsPilotView';
+import { AnalyticsPilotView } from './components/AnalyticsPilotView';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
@@ -1062,6 +1063,9 @@ export function App() {
                 )}
                 {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
                   <Analytics projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'analytics-next' && (activeProjectId || selectedProjectId) && (
+                  <AnalyticsPilotView projectId={(activeProjectId || selectedProjectId)!} />
                 )}
                 {activeView === 'github-issues' && (activeProjectId || selectedProjectId) && (
                   <GitHubIssues

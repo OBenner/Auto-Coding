@@ -68,6 +68,8 @@ export type {
   UiPrCheckStatus,
   UiPrReviewer,
   UiPrStat,
+  UiKpi,
+  UiChartCard,
   CreateTaskInput,
   TaskStatus,
   BadgeTone,
@@ -121,3 +123,9 @@ export type {
   PatternLibraryFilter,
   PatternLibraryStateLabels,
 } from './screens/PatternLibrary';
+// Analytics dashboard (U5 B2)
+export { AnalyticsDashboard } from './screens/AnalyticsDashboard';
+export type {
+  AnalyticsDashboardProps,
+  AnalyticsDashboardStateLabels,
+} from './screens/AnalyticsDashboard';

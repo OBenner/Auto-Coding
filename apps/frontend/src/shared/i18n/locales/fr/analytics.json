@@ -3,20 +3,17 @@
   "subtitle": "Suivre les performances de l'agent et les métriques de succès",
   "loading": "Chargement des données analytiques...",
   "lastUpdated": "Dernière mise à jour",
-
   "views": {
     "overview": "Vue d'ensemble",
     "agents": "Agents",
     "trends": "Tendances",
     "qa": "QA"
   },
-
   "errors": {
     "title": "Impossible de charger les analytiques",
     "loadFailed": "Échec du chargement des données analytiques",
     "noData": "Aucune donnée analytique disponible"
   },
-
   "overview": {
     "totalSpecs": "Spécifications totales",
     "successRate": "Taux de réussite",
@@ -31,7 +28,6 @@
     "avgTime": "moy",
     "avgCost": "moy"
   },
-
   "agents": {
     "totalAttempts": "tentatives totales",
     "successful": "Réussi",
@@ -41,7 +37,6 @@
     "errorPatterns": "Modèles d'erreur courants",
     "noData": "Aucune donnée d'agent disponible"
   },
-
   "trends": {
     "title": "Tendances au fil du temps",
     "description": "Données de performance historiques au fil du temps",
@@ -54,7 +49,6 @@
     "timeSaved": "Temps économisé (heures)",
     "successRate": "Taux de réussite (%)"
   },
-
   "specSummary": {
     "title": "Apercu des spécifications",
     "specCount": "{{count}} spécification",
@@ -68,7 +62,6 @@
     "avgQAIterations": "Itérations QA moyennes",
     "workflowBreakdown": "Répartition par type de workflow"
   },
-
   "qa": {
     "totalReviews": "Revues totales",
     "approved": "Approuvé",
@@ -78,5 +71,39 @@
     "commonIssues": "Problèmes QA courants",
     "issuesDescription": "Problèmes les plus fréquemment identifiés lors de la revue QA",
     "noIssues": "Aucun problème QA enregistré"
+  },
+  "analyticsPilot": {
+    "error": "Échec du chargement de l'analytique.",
+    "states": {
+      "loading": "Chargement de l'analytique…",
+      "retry": "Réessayer",
+      "empty": "Aucune analytique pour le moment."
+    },
+    "kpis": {
+      "specs": "spécs livrées",
+      "successRate": "taux de réussite",
+      "cost": "coût total",
+      "tokens": "tokens utilisés",
+      "specsSub": "depuis le début",
+      "tokensSub": "entrée + sortie"
+    },
+    "charts": {
+      "velocityTitle": "Vélocité des spécs",
+      "velocityAria": "Tâches par jour sur la période de tendance",
+      "tasksSeries": "Tâches",
+      "rateTitle": "Tendance du taux de réussite",
+      "rateAria": "Taux de réussite sur la période de tendance",
+      "rateSeries": "Taux de réussite"
+    },
+    "sections": {
+      "outcomesTitle": "Résultats",
+      "completed": "Terminées",
+      "failed": "Échouées",
+      "inProgress": "En cours",
+      "qaTitle": "QA",
+      "reviews": "Revues",
+      "approved": "Approuvées",
+      "rejectionRate": "Taux de rejet"
+    }
   }
 }

@@ -1,0 +1,117 @@
+/* Generic analytics dashboard ported from .lazyweb/mockups/desktop-analytics.html:
+   KPI stat-tile row | chart-card column beside an optional summary rail. */
+
+.ac-analytics {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.ac-analytics__state {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 20px 28px;
+}
+.ac-analytics__state--error {
+  color: var(--red);
+}
+.ac-analytics__retry {
+  font-family: inherit;
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--blue);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+/* --- KPI row --- */
+
+.ac-analytics__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 18px 28px;
+}
+
+/* --- Two-column body --- */
+
+.ac-analytics__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  padding: 0 28px 24px;
+}
+.ac-analytics__body--no-rail {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ac-analytics__charts {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.ac-analytics__chart-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.ac-analytics__chart-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+/* --- Right rail summary cards (shared kv family) --- */
+
+.ac-analytics__rail {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.ac-analytics__card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.ac-analytics__card h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 760;
+}
+.ac-analytics__kv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+.ac-analytics__kv span {
+  color: var(--quiet);
+  font-weight: 720;
+}
+.ac-analytics__kv strong {
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .ac-analytics__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .ac-analytics__kpis,
+  .ac-analytics__body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

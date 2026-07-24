@@ -251,3 +251,31 @@ export interface UiPattern {
   /** Dot-separated footer facts (confidence, reuse count, provenance, …). */
   footer?: UiPatternFooterStat[];
 }
+
+/** One KPI tile in an analytics dashboard header row. */
+export interface UiKpi {
+  /** Pre-formatted figure (e.g. "112", "87%", "$4.20"). */
+  value: string;
+  label: string;
+  sub?: string;
+  /** Colors the value; default is neutral ink. */
+  tone?: 'good' | 'warn' | 'bad';
+  /** Optional trend series rendered as a sparkline under the value. */
+  trend?: readonly number[];
+  /** Sparkline tone; defaults to info. */
+  trendTone?: 'info' | 'good' | 'warn' | 'bad' | 'neutral';
+}
+
+/** One titled chart card in an analytics dashboard. */
+export interface UiChartCard {
+  title: string;
+  series: readonly {
+    label: string;
+    values: readonly number[];
+    tone?: 'info' | 'good' | 'warn' | 'bad' | 'neutral';
+  }[];
+  xLabels?: readonly string[];
+  showLegend?: boolean;
+  /** Accessible description of the chart. */
+  ariaLabel: string;
+}
