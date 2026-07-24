@@ -140,5 +140,35 @@
       "qaIterations": "Itérations QA",
       "firstAttempt": "Taux au 1er essai"
     }
+  },
+  "mergePilot": {
+    "error": "Échec du chargement de l'analytique de fusion.",
+    "states": {
+      "loading": "Chargement de l'analytique de fusion…",
+      "retry": "Réessayer",
+      "empty": "Aucune analytique de fusion pour le moment."
+    },
+    "kpis": {
+      "operations": "fusions",
+      "operationsSub": "depuis le début",
+      "successRate": "taux de réussite",
+      "autoMerge": "fusion auto",
+      "conflicts": "conflits",
+      "conflictsSub": "total résolus"
+    },
+    "conflicts": {
+      "title": "Fichiers les plus conflictuels",
+      "aria": "Fichiers par nombre d'occurrences de conflit"
+    },
+    "sections": {
+      "outcomesTitle": "Résultats",
+      "successful": "Réussies",
+      "failed": "Échouées",
+      "filesMerged": "Fichiers fusionnés",
+      "efficiencyTitle": "Efficacité",
+      "avgDuration": "Durée moyenne",
+      "aiCalls": "Appels IA",
+      "tokens": "Tokens utilisés"
+    }
   }
 }

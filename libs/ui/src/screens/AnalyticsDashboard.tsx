@@ -1,7 +1,9 @@
+import { BarList } from '../primitives/BarList';
 import { LineChart } from '../primitives/LineChart';
 import { Sparkline } from '../primitives/Sparkline';
 import { StatTile } from '../primitives/StatTile';
 import type {
+  UiBarListCard,
   UiChartCard,
   UiKpi,
   UiMetaSection,
@@ -19,6 +21,8 @@ export interface AnalyticsDashboardProps {
   kpis: UiKpi[] | null;
   /** Titled chart cards (line charts) in the main column. */
   charts?: UiChartCard[];
+  /** Titled bar-list cards (distributions) in the main column. */
+  barLists?: UiBarListCard[];
   /** Summary meta cards (outcomes, QA, agents …) in the right rail. */
   sections?: UiMetaSection[];
   loading?: boolean;
@@ -38,6 +42,7 @@ export interface AnalyticsDashboardProps {
 export function AnalyticsDashboard({
   kpis,
   charts,
+  barLists,
   sections,
   loading = false,
   error = null,
@@ -84,6 +89,7 @@ export function AnalyticsDashboard({
   }
 
   const chartCards = charts ?? [];
+  const barListCards = barLists ?? [];
   const metaCards = sections ?? [];
 
   return (
@@ -124,6 +130,12 @@ export function AnalyticsDashboard({
                 showLegend={chart.showLegend}
                 ariaLabel={chart.ariaLabel}
               />
+            </div>
+          ))}
+          {barListCards.map((barList) => (
+            <div key={barList.title} className="ac-analytics__chart-card">
+              <h3 className="ac-analytics__chart-title">{barList.title}</h3>
+              <BarList items={barList.items} ariaLabel={barList.ariaLabel} />
             </div>
           ))}
         </div>

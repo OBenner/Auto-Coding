@@ -72,6 +72,7 @@ export type {
   UiPrStat,
   UiKpi,
   UiChartCard,
+  UiBarListCard,
   CreateTaskInput,
   TaskStatus,
   BadgeTone,

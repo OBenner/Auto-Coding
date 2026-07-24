@@ -35,7 +35,8 @@
     "githubIssuesNext": "GitHub Issues (New UI)",
     "patternsNext": "Patterns (New UI)",
     "analyticsNext": "Analytics (New UI)",
-    "productivityNext": "Productivity (New UI)"
+    "productivityNext": "Productivity (New UI)",
+    "mergeAnalyticsNext": "Merge Analytics (New UI)"
   },
   "actions": {
     "settings": "Settings",

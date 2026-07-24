@@ -279,3 +279,16 @@ export interface UiChartCard {
   /** Accessible description of the chart. */
   ariaLabel: string;
 }
+
+/** One titled bar-list card (a labeled distribution) in a dashboard. */
+export interface UiBarListCard {
+  title: string;
+  items: readonly {
+    label: string;
+    value: number;
+    valueLabel?: string;
+    tone?: 'info' | 'good' | 'warn' | 'bad' | 'neutral';
+  }[];
+  /** Accessible description of the distribution. */
+  ariaLabel: string;
+}
