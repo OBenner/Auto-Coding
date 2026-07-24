@@ -71,7 +71,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'github-issues-next' | 'gitlab-issues' | 'github-prs' | 'github-prs-next' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'analytics-next' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'patterns-next' | 'model-usage' | 'agent-inspector';
+export type SidebarView = 'kanban' | 'kanban-next' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'github-issues-next' | 'gitlab-issues' | 'github-prs' | 'github-prs-next' | 'gitlab-merge-requests' | 'changelog' | 'changelog-next' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'analytics-next' | 'productivity' | 'productivity-next' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'patterns-next' | 'model-usage' | 'agent-inspector';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -103,6 +103,7 @@ const baseNavItems: NavItem[] = [
   { id: 'analytics', labelKey: 'navigation:items.analytics', icon: BarChart3, shortcut: 'Y' },
   { id: 'analytics-next', labelKey: 'navigation:items.analyticsNext', icon: BarChart3 },
   { id: 'productivity', labelKey: 'navigation:items.productivity', icon: TrendingUp, shortcut: 'P' },
+  { id: 'productivity-next', labelKey: 'navigation:items.productivityNext', icon: Activity },
   { id: 'patterns', labelKey: 'navigation:items.patterns', icon: Code, shortcut: 'Z' },
   { id: 'patterns-next', labelKey: 'navigation:items.patternsNext', icon: Code },
   { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
