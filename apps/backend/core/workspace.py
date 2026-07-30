@@ -139,7 +139,6 @@ MODULE = "workspace"
 # - _async_ai_call
 # - _merge_file_with_ai_async
 # - _run_parallel_merges
-# - _record_merge_completion
 # - _get_task_intent
 # - _get_recent_merges_context
 # - _merge_file_with_ai
@@ -1634,10 +1633,9 @@ def _resolve_git_conflicts_with_ai(
         except Exception as e:
             print(muted(f"    Warning: Could not process {file_path}: {e}"))
 
-    # V2: Record merge completion in Evolution Tracker for future context
-    # TODO: _record_merge_completion not yet implemented - see line 141
-    # if resolved_files:
-    #     _record_merge_completion(project_dir, spec_name, resolved_files)
+    # Record merge completion in Evolution Tracker for future context
+    if resolved_files:
+        _record_merge_completion(project_dir, spec_name, resolved_files)
 
     # Build result - partial success if some files failed but we got others
     result = {
@@ -2154,6 +2152,53 @@ async def _run_parallel_merges(
     )
 
     return final_results
+
+
+def _record_merge_completion(
+    project_dir: Path,
+    spec_name: str,
+    resolved_files: list[str],
+) -> None:
+    """
+    Record merge completion in the Evolution Tracker for future context.
+
+    This function records the outcome of a merge operation to provide
+    historical context for future merges. It tracks which tasks were merged,
+    which files were resolved, and whether the merge was successful.
+
+    The recording is non-blocking - failures are logged but don't affect
+    the merge operation itself.
+
+    Args:
+        project_dir: The project directory
+        spec_name: Name of the spec that was merged
+        resolved_files: List of file paths that were successfully merged
+    """
+    try:
+        from merge.file_evolution.tracker import FileEvolutionTracker
+
+        # Create evolution tracker instance
+        tracker = FileEvolutionTracker(project_dir)
+
+        # Record the merge completion
+        tracker.record_merge_completion(
+            task_ids=[spec_name],
+            resolved_files=resolved_files,
+            success=True,
+        )
+
+        debug_success(
+            MODULE,
+            f"Recorded merge completion for spec '{spec_name}'",
+            files_resolved=len(resolved_files),
+        )
+
+    except Exception as e:
+        # Non-blocking - logging failure shouldn't affect the merge result
+        debug_warning(
+            MODULE,
+            f"Could not record merge completion for spec '{spec_name}': {e}",
+        )
 
 
 # ============================================================================

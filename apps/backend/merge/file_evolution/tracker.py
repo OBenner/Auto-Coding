@@ -11,8 +11,12 @@ Main entry point that orchestrates the modular components:
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from ..semantic_analyzer import SemanticAnalyzer
 from ..types import FileEvolution, TaskSnapshot
@@ -35,6 +39,63 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 MODULE = "merge.file_evolution"
+
+
+@dataclass
+class MergeCompletionRecord:
+    """
+    Record of a completed merge operation.
+
+    Captures the outcome of a merge operation for historical tracking
+    and learning from past merges.
+    """
+
+    # Unique identification
+    merge_id: str  # Format: "merge_{timestamp}_{task_ids_hash}"
+    timestamp: datetime
+
+    # Tasks involved
+    task_ids: list[str] = field(default_factory=list)
+
+    # Files resolved
+    resolved_files: list[str] = field(default_factory=list)
+
+    # Merge outcome
+    success: bool = True
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "merge_id": self.merge_id,
+            "timestamp": self.timestamp.isoformat(),
+            "task_ids": self.task_ids,
+            "resolved_files": self.resolved_files,
+            "success": self.success,
+            "error": self.error,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MergeCompletionRecord:
+        """Create record from dictionary."""
+        return cls(
+            merge_id=data["merge_id"],
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            task_ids=data.get("task_ids", []),
+            resolved_files=data.get("resolved_files", []),
+            success=data.get("success", True),
+            error=data.get("error"),
+        )
+
+    @property
+    def files_resolved_count(self) -> int:
+        """Get number of files resolved in this merge."""
+        return len(self.resolved_files)
+
+    @property
+    def tasks_merged_count(self) -> int:
+        """Get number of tasks merged."""
+        return len(self.task_ids)
 
 
 class FileEvolutionTracker:
@@ -352,3 +413,101 @@ class FileEvolutionTracker:
             analyze_only_files=analyze_only_files,
         )
         self._save_evolutions()
+
+    def record_merge_completion(
+        self,
+        task_ids: list[str],
+        resolved_files: list[str],
+        success: bool = True,
+        error: str | None = None,
+    ) -> MergeCompletionRecord:
+        """
+        Record the completion of a merge operation.
+
+        This method captures the outcome of a merge for historical tracking
+        and learning from past merges.
+
+        Args:
+            task_ids: List of task IDs that were merged
+            resolved_files: List of file paths that were resolved
+            success: Whether the merge completed successfully
+            error: Optional error message if merge failed
+
+        Returns:
+            The created MergeCompletionRecord
+        """
+        # Generate unique merge ID
+        timestamp = datetime.now()
+        task_ids_hash = hashlib.md5(
+            ",".join(sorted(task_ids)).encode("utf-8")
+        ).hexdigest()[:8]
+        merge_id = f"merge_{int(timestamp.timestamp())}_{task_ids_hash}"
+
+        # Create merge completion record
+        record = MergeCompletionRecord(
+            merge_id=merge_id,
+            timestamp=timestamp,
+            task_ids=task_ids,
+            resolved_files=resolved_files,
+            success=success,
+            error=error,
+        )
+
+        # Load existing merge history
+        merge_history = self.storage.load_merge_history()
+
+        # Append new record
+        merge_history.append(record.to_dict())
+
+        # Save updated history
+        self.storage.save_merge_history(merge_history)
+
+        # Log the operation
+        if success:
+            debug_success(
+                MODULE,
+                f"Recorded successful merge {merge_id}",
+                tasks_merged=len(task_ids),
+                files_resolved=len(resolved_files),
+            )
+            logger.info(
+                f"Recorded successful merge {merge_id}: "
+                f"{len(task_ids)} tasks, {len(resolved_files)} files"
+            )
+        else:
+            logger.warning(
+                f"Recorded failed merge {merge_id}: {error}"
+            )
+
+        return record
+
+    def get_merge_completion_history(
+        self,
+        limit: int = 100,
+        task_id: str | None = None,
+    ) -> list[MergeCompletionRecord]:
+        """
+        Get merge completion history.
+
+        Args:
+            limit: Maximum number of records to return (default: 100)
+            task_id: Optional filter to only include merges involving this task
+
+        Returns:
+            List of merge completion records (most recent first)
+        """
+        # Load merge history from storage (returns list of dicts)
+        merge_history_dicts = self.storage.load_merge_history()
+
+        # Convert dicts to MergeCompletionRecord objects
+        records = [
+            MergeCompletionRecord.from_dict(record_dict)
+            for record_dict in merge_history_dicts
+        ]
+
+        # Filter by task if specified
+        if task_id:
+            records = [record for record in records if task_id in record.task_ids]
+
+        # Return limited results (already sorted by timestamp - most recent first)
+        return records[:limit]
