@@ -18,6 +18,7 @@ class Template(ABC):
         description: str,
         category: str,
         parameters: dict[str, Any],
+        placeholders: Optional[list[str]] = None,
     ):
         """
         Initialize a template.
@@ -27,11 +28,13 @@ class Template(ABC):
             description: Human-readable description
             category: Template category (e.g., 'api', 'ui', 'database')
             parameters: Parameter definitions with types and defaults
+            placeholders: Optional list of placeholder names used in this template
         """
         self.name = name
         self.description = description
         self.category = category
         self.parameters = parameters
+        self.placeholders = placeholders or []
 
     @abstractmethod
     def generate(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -68,6 +71,85 @@ class Template(ABC):
                         f"Invalid type for {param_name}: expected {param_type.__name__}"
                     )
         return errors
+
+    def get_placeholders(self) -> list[str]:
+        """
+        Get all placeholders used in this template.
+
+        Returns:
+            List of unique placeholder names (without braces)
+
+        Note:
+            If placeholders were explicitly defined during initialization,
+            those are returned. Otherwise, attempts to extract placeholders
+            from a sample template generation.
+        """
+        # If placeholders were explicitly defined, use those
+        if self.placeholders:
+            return self.placeholders
+
+        # Otherwise, try to extract from a sample generation
+        try:
+            # Import here to avoid circular dependency
+            from .placeholders import PlaceholderParser
+
+            parser = PlaceholderParser()
+
+            # Build default params for sample generation
+            sample_params = {}
+            for param_name, param_def in self.parameters.items():
+                if "default" in param_def:
+                    sample_params[param_name] = param_def["default"]
+                else:
+                    # Provide a sample value based on type
+                    param_type = param_def.get("type", str)
+                    if param_type == str:
+                        sample_params[param_name] = "sample"
+                    elif param_type == bool:
+                        sample_params[param_name] = False
+                    elif param_type == list:
+                        sample_params[param_name] = ["sample"]
+                    elif param_type == dict:
+                        sample_params[param_name] = {}
+                    else:
+                        sample_params[param_name] = None
+
+            # Generate sample content
+            content = self.generate(sample_params)
+
+            # Extract placeholders from all string values in content
+            placeholders = set()
+            self._extract_placeholders_recursive(content, parser, placeholders)
+
+            return sorted(placeholders)
+
+        except Exception:
+            # If extraction fails, return empty list
+            return []
+
+    def _extract_placeholders_recursive(
+        self, obj: Any, parser: Any, placeholders: set[str]
+    ) -> None:
+        """
+        Recursively extract placeholders from an object.
+
+        Args:
+            obj: Object to extract from (dict, list, str, etc.)
+            parser: PlaceholderParser instance
+            placeholders: Set to accumulate unique placeholder names
+        """
+        if isinstance(obj, str):
+            # Extract from string
+            found = parser.extract_placeholders(obj)
+            placeholders.update(found)
+        elif isinstance(obj, dict):
+            # Recursively process dictionary values
+            for value in obj.values():
+                self._extract_placeholders_recursive(value, parser, placeholders)
+        elif isinstance(obj, list):
+            # Recursively process list items
+            for item in obj:
+                self._extract_placeholders_recursive(item, parser, placeholders)
 
 
 class TemplateRegistry:

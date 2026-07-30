@@ -6,11 +6,21 @@ Template library manager for browsing, searching, and managing templates.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from .generator import SpecGenerator
+from .io import (
+    export_template as io_export_template,
+    export_template_to_file,
+    import_template as io_import_template,
+    import_template_from_file,
+)
 from .registry import Template, TemplateRegistry
+from .validator import validate_template
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateLibrary:
@@ -126,6 +136,8 @@ class TemplateLibrary:
         """
         Create a spec from a template.
 
+        Validates the template before generation to ensure security and correctness.
+
         Args:
             template_name: Name of the template to use
             params: Template parameters
@@ -135,11 +147,20 @@ class TemplateLibrary:
             Generated spec content
 
         Raises:
-            ValueError: If template not found or parameters invalid
+            ValueError: If template not found, validation fails, or parameters invalid
         """
         template = self.get_template(template_name)
         if not template:
             raise ValueError(f"Template not found: {template_name}")
+
+        # Validate template before using it to generate specs
+        is_valid, errors = self.validate(template, strict=True)
+        if not is_valid:
+            error_msg = f"Template '{template_name}' validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            logger.error("Failed to create spec from template '%s': %s", template_name, error_msg)
+            raise ValueError(error_msg)
 
         generator = SpecGenerator(template)
         return generator.generate_spec(params, spec_dir)
@@ -164,28 +185,193 @@ class TemplateLibrary:
         generator = SpecGenerator(template)
         return generator.preview_spec(params)
 
+    def export_template(self, template_name: str) -> dict[str, Any]:
+        """
+        Export a template to a JSON-compatible dictionary.
+
+        Args:
+            template_name: Name of the template to export
+
+        Returns:
+            Dictionary containing all template data
+
+        Raises:
+            ValueError: If template not found
+
+        Example:
+            >>> library = TemplateLibrary()
+            >>> data = library.export_template("crud_api")
+            >>> data["name"]
+            'crud_api'
+        """
+        template = self.get_template(template_name)
+        if not template:
+            raise ValueError(f"Template not found: {template_name}")
+
+        return io_export_template(template)
+
+    def import_template_data(self, data: dict[str, Any]) -> Template:
+        """
+        Import a template from a JSON dictionary.
+
+        Validates the template before adding it to the library.
+
+        Args:
+            data: Dictionary containing template data
+
+        Returns:
+            Imported Template instance
+
+        Raises:
+            ValueError: If template data is invalid or validation fails
+
+        Example:
+            >>> library = TemplateLibrary()
+            >>> data = {
+            ...     "name": "my-template",
+            ...     "description": "My custom template",
+            ...     "category": "api",
+            ...     "parameters": {},
+            ...     "placeholders": []
+            ... }
+            >>> template = library.import_template_data(data)
+            >>> template.name
+            'my-template'
+        """
+        # Import template using io module
+        template = io_import_template(data)
+
+        # Validate before adding to library
+        is_valid, errors = self.validate(template, strict=True)
+        if not is_valid:
+            error_msg = f"Imported template '{template.name}' validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            logger.error("Failed to import template: %s", error_msg)
+            raise ValueError(error_msg)
+
+        # Add to registry
+        self.registry.register(template)
+        logger.info("Successfully imported template '%s'", template.name)
+
+        return template
+
+    def export_template_file(self, template_name: str, file_path: Path | str) -> None:
+        """
+        Export a template to a JSON file.
+
+        Args:
+            template_name: Name of the template to export
+            file_path: Path to write the JSON file to
+
+        Raises:
+            ValueError: If template not found
+
+        Example:
+            >>> library = TemplateLibrary()
+            >>> library.export_template_file("crud_api", "my-template.json")
+        """
+        template = self.get_template(template_name)
+        if not template:
+            raise ValueError(f"Template not found: {template_name}")
+
+        export_template_to_file(template, str(file_path))
+        logger.info("Exported template '%s' to %s", template_name, file_path)
+
+    def import_template_file(self, file_path: Path | str) -> Template:
+        """
+        Import a template from a JSON file.
+
+        Validates the template before adding it to the library.
+
+        Args:
+            file_path: Path to the JSON file to import
+
+        Returns:
+            Imported Template instance
+
+        Raises:
+            ValueError: If file is invalid, template data is malformed, or validation fails
+            FileNotFoundError: If file doesn't exist
+
+        Example:
+            >>> library = TemplateLibrary()
+            >>> template = library.import_template_file("my-template.json")
+            >>> template.name
+            'my-template'
+        """
+        # Import template from file using io module
+        template = import_template_from_file(str(file_path))
+
+        # Validate before adding to library
+        is_valid, errors = self.validate(template, strict=True)
+        if not is_valid:
+            error_msg = f"Imported template '{template.name}' validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            logger.error("Failed to import template from %s: %s", file_path, error_msg)
+            raise ValueError(error_msg)
+
+        # Add to registry
+        self.registry.register(template)
+        logger.info("Successfully imported template '%s' from %s", template.name, file_path)
+
+        return template
+
+    def validate(self, template: Template, strict: bool = True) -> tuple[bool, list[str]]:
+        """
+        Validate a template for security and correctness.
+
+        Performs comprehensive validation including:
+        - Basic field validation (name, description, category)
+        - Parameter validation (types, required fields)
+        - Placeholder validation (proper format, no duplicates)
+        - Content safety (no injection attacks)
+        - Generated content validation
+
+        Args:
+            template: Template instance to validate
+            strict: If True, fail on warnings. If False, allow warnings.
+
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+            - is_valid: True if template passes all checks
+            - list_of_errors: List of error/warning messages (empty if valid)
+        """
+        return validate_template(template, strict=strict)
+
     def save_custom_template(self, template: Template) -> None:
         """
         Save a custom user-created template.
 
+        Validates the template before saving to ensure it meets security
+        and correctness requirements.
+
         Args:
             template: Template to save
+
+        Raises:
+            ValueError: If template validation fails
         """
+        # Validate template before saving
+        is_valid, errors = self.validate(template, strict=True)
+        if not is_valid:
+            error_msg = "Template validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            logger.error("Failed to save template '%s': %s", template.name, error_msg)
+            raise ValueError(error_msg)
+
         self.registry.register(template)
 
         if self.custom_templates_dir:
             self.custom_templates_dir.mkdir(parents=True, exist_ok=True)
             template_file = self.custom_templates_dir / f"{template.name}.json"
 
-            template_data = {
-                "name": template.name,
-                "description": template.description,
-                "category": template.category,
-                "parameters": template.parameters,
-            }
+            # Use io module for export
+            export_template_to_file(template, str(template_file))
 
-            with open(template_file, "w", encoding="utf-8") as f:
-                json.dump(template_data, f, indent=2)
+            logger.info("Successfully saved custom template '%s' to %s", template.name, template_file)
 
     def _load_custom_templates(self) -> None:
         """Load custom templates from disk."""
@@ -194,15 +380,13 @@ class TemplateLibrary:
 
         for template_file in self.custom_templates_dir.glob("*.json"):
             try:
-                with open(template_file, encoding="utf-8") as f:
-                    json.load(f)
-
-                # Note: We'd need to implement a way to reconstruct Template instances
-                # from JSON data. For now, we just skip custom templates.
-                # This would be implemented when we add custom template creation UI.
-            except Exception:
+                # Use io module to import template
+                template = import_template_from_file(str(template_file))
+                self.registry.register(template)
+                logger.info("Loaded custom template '%s' from %s", template.name, template_file)
+            except Exception as e:
                 # Skip invalid template files
-                pass
+                logger.warning("Failed to load template from %s: %s", template_file, e)
 
 
 def suggest_templates(

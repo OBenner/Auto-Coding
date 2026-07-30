@@ -50,6 +50,7 @@ class AuthenticationTemplate(Template):
                     "description": "Support multi-factor authentication",
                 },
             },
+            placeholders=["PROJECT_NAME", "ORGANIZATION"],
         )
 
     def generate(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -64,8 +65,8 @@ class AuthenticationTemplate(Template):
 
         return {
             "title": "User Authentication",
-            "description": f"Secure user authentication system using {auth_method.upper()} with support for {providers_str}.",
-            "rationale": "Provide secure, user-friendly authentication that protects user accounts while enabling easy access to the application.",
+            "description": f"Secure user authentication system for {{{{PROJECT_NAME}}}} using {auth_method.upper()} with support for {providers_str}.",
+            "rationale": "Provide secure, user-friendly authentication for {{{{ORGANIZATION}}}} that protects user accounts while enabling easy access to the application.",
             "user_stories": [
                 "As a user, I want to sign up for an account",
                 "As a user, I want to log in securely",

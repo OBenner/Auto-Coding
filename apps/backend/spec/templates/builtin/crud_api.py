@@ -48,6 +48,7 @@ class CrudApiTemplate(Template):
                     "description": "Whether list endpoint should support pagination",
                 },
             },
+            placeholders=["PROJECT_NAME"],
         )
 
     def generate(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -62,8 +63,8 @@ class CrudApiTemplate(Template):
 
         return {
             "title": f"{resource} CRUD API",
-            "description": f"RESTful API endpoints for managing {resource_plural} with full CRUD operations.",
-            "rationale": f"Provide a standard interface for creating, reading, updating, and deleting {resource_plural}. This enables frontend applications and third-party integrations to manage {resource_plural} programmatically.",
+            "description": f"RESTful API endpoints for {{{{PROJECT_NAME}}}} to manage {resource_plural} with full CRUD operations.",
+            "rationale": f"Provide a standard interface for creating, reading, updating, and deleting {resource_plural} in {{{{PROJECT_NAME}}}}. This enables frontend applications and third-party integrations to manage {resource_plural} programmatically.",
             "user_stories": [
                 f"As a developer, I want to create new {resource_plural} via API",
                 f"As a developer, I want to retrieve {resource_plural} with filtering and search",

@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .placeholders import PlaceholderParser
 from .registry import Template
 
 
@@ -24,6 +25,7 @@ class SpecGenerator:
             template: Template to use for generation
         """
         self.template = template
+        self.placeholder_parser = PlaceholderParser()
 
     def generate_spec(
         self, params: dict[str, Any], spec_dir: Path | None = None
@@ -45,6 +47,9 @@ class SpecGenerator:
 
         # Generate spec content from template
         spec_content = self.template.generate(params)
+
+        # Replace placeholders in spec content
+        spec_content = self._replace_placeholders_in_content(spec_content, params)
 
         # Add metadata
         spec_content["metadata"] = {
@@ -172,3 +177,39 @@ class SpecGenerator:
                 errors.append("acceptance_criteria cannot be empty")
 
         return errors
+
+    def _replace_placeholders_in_content(
+        self, content: Any, values: dict[str, Any]
+    ) -> Any:
+        """
+        Recursively replace placeholders in spec content.
+
+        Args:
+            content: Content to process (can be dict, list, str, or other)
+            values: Dictionary of placeholder values
+
+        Returns:
+            Content with placeholders replaced
+        """
+        if isinstance(content, str):
+            # Replace placeholders in string
+            try:
+                return self.placeholder_parser.replace(content, values)
+            except ValueError:
+                # If placeholder replacement fails, return original string
+                # This allows templates to have optional placeholders
+                return content
+        elif isinstance(content, dict):
+            # Recursively process dictionary values
+            return {
+                key: self._replace_placeholders_in_content(value, values)
+                for key, value in content.items()
+            }
+        elif isinstance(content, list):
+            # Recursively process list items
+            return [
+                self._replace_placeholders_in_content(item, values) for item in content
+            ]
+        else:
+            # Return other types unchanged
+            return content
