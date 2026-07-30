@@ -28,7 +28,7 @@ google-generativeai>=0.8.0
 
 # LiteLLM - Unified interface for 100+ LLM providers
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
-# Bumped from 1.84.0rc1 to 1.86.0 to satisfy aiohttp>=3.13.5 (RC pinned aiohttp==3.13.4).
+# Bumped from 1.84.0rc1 to 1.86.0 to satisfy aiohttp>=3.14.1 (RC pinned aiohttp==3.13.4).
 litellm==1.86.0
 
 # OpenAI SDK - Required by OpenAI-compatible providers and LiteLLM.
@@ -56,7 +56,7 @@ uvicorn[standard]>=0.46.0
 # httpx - Modern async HTTP client with HTTP/2 support
 httpx>=0.28.1
 # aiohttp - Async HTTP client/server library (alternative HTTP client)
-aiohttp>=3.13.5
+aiohttp>=3.14.1
 
 # tiktoken - Token counting for accurate context window estimation
 tiktoken>=0.13.0
