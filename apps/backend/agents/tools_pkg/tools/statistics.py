@@ -239,7 +239,7 @@ def _count_subtasks_by_status(
 
 def _parse_qa_metrics(plan: dict[str, Any]) -> tuple[int, str]:
     """Extract QA iterations and status from the plan's qa_signoff."""
-    qa_signoff = plan.get("qa_signoff", {})
+    qa_signoff = plan.get("qa_signoff") or {}
     raw_iterations = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
     try:
         qa_iterations = int(raw_iterations)
@@ -421,7 +421,7 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
             session_count = _count_unique_sessions(plan)
 
             # QA iterations
-            qa_signoff = plan.get("qa_signoff", {})
+            qa_signoff = plan.get("qa_signoff") or {}
             raw_iter = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
             try:
                 qa_iterations = int(raw_iter)
@@ -551,5 +551,143 @@ Quality Assessment:
             }
 
     tools.append(get_quality_metrics)
+
+    # -------------------------------------------------------------------------
+    # Tool: compare_specs
+    # -------------------------------------------------------------------------
+    @tool(
+        "compare_specs",
+        "Compare two specification implementations side-by-side, showing subtask counts, completion rates, QA status, duration, and quality metrics.",
+        {"spec_id_1": str, "spec_id_2": str},
+    )
+    async def compare_specs(args: dict[str, Any]) -> dict[str, Any]:
+        """Compare two specs side-by-side."""
+        spec_id_1 = args["spec_id_1"]
+        spec_id_2 = args["spec_id_2"]
+
+        # Locate specs directory (parent of current spec_dir)
+        specs_root = spec_dir.parent
+
+        # Build paths to implementation plans
+        plan_file_1 = specs_root / spec_id_1 / "implementation_plan.json"
+        plan_file_2 = specs_root / spec_id_2 / "implementation_plan.json"
+
+        # Check if both plans exist
+        if not plan_file_1.exists():
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error: Spec '{spec_id_1}' not found or has no implementation plan.",
+                    }
+                ]
+            }
+
+        if not plan_file_2.exists():
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error: Spec '{spec_id_2}' not found or has no implementation plan.",
+                    }
+                ]
+            }
+
+        try:
+            # Load both plans
+            plan_1 = json.loads(plan_file_1.read_text(encoding="utf-8"))
+            plan_2 = json.loads(plan_file_2.read_text(encoding="utf-8"))
+
+            # Calculate metrics for both specs
+            quality_1 = _calculate_quality_metrics(plan_1)
+            quality_2 = _calculate_quality_metrics(plan_2)
+
+            # Parse timestamps for spec 1
+            created_1 = _parse_timestamp(plan_1.get("created_at"))
+            last_updated_1 = _parse_timestamp(plan_1.get("last_updated"))
+            now = datetime.now(UTC)
+
+            if created_1:
+                duration_1_seconds = (now - created_1).total_seconds()
+                duration_1 = _format_duration(duration_1_seconds)
+            else:
+                duration_1 = "N/A"
+
+            # Parse timestamps for spec 2
+            created_2 = _parse_timestamp(plan_2.get("created_at"))
+            last_updated_2 = _parse_timestamp(plan_2.get("last_updated"))
+
+            if created_2:
+                duration_2_seconds = (now - created_2).total_seconds()
+                duration_2 = _format_duration(duration_2_seconds)
+            else:
+                duration_2 = "N/A"
+
+            # Calculate phase durations
+            phase_durations_1 = _calculate_phase_durations(plan_1.get("phases", []))
+            phase_durations_2 = _calculate_phase_durations(plan_2.get("phases", []))
+
+            # Calculate velocities
+            velocity_1 = _calculate_completion_velocity(plan_1, phase_durations_1)
+            velocity_2 = _calculate_completion_velocity(plan_2, phase_durations_2)
+
+            # Count unique sessions
+            session_count_1 = _count_unique_sessions(plan_1)
+            session_count_2 = _count_unique_sessions(plan_2)
+
+            # Build comparison output
+            result = f"""Spec Comparison: {spec_id_1} vs {spec_id_2}
+{'=' * 60}
+
+                                Spec 1              Spec 2
+                                {spec_id_1:20s}  {spec_id_2:20s}
+{'─' * 60}
+
+Time Tracking:
+  Build Duration:             {duration_1:20s}  {duration_2:20s}
+  Started:                    {created_1.strftime("%Y-%m-%d %H:%M") if created_1 else "N/A":20s}  {created_2.strftime("%Y-%m-%d %H:%M") if created_2 else "N/A":20s}
+  Last Updated:               {last_updated_1.strftime("%Y-%m-%d %H:%M") if last_updated_1 else "N/A":20s}  {last_updated_2.strftime("%Y-%m-%d %H:%M") if last_updated_2 else "N/A":20s}
+
+Subtask Progress:
+  Total Subtasks:             {quality_1["total_subtasks"]:20d}  {quality_2["total_subtasks"]:20d}
+  Completed:                  {quality_1["completed_subtasks"]:20d}  {quality_2["completed_subtasks"]:20d}
+  Failed:                     {quality_1["failed_subtasks"]:20d}  {quality_2["failed_subtasks"]:20d}
+  Completion Rate:            {quality_1["completion_rate"]:.1%}              {quality_2["completion_rate"]:.1%}
+  Failure Rate:               {quality_1["failure_rate"]:.1%}              {quality_2["failure_rate"]:.1%}
+
+Velocity:
+  Subtasks/Hour:              {velocity_1["subtasks_per_hour"]:20.2f}  {velocity_2["subtasks_per_hour"]:20.2f}
+  Subtasks/Day:               {velocity_1["subtasks_per_day"]:20.2f}  {velocity_2["subtasks_per_day"]:20.2f}
+  Avg Subtask Duration:       {velocity_1["average_subtask_duration"]:20s}  {velocity_2["average_subtask_duration"]:20s}
+
+QA Performance:
+  QA Status:                  {quality_1["qa_status"]:20s}  {quality_2["qa_status"]:20s}
+  QA Iterations:              {quality_1["qa_iterations"]:20d}  {quality_2["qa_iterations"]:20d}
+  First-Attempt Success:      {"Yes" if quality_1["first_attempt_success"] else "No":20s}  {"Yes" if quality_2["first_attempt_success"] else "No":20s}
+  Session Count:              {session_count_1:20d}  {session_count_2:20d}
+
+Quality Score:
+  Overall Score (/100):       {quality_1["quality_score"]:20.1f}  {quality_2["quality_score"]:20.1f}
+  Completion Component:       {quality_1["completion_rate"] * 40:20.1f}  {quality_2["completion_rate"] * 40:20.1f}
+  QA Component:               {quality_1["qa_value"]:20.1f}  {quality_2["qa_value"]:20.1f}
+  Low Failure Component:      {(1 - quality_1["failure_rate"]) * 20:20.1f}  {(1 - quality_2["failure_rate"]) * 20:20.1f}
+
+Status:
+  Spec Completed:             {"Yes" if quality_1["is_completed"] else "No":20s}  {"Yes" if quality_2["is_completed"] else "No":20s}
+"""
+
+            return {"content": [{"type": "text", "text": result}]}
+
+        except Exception as e:
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error comparing specs: {e}",
+                    }
+                ]
+            }
+
+    tools.append(compare_specs)
 
     return tools
