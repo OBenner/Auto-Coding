@@ -62,6 +62,9 @@ class QualityScore:
     total_criteria: int = 0
     met_criteria: int = 0
     user_approved: bool = False
+    coverage_percent: float = 0.0
+    lines_covered: int = 0
+    lines_total: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -81,6 +84,9 @@ class QualityScore:
             "total_criteria": self.total_criteria,
             "met_criteria": self.met_criteria,
             "user_approved": self.user_approved,
+            "coverage_percent": self.coverage_percent,
+            "lines_covered": self.lines_covered,
+            "lines_total": self.lines_total,
             "composite_score": self.composite_score,
             "is_high_quality": self.is_high_quality,
             "is_low_quality": self.is_low_quality,
@@ -105,6 +111,9 @@ class QualityScore:
             total_criteria=data.get("total_criteria", 0),
             met_criteria=data.get("met_criteria", 0),
             user_approved=data.get("user_approved", False),
+            coverage_percent=data.get("coverage_percent", 0.0),
+            lines_covered=data.get("lines_covered", 0),
+            lines_total=data.get("lines_total", 0),
         )
 
     @staticmethod
