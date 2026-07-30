@@ -203,6 +203,120 @@ async function fetchAndUpdateTokenStats(taskId: string): Promise<void> {
   }
 }
 
+/**
+ * Creates an optimistic update action for instant UI feedback with automatic revert on error
+ *
+ * This helper follows the pattern from UsageIndicator.tsx:
+ * 1. Capture previous state for potential revert
+ * 2. Apply optimistic update immediately for instant feedback
+ * 3. Execute async operation
+ * 4. Revert to previous state if operation fails
+ *
+ * @param getState - Function to get current state
+ * @param setState - Function to update state
+ * @param optimisticUpdate - Function to calculate optimistic state from current state
+ * @param asyncOperation - The async operation to perform (e.g., API call)
+ * @param onError - Optional custom error handler (default: console.error)
+ * @returns Promise with the result of the async operation
+ *
+ * @example
+ * ```typescript
+ * await createOptimisticAction(
+ *   () => useTaskStore.getState(),
+ *   (state) => useTaskStore.setState(state),
+ *   (state) => ({
+ *     ...state,
+ *     tasks: state.tasks.map(t => t.id === taskId ? { ...t, status: 'done' } : t)
+ *   }),
+ *   async () => {
+ *     await window.electronAPI.updateTaskStatus(taskId, 'done');
+ *   }
+ * );
+ * ```
+ */
+export async function createOptimisticAction<T>(
+  getState: () => T,
+  setState: (state: T | Partial<T>) => void,
+  optimisticUpdate: (currentState: T) => T | Partial<T>,
+  asyncOperation: () => Promise<void>,
+  onError?: (error: Error) => void
+): Promise<void> {
+  // Capture previous state for revert (before any changes)
+  const previousState = getState();
+
+  try {
+    // Calculate and apply optimistic update immediately
+    const optimisticState = optimisticUpdate(previousState);
+    setState(optimisticState);
+
+    // Execute the actual async operation
+    await asyncOperation();
+  } catch (error) {
+    // Revert to captured previous state on error
+    setState(previousState);
+
+    // Call custom error handler or default to console.error
+    if (onError) {
+      onError(error as Error);
+    } else {
+      console.error('[createOptimisticAction] Operation failed, reverted state:', error);
+    }
+
+    // Re-throw for caller to handle if needed
+    throw error;
+  }
+}
+
+/**
+ * Creates an optimistic action specifically for task updates
+ * Convenience wrapper around createOptimisticAction for task-store operations
+ *
+ * @param taskId - The task ID to update
+ * @param optimisticUpdate - Function to calculate optimistic task state
+ * @param asyncOperation - The async operation to perform
+ * @param onError - Optional custom error handler
+ * @returns Promise that resolves when operation completes
+ *
+ * @example
+ * ```typescript
+ * await createOptimisticTaskAction(
+ *   taskId,
+ *   (task) => ({ ...task, status: 'done' }),
+ *   async () => {
+ *     await window.electronAPI.completeTask(taskId);
+ *   }
+ * );
+ * ```
+ */
+export async function createOptimisticTaskAction(
+  taskId: string,
+  optimisticUpdate: (task: Task) => Partial<Task>,
+  asyncOperation: () => Promise<void>,
+  onError?: (error: Error) => void
+): Promise<void> {
+  await createOptimisticAction(
+    () => useTaskStore.getState(),
+    (state) => useTaskStore.setState(state),
+    (state) => {
+      const taskIndex = findTaskIndex(state.tasks, taskId);
+      if (taskIndex === -1) {
+        debugLog('[createOptimisticTaskAction] Task not found:', taskId);
+        return state;
+      }
+
+      const updatedTasks = updateTaskAtIndex(
+        state.tasks,
+        taskIndex,
+        (task) => ({ ...task, ...optimisticUpdate(task) })
+      );
+
+      return { ...state, tasks: updatedTasks };
+    },
+    asyncOperation,
+    onError
+  );
+}
+
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   selectedTaskId: null,
@@ -830,6 +944,64 @@ export function stopTask(taskId: string): void {
 }
 
 /**
+ * Start a task with optimistic UI update
+ * Immediately updates the task status to 'in_progress' before server confirmation,
+ * with automatic rollback on error.
+ *
+ * @param taskId - The task ID to start
+ * @param options - Optional configuration (parallel execution, worker count)
+ * @throws Error if task not found or start operation fails
+ */
+export async function startTaskOptimistic(
+  taskId: string,
+  options?: { parallel?: boolean; workers?: number }
+): Promise<void> {
+  await createOptimisticTaskAction(
+    taskId,
+    (task) => {
+      // Optimistic update: change status to 'in_progress'
+      return {
+        status: 'in_progress' as const,
+      };
+    },
+    async () => {
+      // Call the backend API to start the task
+      await window.electronAPI.startTask(taskId, options);
+    },
+    (error) => {
+      console.error('[startTaskOptimistic] Failed to start task:', error);
+    }
+  );
+}
+
+/**
+ * Stop a task with optimistic UI update
+ * Immediately updates the task status back to 'backlog'
+ * before server confirmation, with automatic rollback on error.
+ *
+ * @param taskId - The task ID to stop
+ * @throws Error if task not found or stop operation fails
+ */
+export async function stopTaskOptimistic(taskId: string): Promise<void> {
+  await createOptimisticTaskAction(
+    taskId,
+    (task) => {
+      // Optimistic update: revert to 'backlog' (most common pre-start status)
+      return {
+        status: 'backlog' as const,
+      };
+    },
+    async () => {
+      // Call the backend API to stop the task
+      await window.electronAPI.stopTask(taskId);
+    },
+    (error) => {
+      console.error('[stopTaskOptimistic] Failed to stop task:', error);
+    }
+  );
+}
+
+/**
  * Submit review for a task
  */
 export async function submitReview(
@@ -1060,6 +1232,43 @@ export async function archiveTasks(
 // ============================================
 // Task Creation Draft Management
 // ============================================
+
+/**
+ * Archive a single task with optimistic UI update
+ * Immediately adds archivedAt timestamp before server confirmation,
+ * with automatic rollback on error.
+ *
+ * @param projectId - The project ID
+ * @param taskId - The task ID to archive
+ * @throws Error if task not found or archive operation fails
+ */
+export async function archiveTaskOptimistic(
+  projectId: string,
+  taskId: string
+): Promise<void> {
+  await createOptimisticTaskAction(
+    taskId,
+    (task) => {
+      // Optimistic update: add archivedAt timestamp
+      return {
+        metadata: {
+          ...task.metadata,
+          archivedAt: new Date().toISOString(),
+        },
+      };
+    },
+    async () => {
+      // Call the backend API to archive the task
+      const result = await window.electronAPI.archiveTasks(projectId, [taskId]);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to archive task');
+      }
+    },
+    (error) => {
+      console.error('[archiveTaskOptimistic] Failed to archive task:', error);
+    }
+  );
+}
 
 const DRAFT_KEY_PREFIX = 'task-creation-draft';
 

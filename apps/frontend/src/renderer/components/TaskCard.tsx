@@ -32,7 +32,8 @@ import {
   JSON_ERROR_PREFIX,
   JSON_ERROR_TITLE_SUFFIX
 } from '../../shared/constants';
-import { startTask, stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks } from '../stores/task-store';
+import { startTask, stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks, archiveTaskOptimistic } from '../stores/task-store';
+import { useToast } from '../hooks/use-toast';
 import type { Task, TaskCategory, ReviewReason, TaskStatus } from '../../shared/types';
 
 // Module-level visibility change singleton — one listener for all TaskCard instances
@@ -169,6 +170,7 @@ export const TaskCard = memo(function TaskCard({
   onToggleSelect
 }: TaskCardProps) {
   const { t } = useTranslation(['tasks', 'errors']);
+  const { toast } = useToast();
   const [isStuck, setIsStuck] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const stuckCheckRef = useRef<{ timeout: NodeJS.Timeout | null; interval: NodeJS.Timeout | null }>({
@@ -308,14 +310,44 @@ export const TaskCard = memo(function TaskCard({
     };
   }, [isRunning, performStuckCheck]);
 
-  const handleStartStop = (e: React.MouseEvent) => {
+  const handleStartStop = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isRunning && !isStuck) {
-      stopTask(task.id);
-    } else {
-      startTask(task.id);
+
+    // Capture previous status for revert
+    const previousStatus = task.status;
+
+    // Determine new status optimistically
+    const newStatus: TaskStatus = (isRunning && !isStuck) ? 'backlog' : 'in_progress';
+
+    // Apply optimistic update by calling onStatusChange if available
+    // This provides immediate UI feedback
+    if (onStatusChange) {
+      onStatusChange(newStatus);
     }
-  };
+
+    try {
+      // Actually start/stop the task on the backend
+      if (isRunning && !isStuck) {
+        await stopTask(task.id);
+      } else {
+        await startTask(task.id);
+      }
+      // If successful, the optimistic update is now the actual state
+      // The task store will emit updates that sync everything
+    } catch (error) {
+      // Revert optimistic update on failure
+      console.error('[TaskCard] Failed to start/stop task, reverting:', error);
+      if (onStatusChange && previousStatus !== newStatus) {
+        onStatusChange(previousStatus);
+      }
+      // Show error toast
+      toast({
+        title: 'Action Failed',
+        description: `Could not ${isRunning ? 'stop' : 'start'} task. Please try again.`,
+        variant: 'destructive'
+      });
+    }
+  }, [task.id, task.status, isRunning, isStuck, onStatusChange]);
 
   const handleRecover = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -330,9 +362,19 @@ export const TaskCard = memo(function TaskCard({
 
   const handleArchive = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const result = await archiveTasks(task.projectId, [task.id]);
-    if (!result.success) {
-      console.error('[TaskCard] Failed to archive task:', task.id, result.error);
+    // Optimistic archive - immediately updates UI with archivedAt timestamp
+    // The archiveTaskOptimistic function handles rollback on error
+    try {
+      await archiveTaskOptimistic(task.projectId, task.id);
+    } catch (error) {
+      // Error is already logged by archiveTaskOptimistic
+      console.error('[TaskCard] Archive failed, UI reverted:', error);
+      // Show error toast
+      toast({
+        title: 'Archive Failed',
+        description: 'Could not archive task. Please try again.',
+        variant: 'destructive'
+      });
     }
   };
 
