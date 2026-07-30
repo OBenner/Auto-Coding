@@ -190,6 +190,22 @@
       "title": "Explorer la documentation",
       "description": "En savoir plus sur les fonctionnalités avancées, les bonnes pratiques et le dépannage."
     },
+    "readiness": {
+      "title": "Préparation de l'environnement",
+      "states": {
+        "checking": "Vérification de {{item}}...",
+        "ready": "{{item}} prêt",
+        "warning": "{{item}} nécessite une attention",
+        "skipped": "{{item}} désactivé"
+      },
+      "items": {
+        "claudeAuth": "l'authentification Claude/API",
+        "claudeCli": "le CLI Claude Code",
+        "codexAuth": "le compte Codex",
+        "codexCli": "le CLI Codex",
+        "memory": "la base mémoire"
+      }
+    },
     "finish": "Terminer et commencer à construire",
     "rerunHint": "Vous pouvez toujours relancer cet assistant depuis Paramètres → Application"
   },

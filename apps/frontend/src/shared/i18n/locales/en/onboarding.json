@@ -200,6 +200,22 @@
       "title": "Explore Documentation",
       "description": "Learn more about advanced features, best practices, and troubleshooting."
     },
+    "readiness": {
+      "title": "Environment readiness",
+      "states": {
+        "checking": "Checking {{item}}...",
+        "ready": "{{item}} ready",
+        "warning": "{{item}} needs attention",
+        "skipped": "{{item}} disabled"
+      },
+      "items": {
+        "claudeAuth": "Claude/API authentication",
+        "claudeCli": "Claude Code CLI",
+        "codexAuth": "Codex account",
+        "codexCli": "Codex CLI",
+        "memory": "Memory database"
+      }
+    },
     "finish": "Finish & Start Building",
     "rerunHint": "You can always re-run this wizard from Settings → Application"
   },

@@ -4,24 +4,30 @@ import {
   FileText,
   Settings,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
+import { useSettingsStore } from '../../stores/settings-store';
+import { useClaudeProfileStore } from '../../stores/claude-profile-store';
 
 interface CompletionStepProps {
-  onFinish: () => void;
-  onOpenTaskCreator?: () => void;
-  onOpenSettings?: () => void;
+  readonly authRuntime?: 'anthropic' | 'codex';
+  readonly onFinish: () => void;
+  readonly onOpenTaskCreator?: () => void;
+  readonly onOpenSettings?: () => void;
 }
 
 interface NextStepCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  action?: () => void;
-  actionLabel?: string;
+  readonly icon: React.ReactNode;
+  readonly title: string;
+  readonly description: string;
+  readonly action?: () => void;
+  readonly actionLabel?: string;
 }
 
 function NextStepCard({ icon, title, description, action, actionLabel }: NextStepCardProps) {
@@ -53,12 +59,262 @@ function NextStepCard({ icon, title, description, action, actionLabel }: NextSte
   );
 }
 
+type ReadinessState = 'checking' | 'ready' | 'warning' | 'skipped';
+type ReadinessSubject = 'claudeAuth' | 'claudeCli' | 'codexAuth' | 'codexCli' | 'memory';
+type Translate = (key: string, options?: Record<string, string>) => string;
+
+interface ReadinessItem {
+  id: string;
+  state: ReadinessState;
+  label: string;
+}
+
+interface RuntimeContext {
+  authRuntime: 'anthropic' | 'codex';
+  apiProfiles: unknown[];
+  claudeProfiles: Array<{ oauthToken?: string; configDir?: string }>;
+  memoryEnabled: boolean;
+  t: Translate;
+}
+
+function getElectronAPI(): Window['electronAPI'] {
+  return (globalThis as typeof globalThis & { electronAPI: Window['electronAPI'] }).electronAPI;
+}
+
+function translateReadiness(t: Translate, subject: ReadinessSubject, state: ReadinessState): string {
+  const item = t(`completion.readiness.items.${subject}`);
+  return t(`completion.readiness.states.${state}`, { item });
+}
+
+function buildItem(
+  id: string,
+  subject: ReadinessSubject,
+  ready: boolean,
+  t: Translate
+): ReadinessItem {
+  const state: ReadinessState = ready ? 'ready' : 'warning';
+
+  return {
+    id,
+    state,
+    label: translateReadiness(t, subject, state)
+  };
+}
+
+function getReadinessIcon(state: ReadinessState) {
+  if (state === 'checking') {
+    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  }
+
+  if (state === 'ready' || state === 'skipped') {
+    return <CheckCircle2 className="h-4 w-4 text-success" />;
+  }
+
+  return <AlertTriangle className="h-4 w-4 text-warning" />;
+}
+
+function ReadinessRow({ item }: Readonly<{ item: ReadinessItem }>) {
+  const icon = getReadinessIcon(item.state);
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2">
+      {icon}
+      <span className="text-sm text-foreground">{item.label}</span>
+    </div>
+  );
+}
+
+function isCodexProfileAuthenticated(profile: unknown): boolean {
+  if (!profile || typeof profile !== 'object') return false;
+  const candidate = profile as {
+    authenticated?: boolean;
+    isAuthenticated?: boolean;
+    configDir?: string;
+  };
+  return Boolean(candidate.authenticated || candidate.isAuthenticated || candidate.configDir);
+}
+
+function createInitialReadinessItems(
+  authRuntime: 'anthropic' | 'codex',
+  memoryEnabled: boolean,
+  t: Translate
+): ReadinessItem[] {
+  const authSubject = authRuntime === 'codex' ? 'codexAuth' : 'claudeAuth';
+  const cliSubject = authRuntime === 'codex' ? 'codexCli' : 'claudeCli';
+
+  return [
+    {
+      id: 'auth',
+      state: 'checking',
+      label: translateReadiness(t, authSubject, 'checking')
+    },
+    {
+      id: 'cli',
+      state: 'checking',
+      label: translateReadiness(t, cliSubject, 'checking')
+    },
+    {
+      id: 'memory',
+      state: memoryEnabled ? 'checking' : 'skipped',
+      label: translateReadiness(t, 'memory', memoryEnabled ? 'checking' : 'skipped')
+    }
+  ];
+}
+
+async function getCodexAuthItem(t: Translate): Promise<ReadinessItem> {
+  try {
+    const result = await getElectronAPI().getCodexProfiles();
+    const profiles = result.success && result.data ? result.data.profiles : [];
+    return buildItem(
+      'auth',
+      'codexAuth',
+      profiles.some(isCodexProfileAuthenticated),
+      t
+    );
+  } catch {
+    return buildItem('auth', 'codexAuth', false, t);
+  }
+}
+
+function getClaudeAuthItem(context: RuntimeContext): ReadinessItem {
+  const hasApiProfile = context.apiProfiles.length > 0;
+  const hasClaudeProfile = context.claudeProfiles.some((profile) =>
+    Boolean(profile.oauthToken || profile.configDir)
+  );
+
+  return buildItem(
+    'auth',
+    'claudeAuth',
+    hasApiProfile || hasClaudeProfile,
+    context.t
+  );
+}
+
+async function getCliItem(
+  id: string,
+  subject: ReadinessSubject,
+  checkVersion: () => Promise<{ success: boolean; data?: { installed?: string | null } }>,
+  t: Translate
+): Promise<ReadinessItem> {
+  try {
+    const result = await checkVersion();
+    return buildItem(id, subject, Boolean(result.success && result.data?.installed), t);
+  } catch {
+    return buildItem(id, subject, false, t);
+  }
+}
+
+async function getRuntimeItems(context: RuntimeContext): Promise<ReadinessItem[]> {
+  if (context.authRuntime === 'codex') {
+    const [authItem, cliItem] = await Promise.all([
+      getCodexAuthItem(context.t),
+      getCliItem(
+        'cli',
+        'codexCli',
+        () => getElectronAPI().checkCodexCodeVersion(),
+        context.t
+      )
+    ]);
+
+    return [authItem, cliItem];
+  }
+
+  const cliItem = await getCliItem(
+    'cli',
+    'claudeCli',
+    () => getElectronAPI().checkClaudeCodeVersion(),
+    context.t
+  );
+
+  return [getClaudeAuthItem(context), cliItem];
+}
+
+async function getMemoryItem(
+  memoryEnabled: boolean,
+  t: Translate
+): Promise<ReadinessItem> {
+  if (!memoryEnabled) {
+    return {
+      id: 'memory',
+      state: 'skipped',
+      label: translateReadiness(t, 'memory', 'skipped')
+    };
+  }
+
+  try {
+    const result = await getElectronAPI().getMemoryInfrastructureStatus();
+    return buildItem('memory', 'memory', Boolean(result.success && result.data?.ready), t);
+  } catch {
+    return buildItem('memory', 'memory', false, t);
+  }
+}
+
+async function collectReadinessItems(context: RuntimeContext): Promise<ReadinessItem[]> {
+  const [runtimeItems, memoryItem] = await Promise.all([
+    getRuntimeItems(context),
+    getMemoryItem(context.memoryEnabled, context.t)
+  ]);
+
+  return [...runtimeItems, memoryItem];
+}
+
+function CompletionReadiness({ authRuntime }: Readonly<{ authRuntime: 'anthropic' | 'codex' }>) {
+  const { t } = useTranslation('onboarding');
+  const { settings, profiles: apiProfiles } = useSettingsStore();
+  const { profiles: claudeProfiles } = useClaudeProfileStore();
+  const memoryEnabled = settings.memoryEnabled !== false;
+  const [items, setItems] = useState<ReadinessItem[]>(
+    createInitialReadinessItems(authRuntime, memoryEnabled, t)
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const context: RuntimeContext = {
+      authRuntime,
+      apiProfiles,
+      claudeProfiles,
+      memoryEnabled,
+      t
+    };
+
+    const runChecks = async () => {
+      const nextItems = await collectReadinessItems(context);
+      if (!cancelled) {
+        setItems(nextItems);
+      }
+    };
+
+    runChecks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiProfiles, authRuntime, claudeProfiles, memoryEnabled, t]);
+
+  return (
+    <Card className="border border-border bg-card/50 mb-8">
+      <CardContent className="p-5">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CheckCircle2 className="h-4 w-4" />
+          {t('completion.readiness.title')}
+        </div>
+        <div className="grid grid-cols-1 gap-2">
+          {items.map((item) => (
+            <ReadinessRow key={item.id} item={item} />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /**
  * Completion step component for the onboarding wizard.
  * Displays a success message with suggestions for next steps
  * and a prominent "Finish" button to complete the wizard.
  */
 export function CompletionStep({
+  authRuntime = 'anthropic',
   onFinish,
   onOpenTaskCreator,
   onOpenSettings
@@ -126,6 +382,8 @@ export function CompletionStep({
             </div>
           </CardContent>
         </Card>
+
+        <CompletionReadiness authRuntime={authRuntime} />
 
         {/* Next Steps Section */}
         <div className="space-y-4 mb-10">
