@@ -147,7 +147,7 @@
     "tailwindcss": "^4.1.17",
     "typescript": "^6.0.2",
     "vite": "^7.3.5",
-    "vitest": "^4.0.16"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "electron-builder-squirrel-windows": "26.5.0",
