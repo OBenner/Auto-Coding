@@ -29,7 +29,7 @@ google-generativeai>=0.8.0
 # LiteLLM - Unified interface for 100+ LLM providers
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
 # Bumped from 1.84.0rc1 to 1.86.0 to satisfy aiohttp>=3.13.5 (RC pinned aiohttp==3.13.4).
-litellm==1.86.0
+litellm==1.93.2
 
 # OpenAI SDK - Required by OpenAI-compatible providers and LiteLLM.
 # Keep this aligned with the pinned LiteLLM requirement.
